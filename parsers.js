@@ -18,7 +18,7 @@ function parseLotteryExtreme(html) {
       }
 
       let special = null;
-      const specMatch = parts[1].match(/^(\d{1,2})/);
+      const specMatch = parts[1].match(/(\d{1,2})/);
       if (specMatch) special = Number(specMatch[1]);
 
       if (mainNos.length === 6) {
