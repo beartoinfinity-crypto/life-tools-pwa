@@ -39,7 +39,8 @@ function fetchUrl(url, options = {}, maxRedirects = 5) {
       res.on('end', () => resolve({ status: res.statusCode, data }));
     });
     req.on('error', reject);
-    req.setTimeout(30000, () => { req.destroy(); reject(new Error('Timeout')); });
+    const timeout = options.timeout || 30000;
+    req.setTimeout(timeout, () => { req.destroy(); reject(new Error('Timeout')); });
     if (options.body) req.write(options.body);
     req.end();
   });
@@ -62,7 +63,7 @@ async function scrapeLotteryHk(years) {
   const results = [];
   for (const year of years) {
     try {
-      const { status, data: html } = await fetchUrl(`https://lottery.hk/en/mark-six/results/${year}`);
+      const { status, data: html } = await fetchUrl(`https://lottery.hk/en/mark-six/results/${year}`, { timeout: 5000 });
       if (status === 200) {
         const draws = parseLotteryHk(html);
         if (draws.length > 0) {
@@ -104,24 +105,17 @@ async function refreshData() {
     console.log('lotteryextreme.com failed:', e.message);
   }
 
-  // 2. lottery.hk: fill missing years
+  // 2. lottery.hk: fill missing years (bounded to recent years only)
+  //    Historical years (1993-2025) are immutable and already populated via the
+  //    GitHub backfill, so only the current (and previous) year can be missing.
   const currentYear = new Date().getFullYear();
-  const existingYears = await db.getDraws(100000).then(draws =>
-    [...new Set(draws.map(d => d.date.split('-')[0]))]
-  );
-  const missingYears = [];
-  for (let y = 1993; y <= currentYear; y++) {
-    if (!existingYears.includes(String(y))) missingYears.push(y);
-  }
-
-  if (missingYears.length > 0) {
-    console.log(`Scraping lottery.hk for ${missingYears.length} missing years...`);
-    const hkDraws = await scrapeLotteryHk(missingYears);
-    if (hkDraws.length > 0) {
-      await db.upsertBatch(hkDraws.map(d => toISODraw(d)));
-    }
+  const yearsToTry = [currentYear, currentYear - 1];
+  const hkDraws = await scrapeLotteryHk(yearsToTry);
+  if (hkDraws.length > 0) {
+    await db.upsertBatch(hkDraws.map(d => toISODraw(d)));
+    console.log(`lottery.hk: upserted ${hkDraws.length} draws for ${yearsToTry.join(', ')}`);
   } else {
-    console.log('All years already in DB');
+    console.log('lottery.hk: no new historical draws');
   }
 
   // 3. GitHub bulk if DB is small

@@ -211,7 +211,7 @@
   retryBtn.addEventListener('click', function () { loadInitial(true); });
   loadOlderBtn.addEventListener('click', loadOlder);
 
-  loadInitial(isPastMidnight());
+  loadInitial(false);
   scheduleMidnightRefresh();
 
   if ('serviceWorker' in navigator) {
