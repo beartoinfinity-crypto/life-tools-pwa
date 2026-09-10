@@ -304,7 +304,7 @@ function groupByDirection(no) {
     if (!map.has(key)) map.set(key, { key, orig: e.orig, dest: e.dest, entries: [] });
     map.get(key).entries.push(e);
   }
-  return [...map.values()];
+  return [...map.values()].map((g, gi) => ({ ...g, gi }));
 }
 
 /* ---------------- route search ---------------- */
@@ -389,7 +389,7 @@ function renderRouteStops(group) {
     if (!name) return;
     const card = document.createElement("div");
     card.className = "stop-card";
-    card.dataset.rowkey = group.key + "\u0001" + coMain + "\u0001" + seq;
+    card.dataset.rowkey = group.gi + "\u0002" + coMain + "\u0002" + seq;
     card.innerHTML = `
       <div class="stop-idx${seq === stops.length - 1 ? " last" : ""}">${seq + 1}</div>
       <div class="stop-name">
@@ -427,9 +427,9 @@ function renderRouteStops(group) {
 }
 function fetchRowEtas(cards) {
   const rows = cards.map((c) => {
-    const parts = c.dataset.rowkey.split("\u0001");
-    const group = state.detail.groups.find((x) => x.key === parts[0]);
-    return { el: c, rowkey: c.dataset.rowkey, groupKey: parts[0], co: parts[1], seq: Number(parts[2]), entry: pickEntry(group) };
+    const parts = c.dataset.rowkey.split("\u0002");
+    const group = state.detail.groups[Number(parts[0])];
+    return { el: c, rowkey: c.dataset.rowkey, co: parts[1], seq: Number(parts[2]), entry: pickEntry(group) };
   });
   etaRace(rows).then((res) => {
     rows.forEach((r, i) => {
@@ -596,9 +596,9 @@ function collectVisibleRows() {
     if (!info || info.etas === null) return;
     if (info.entry) rows.push({ rowEl, ...info });
     else {
-      const parts = rowEl.dataset.rowkey.split("\u0001");
+      const parts = rowEl.dataset.rowkey.split("\u0002");
       if (parts.length === 3) {
-        const g = state.detail.groups.find((x) => x.key === parts[0]);
+        const g = state.detail.groups[Number(parts[0])];
         if (g) rows.push({ rowEl, entry: pickEntry(g), co: parts[1], seq: Number(parts[2]) });
       }
     }
