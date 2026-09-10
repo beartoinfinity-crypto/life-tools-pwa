@@ -496,7 +496,7 @@ function renderRouteStops(group) {
       <div class="stop-name">
         <div class="zh">${esc(name)}</div>
       </div>
-      <div class="co-tag">${esc(coTag(coMain))}</div>
+      <div class="co-tag ${coBadgeClass(coMain)}">${esc(coTag(coMain))}</div>
       <div class="eta-chips"><span class="skeleton"></span><span class="skeleton"></span><span class="skeleton"></span></div>
       <div class="stop-more">›</div>`;
     card.addEventListener("click", () =>

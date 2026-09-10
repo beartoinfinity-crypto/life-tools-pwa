@@ -171,6 +171,12 @@ body {
 }
 .stop-name .en { font-size: 11px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .co-tag { flex: 0 0 auto; font-size: 11px; font-weight: 700; color: var(--accent-2); background: var(--chip); padding: 2px 7px; border-radius: 6px; }
+.co-tag.co-kmb { background: #c9312b; color: #fff; }
+.co-tag.co-ctb { background: #0b7a75; color: #fff; }
+.co-tag.co-nlb { background: #2f5ba8; color: #fff; }
+.co-tag.co-gmb { background: #2e7d32; color: #fff; }
+.co-tag.co-nwf { background: #c05e12; color: #fff; }
+.co-tag.co-mixed { background: #6a4fa0; color: #fff; }
 .stop-more {
   flex: 0 0 14px; color: var(--ink-2); font-size: 20px; font-weight: 600; line-height: 1;
   opacity: 0.4; transition: opacity 0.15s, transform 0.15s, color 0.15s;
