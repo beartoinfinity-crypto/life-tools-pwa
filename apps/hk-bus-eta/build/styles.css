@@ -10,6 +10,7 @@
   --chip-ink: #0b6e4f;
   --warn: #b4541e;
   --silk: #fffbe6;
+  --route-badge-bg: #17211c;
   --radius: 14px;
   --font: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang TC",
     "Microsoft JhengHei", "Noto Sans TC", sans-serif;
@@ -88,7 +89,7 @@ body {
 .route-row { display: flex; align-items: center; gap: 12px; }
 .route-no {
   flex: 0 0 auto; min-width: 62px; text-align: center; padding: 6px 8px;
-  background: var(--ink); color: #fff; border-radius: 10px;
+  background: var(--route-badge-bg); color: #fff; border-radius: 10px;
   font-size: 17px; font-weight: 800; letter-spacing: .5px;
 }
 .route-dir { flex: 1; min-width: 0; }
@@ -210,6 +211,7 @@ body {
     --bg: #101613; --card: #1a211d; --ink: #e8efea;
     --ink-2: #8aa093; --line: #2a342f;
     --chip: #173025; --chip-ink: #7fe0b0;
+    --route-badge-bg: #2a342f;
   }
   :root:not([data-theme="day"]) .search-input,
   :root:not([data-theme="day"]) .btn-more,
@@ -228,6 +230,7 @@ body {
   --bg: #101613; --card: #1a211d; --ink: #e8efea;
   --ink-2: #8aa093; --line: #2a342f;
   --chip: #173025; --chip-ink: #7fe0b0;
+  --route-badge-bg: #2a342f;
 }
 :root[data-theme="night"] .search-input,
 :root[data-theme="night"] .btn-more,
