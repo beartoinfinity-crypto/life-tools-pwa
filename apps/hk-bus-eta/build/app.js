@@ -364,7 +364,7 @@ function renderDetail() {
         ${esc(pickEntry(x).dest[state.lang] || "")}<small>${esc(pickEntry(x).orig[state.lang] || "")}</small>
       </button>`).join("")}
     </div>
-    <div class="note">${T.noteDetail[state.lang]}</div>`;
+    <div class="note">${state.lang === "zh" ? "點擊車站查看經此站的所有路線 · 每 30 秒自動更新" : "Tap a stop to see all routes via it · auto-refresh 30s"}</div>`;
   el.detailTop.querySelector("#backBtn").addEventListener("click", goHome);
   el.detailTop.querySelectorAll(".pill").forEach((p) =>
     p.addEventListener("click", () => {
@@ -397,17 +397,9 @@ function renderRouteStops(group) {
       </div>
       <div class="co-tag">${esc(coTag(coMain))}</div>
       <div class="eta-chips"><span class="skeleton"></span><span class="skeleton"></span><span class="skeleton"></span></div>`;
-    card.addEventListener("click", () => {
-      const ex = card.querySelector(".eta-expanded");
-      if (ex) { ex.remove(); return; }
-      const info = state.etaRows.get(card.dataset.rowkey);
-      if (info) {
-        const d = document.createElement("div");
-        d.className = "eta-expanded";
-        d.innerHTML = expandedHTML(info.etas);
-        card.appendChild(d);
-      }
-    });
+    card.addEventListener("click", () =>
+      openStop(ref, false, { kind: "route", routeNo: state.detail.routeNo, sel: state.detail.sel })
+    );
     cards.push(card);
   });
   let offset = 0;
@@ -505,9 +497,9 @@ function hav(aLat, aLng, bLat, bLng) {
 }
 
 /* ---------------- stop detail ---------------- */
-function openStop(ref, silent) {
+function openStop(ref, silent, from) {
   state.view = "detail";
-  state.detail = { kind: "stop", stopId: ref };
+  state.detail = { kind: "stop", stopId: ref, from: from || null };
   const rows = stopRows(ref);
   el.viewHome.classList.add("hidden");
   el.viewDetail.classList.remove("hidden");
@@ -520,13 +512,29 @@ function openStop(ref, silent) {
       </div>
     </div>
     <div class="note">${T.noteStop[state.lang]}</div>`;
-  el.detailTop.querySelector("#backBtn").addEventListener("click", goHome);
+  el.detailTop.querySelector("#backBtn").addEventListener("click", () => {
+    const f = state.detail.from;
+    if (f && f.kind === "route") {
+      openRoute(f.routeNo, true);
+      if (typeof f.sel === "number") {
+        state.detail.sel = f.sel;
+        renderDetail();
+      }
+    } else {
+      goHome();
+    }
+  });
   el.detailContent.innerHTML = '<div class="stop-list"></div>';
   renderStopRows(rows);
   if (!silent) renderCurrentList();
 }
 function stopRows(ref) {
-  const rows = state.stopIndex.get(ref) || [];
+  const ids = [ref];
+  const m = state.db && state.db.stopMap[ref];
+  if (m) {
+    for (const [co, id] of m) if (!ids.includes(id)) ids.push(id);
+  }
+  const rows = ids.flatMap((id) => state.stopIndex.get(id) || []);
   const map = new Map();
   for (const r of rows) {
     const key = [String(r.entry.route), r.entry.orig.en, r.entry.dest.en].join("|");
