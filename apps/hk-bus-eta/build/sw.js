@@ -1,4 +1,4 @@
-const VERSION = "buseta-lite-v1";
+const VERSION = "buseta-lite-v2";
 const SHELL = [
   "/bus-eta/",
   "/bus-eta/index.html",
