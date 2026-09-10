@@ -541,11 +541,20 @@ function stopRows(ref) {
     const key = [String(r.entry.route), r.entry.orig.en, r.entry.dest.en].join("|");
     if (!map.has(key)) map.set(key, r);
   }
-  return [...map.values()].sort((a, b) => {
-    const ra = a.entry.co && a.entry.co[0] === "kmb" ? 0 : 1;
-    const rb = b.entry.co && b.entry.co[0] === "kmb" ? 0 : 1;
-    return ra - rb || numCompare(a.entry.route) - numCompare(b.entry.route);
-  });
+  return [...map.values()].sort((a, b) =>
+    naturalRouteCompare(String(a.entry.route), String(b.entry.route))
+  );
+}
+function naturalRouteCompare(a, b) {
+  const na = leadingNum(a), nb = leadingNum(b);
+  const ta = na === null ? 1 : 0, tb = nb === null ? 1 : 0;
+  if (ta !== tb) return ta - tb;
+  if (na !== nb) return na - nb;
+  return String(a).localeCompare(String(b));
+}
+function leadingNum(s) {
+  const m = String(s).match(/^\d+/);
+  return m ? Number(m[0]) : null;
 }
 function renderStopRows(rows) {
   const listEl = $("#detailContent .stop-list");
