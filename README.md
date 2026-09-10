@@ -12,9 +12,12 @@ A hub of handy Progressive Web Apps (PWAs), served from a single Express server 
 | App | URL | Description |
 |-----|-----|-------------|
 | **Mark Six** | `/mark-six/` | Hong Kong Mark Six lottery results: latest draws, full history, special numbers, daily auto-refresh |
-| **HK Bus ETA** | `/bus-eta/` | Hong Kong real-time bus/minibus ETA — search by **route number** or by **bus stop** ("all buses via"), auto-refresh every 30 s, offline-capable; data from `data.hkbus.app` / `data.gov.hk` via the bundled [hk-bus-eta](https://www.npmjs.com/package/hk-bus-eta) library (GPL-3.0) |
+| **HK Bus ETA (original)** | `/bus-eta/` | Archived upstream PWA (hkbus/hk-independent-bus-eta) — full-featured, mounted unmodified |
+| **Bus ETA (lite)** | `/bus-eta-lite/` | Home-grown simple ETA UI — route & stop search, bookmarks, day/night theme, operator-coloured badges; data via the bundled [hk-bus-eta](https://www.npmjs.com/package/hk-bus-eta) library (GPL-3.0) |
 
-Browsing to the root (`/`) shows a launcher dashboard with a card for each app.
+Browsing to the root (`/`) shows a launcher dashboard with a card per app. The dashboard itself has a **Dark/Light
+toggle** (persisted, defaults to system), a theme-aware favicon, and the cards can be **drag-reordered** (order persists
+in `localStorage`).
 
 ---
 
@@ -39,7 +42,9 @@ Open `http://localhost:3000` — visit `/` for the dashboard and `/mark-six/` fo
 ├── public/               # Dashboard (served at /)
 │   ├── index.html
 │   ├── styles.css
-│   └── app.js            # Renders launcher cards (add new apps here)
+│   ├── app.js            # Renders launcher cards + theme toggle + drag-reorder (add new apps here)
+│   ├── icon-light.svg    # Theme-aware favicon (light)
+│   └── icon-dark.svg     # Theme-aware favicon (dark)
 ├── apps/
 │   └── mark-six/         # Mark Six PWA (mounted at /mark-six/)
 │       ├── server.js          # Express app (module) + ensureInitialData()
@@ -57,9 +62,9 @@ Open `http://localhost:3000` — visit `/` for the dashboard and `/mark-six/` fo
 │       ├── sw.js              # Service worker (offline caching)
 │       ├── icons/icon.svg
 │       └── test/              # Vitest suite (55 tests) + fixtures
-│   └── hk-bus-eta/        # HK Bus ETA app (mounted at /bus-eta/)
-│       ├── build/             # Lite ETA UI (served): app.js + bundled hk-bus-eta library
-│       ├── build-upstream/    # Archived upstream PWA (not served)
+│   └── hk-bus-eta/        # HK Bus ETA apps (mounted at /bus-eta/, /bus-eta-lite/)
+│       ├── build/             # Lite ETA UI (served at /bus-eta-lite/): app.js + bundled hk-bus-eta library
+│       ├── build-upstream/    # Archived upstream PWA (served at /bus-eta/, not from this dir)
 │       ├── README.md          # Attribution + data-layer notes
 │       └── LICENSE            # GPL-3.0 (upstream license, required)
 ├── render.yaml           # Render Blueprint config
@@ -172,19 +177,42 @@ Response shape:
 
 ---
 
-## HK Bus ETA app
+## HK Bus ETA apps
 
-`/bus-eta/` is a focused, mobile-first PWA for Hong Kong bus/minibus ETA with two flows: **search by route number**
-(direction pills → every stop with live arrival chips) and **search by bus stop** (every route serving that stop).
-It auto-refreshes every 30 s, has an EN/ZH toggle, and stays usable offline.
+Two bus UIs share one data layer (`apps/hk-bus-eta/`):
 
-- No backend: routes come from `hk-bus-eta`'s `fetchEtaDb()` (`https://data.hkbus.app/routeFareList.min.json`, ~8 MB,
-  cached in IndexedDB); live arrivals come from the provider APIs (KMB/CTB/NLB/green minibus/MTR/light rail/ferries)
-  via the library's `fetchEtas()`.
-- The served files live in `apps/hk-bus-eta/build/` (original `index.html` / `app.js` / `styles.css` + a bundled
-  `vendor/hk-bus-eta.esm.js`); the **upstream prebuilt PWA** (hkbus/hk-independent-bus-eta v11.2.0) is archived in
-  `apps/hk-bus-eta/build-upstream/` and is **not served**.
-- The bundled library is GPL-3.0; the upstream LICENSE is included. See `apps/hk-bus-eta/README.md` for details.
+### `/bus-eta/` — original (upstream) PWA
+
+The unmodified prebuilt [hkbus/hk-independent-bus-eta](https://github.com/hkbus/hk-independent-bus-eta) v11.2.0,
+archived in `apps/hk-bus-eta/build-upstream/` and served at `/bus-eta/`. Full-featured (maps, saved stops, theme,
+filtering) — kept as the "reference" app.
+
+### `/bus-eta-lite/` — lite UI
+
+A mobile-first, vanilla-JS re-implementation tuned for quick glance-and-leave use. Tabs:
+
+| Tab | Purpose |
+|-----|---------|
+| 路線查詢 / Route | Type a route number (e.g. `1A`, `286X`, `A12`) → direction pills → every stop with live arrival chips; **tap a stop** to see *all routes via it* |
+| 車站查詢 / Stop | Fuzzy-like match on stop **name** *or* **code** (e.g. `TA296`) — the code in the bracket is searchable; "附近的站" geolocation also available |
+| 收藏路線 / Bookmark | All bookmarked routes (★ on the route detail page) |
+| 收藏車站 / Stops | All bookmarked stops |
+
+Other features:
+
+- **Operator-coloured badges** — route numbers render in the operator's colour: 九巴 red, 城巴 teal, 嶼巴 blue, 綠Van green (NWFB orange).
+- **Day / Night toggle** — header button, persisted in `localStorage`, follows the system preference until you choose manually (override wins over `prefers-color-scheme`).
+- **Bookmarks** — star a route or stop from its detail page; stored in `localStorage`, listed under the two bookmark tabs, tap to reopen.
+- **Auto-refresh** — live arrival chips refresh every 30 s; manual refresh re-downloads the route database.
+- **Offline-first** — route database cached in IndexedDB; service worker caches the shell (`buseta-lite-v14`).
+- **EN/ZH** toggle; near-black UI in night mode with corrected chip/badge colours.
+
+Served files are in `apps/hk-bus-eta/build/` (includes the bundled `vendor/hk-bus-eta.esm.js`). The route database is
+fetched client-side via the library's `fetchEtaDb()` (`https://data.hkbus.app/routeFareList.min.json`, ~8 MB, cached in
+IndexedDB); live arrivals come from the provider APIs (KMB/CTB/NLB/綠Van/MTR/light rail/ferries) via `fetchEtas()`.
+See `apps/hk-bus-eta/README.md` for the data-layer details.
+
+The bundled library is GPL-3.0; the upstream LICENSE is included in `apps/hk-bus-eta/`.
 
 ---
 
