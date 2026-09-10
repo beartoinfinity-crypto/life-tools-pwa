@@ -136,6 +136,13 @@ body {
   border-radius: 10px; padding: 8px 12px; font-size: 14px; font-family: var(--font); color: var(--ink);
 }
 .pill.active { border-color: var(--accent); background: var(--accent); color: #fff; }
+.pill.co-kmb { background: #c9312b; color: #fff; border-color: #c9312b; }
+.pill.co-ctb { background: #0b7a75; color: #fff; border-color: #0b7a75; }
+.pill.co-nlb { background: #2f5ba8; color: #fff; border-color: #2f5ba8; }
+.pill.co-gmb { background: #2e7d32; color: #fff; border-color: #2e7d32; }
+.pill.co-nwf { background: #c05e12; color: #fff; border-color: #c05e12; }
+.pill.co-mixed { background: #6a4fa0; color: #fff; border-color: #6a4fa0; }
+.pill.active { outline: 2px solid rgba(255, 255, 255, 0.9); outline-offset: -1px; }
 .pill small { display: block; font-size: 10px; opacity: .75; font-weight: 600; }
 
 /* stop rows within a route */

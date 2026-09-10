@@ -406,6 +406,10 @@ function routeBadgeClass(no) {
   const ops = routeOperators(no);
   return ops.length === 1 ? coBadgeClass(ops[0]) : "co-mixed";
 }
+function groupOpsClass(g) {
+  const ops = [...new Set(g.entries.map((en) => en.co && en.co[0]).filter(Boolean))];
+  return ops.length === 1 ? coBadgeClass(ops[0]) : ops.length > 1 ? "co-mixed" : "";
+}
 function appendRouteRow(box, no) {
   const group = groupByDirection(no);
   if (!group.length) return;
@@ -450,7 +454,7 @@ function renderDetail() {
         title="${esc(T.bookToggle[state.lang])}">${isRouteBooked(state.detail.routeNo) ? "★" : "☆"}</button>
     </div>
     <div class="pills">
-      ${groups.map((x, i) => `<button class="pill${i === sel ? " active" : ""}" data-pi="${i}">
+      ${groups.map((x, i) => `<button class="pill${i === sel ? " active" : ""}${groupOpsClass(x) ? " " + groupOpsClass(x) : ""}" data-pi="${i}">
         ${esc(pickEntry(x).dest[state.lang] || "")}<small>${esc(pickEntry(x).orig[state.lang] || "")}</small>
       </button>`).join("")}
     </div>
