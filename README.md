@@ -200,11 +200,11 @@ A mobile-first, vanilla-JS re-implementation tuned for quick glance-and-leave us
 
 Other features:
 
-- **Operator-coloured badges** — route numbers render in the operator's colour: 九巴 red, 城巴 teal, 嶼巴 blue, 綠Van green (NWFB orange).
+- **Operator-coloured badges** — route numbers render in the operator's colour: 九巴 red, 城巴 yellow-on-red, 嶼巴 blue, 綠Van green, NWFB orange; a route served by several operators (e.g. 170) gets a mixed violet badge. The same palette also colours the operator tags, the direction pills, and each stop row's operator chip.
 - **Day / Night toggle** — header button, persisted in `localStorage`, follows the system preference until you choose manually (override wins over `prefers-color-scheme`).
 - **Bookmarks** — star a route or stop from its detail page; stored in `localStorage`, listed under the two bookmark tabs, tap to reopen.
 - **Auto-refresh** — live arrival chips refresh every 30 s; manual refresh re-downloads the route database.
-- **Offline-first** — route database cached in IndexedDB; service worker caches the shell (`buseta-lite-v14`).
+- **Offline-first** — route database cached in IndexedDB; service worker caches the shell (`buseta-lite-v18`).
 - **EN/ZH** toggle; near-black UI in night mode with corrected chip/badge colours.
 
 Served files are in `apps/hk-bus-eta/build/` (includes the bundled `vendor/hk-bus-eta.esm.js`). The route database is

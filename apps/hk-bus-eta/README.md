@@ -30,15 +30,16 @@ A mobile-first, vanilla-JS app with no build step, tuned for quick glance-and-le
 
 ### Features
 
-- **Operator-coloured route badges** — 九巴 red / 城巴 teal / 嶼巴 blue / 綠Van green / NWFB orange; unknown operators
-  fall back to the neutral badge.
+- **Operator-coloured badges** — 九巴 red / 城巴 yellow-on-red / 嶼巴 blue / 綠Van green / NWFB orange; a route served
+  by several operators (e.g. 170 = 九巴+城巴) gets a mixed **violet** badge, and unknown operators fall back to the
+  neutral badge. The same palette colours the operator tags, the direction pills, and each stop row's operator chip.
 - **Day / Night toggle** — header button, persisted in `localStorage` (`buseta-theme`); defaults to and live-follows
   `prefers-color-scheme` until the user picks a theme manually.
 - **Bookmarks** — star a route or stop from its detail page; stored in `localStorage`
   (`buseta-book-routes`, `buseta-book-stops`); reopened from the two bookmark tabs.
 - **Auto-refresh** — arrivals refresh every 30 s; manual refresh re-downloads the route database.
 - **Offline-first** — the ~8 MB route database is cached in IndexedDB (`bus-eta-lite` / `kv`); the service worker
-  caches the app shell (`buseta-lite-v14`) so the app opens instantly after the first visit.
+  caches the app shell (`buseta-lite-v18`) so the app opens instantly after the first visit.
 - **EN/ZH toggle**, tap-to-expand per-stop arrival details, batching for long stop lists.
 
 ## What's in this folder
