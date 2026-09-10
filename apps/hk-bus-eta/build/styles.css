@@ -156,7 +156,7 @@ body {
 .eta-chips { display: flex; gap: 6px; }
 .eta-chip {
   flex: 0 0 auto; text-align: center; padding: 5px 8px; min-width: 52px;
-  border-radius: 9px; background: var(--ink); color: #fff; font-size: 14px; font-weight: 700;
+  border-radius: 9px; background: var(--route-badge-bg); color: #fff; font-size: 14px; font-weight: 700;
 }
 .eta-chip .t { display: block; font-size: 9px; font-weight: 500; opacity: .75; }
 .eta-chip.soon { background: var(--accent); }
@@ -218,6 +218,8 @@ body {
   :root:not([data-theme="day"]) .btn-back { background: #1a211d; color: var(--ink); }
   :root:not([data-theme="day"]) .stop-idx { background: #2a342f; }
   :root:not([data-theme="day"]) .eta-expanded { background: #141a17; }
+  :root:not([data-theme="day"]) .eta-chip.mut,
+  :root:not([data-theme="day"]) .eta-chip.none { background: #222b26; color: var(--ink-2); }
   :root:not([data-theme="day"]) .card.tappable:active { background: #222b26; }
   :root:not([data-theme="day"]) .near-btn,
   :root:not([data-theme="day"]) .tab { color: var(--ink-2); background: #222b26; }
@@ -237,6 +239,8 @@ body {
 :root[data-theme="night"] .btn-back { background: #1a211d; color: var(--ink); }
 :root[data-theme="night"] .stop-idx { background: #2a342f; }
 :root[data-theme="night"] .eta-expanded { background: #141a17; }
+:root[data-theme="night"] .eta-chip.mut,
+:root[data-theme="night"] .eta-chip.none { background: #222b26; color: var(--ink-2); }
 :root[data-theme="night"] .card.tappable:active { background: #222b26; }
 :root[data-theme="night"] .near-btn,
 :root[data-theme="night"] .tab { color: var(--ink-2); background: #222b26; }
