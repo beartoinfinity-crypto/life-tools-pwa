@@ -42,4 +42,17 @@
   }
 
   render();
+
+  // theme-aware favicon (light / dark)
+  var mq = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)');
+  var iconLink = document.createElement('link');
+  iconLink.rel = 'icon';
+  iconLink.type = 'image/svg+xml';
+  document.head.appendChild(iconLink);
+  document.querySelectorAll('link[rel="icon"][media]').forEach(function (l) { l.remove(); });
+  function updateIcon() {
+    iconLink.href = mq && mq.matches ? 'icon-dark.svg' : 'icon-light.svg';
+  }
+  updateIcon();
+  if (mq && mq.addEventListener) mq.addEventListener('change', updateIcon);
 })();
