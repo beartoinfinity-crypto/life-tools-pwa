@@ -396,6 +396,16 @@ function renderRouteResults(q) {
 function coBadgeClass(co) {
   return "co-" + String(co || "").toLowerCase();
 }
+function routeOperators(no) {
+  const entries = state.routeNoIndex.get(String(no).toUpperCase()) || [];
+  const set = new Set();
+  for (const e of entries) if (e.co && e.co[0]) set.add(e.co[0]);
+  return [...set];
+}
+function routeBadgeClass(no) {
+  const ops = routeOperators(no);
+  return ops.length === 1 ? coBadgeClass(ops[0]) : "co-mixed";
+}
 function appendRouteRow(box, no) {
   const group = groupByDirection(no);
   if (!group.length) return;
@@ -404,11 +414,11 @@ function appendRouteRow(box, no) {
   const card = document.createElement("div");
   card.className = "card tappable route-row";
   card.innerHTML = `
-    <div class="route-no ${coBadgeClass(cos[0])}">${esc(no)}</div>
+    <div class="route-no ${routeBadgeClass(no)}">${esc(no)}</div>
     <div class="route-dir">
       <div class="rd">${esc(dirs.join(" · "))}</div>
       <div class="rmeta">${esc(group.length + " " + T.services[state.lang])}
-        ${cos.map((c) => `<span class="tag">${esc(coTag(c))}</span>`).join("")}</div>
+        ${cos.map((c) => `<span class="tag ${coBadgeClass(c)}">${esc(coTag(c))}</span>`).join("")}</div>
     </div>`;
   card.addEventListener("click", () => openRoute(no));
   box.appendChild(card);
@@ -425,13 +435,15 @@ function renderDetail() {
   const { sel, groups } = state.detail;
   const g = groups[sel];
   const e = pickEntry(g);
+  const ops = routeOperators(state.detail.routeNo);
+  const opTags = ops.map((c) => `<span class="tag ${coBadgeClass(c)}">${esc(coTag(c))}</span>`).join("");
   el.viewHome.classList.add("hidden");
   el.viewDetail.classList.remove("hidden");
   el.detailTop.innerHTML = `
     <div class="back-bar">
       <button class="btn-back" id="backBtn" title="${esc(T.updated[state.lang])}">‹</button>
       <div>
-        <div class="detail-title">${esc(state.detail.routeNo)} <span class="tag">${esc(coTag(e.co[0]))}</span>
+        <div class="detail-title">${esc(state.detail.routeNo)} ${opTags}
         <span class="detail-sub">${esc(T.headingTo[state.lang] + " " + (e.dest[state.lang] || e.dest.en))}</span></div>
       </div>
       <button class="btn-star${isRouteBooked(state.detail.routeNo) ? " on" : ""}" id="starBtn"
