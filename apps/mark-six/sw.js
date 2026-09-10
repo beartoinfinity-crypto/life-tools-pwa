@@ -31,7 +31,7 @@ self.addEventListener('fetch', function (event) {
 
   var url = new URL(event.request.url);
 
-  if (url.pathname === '/api/marksix' || url.pathname === '/api/marksix/refresh') {
+  if (url.pathname === '/mark-six/api/marksix' || url.pathname === '/mark-six/api/marksix/refresh' || url.pathname === '/mark-six/api/marksix/history') {
     event.respondWith(
       fetch(event.request).then(function (response) {
         var cloned = response.clone();

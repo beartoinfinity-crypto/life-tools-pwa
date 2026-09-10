@@ -6,6 +6,9 @@
   var allDraws = [];
   var totalCached = 0;
 
+  // Base path this app is mounted at (hub server mounts it under /mark-six)
+  var API_BASE = '/mark-six/api';
+
   var loadingEl = document.getElementById('loading');
   var errorEl = document.getElementById('error');
   var errorMsgEl = document.getElementById('errorMsg');
@@ -130,7 +133,7 @@
     refreshBtn.classList.add('spinning');
 
     try {
-      var url = forceRefresh ? '/api/marksix/refresh' : '/api/marksix';
+      var url = forceRefresh ? API_BASE + '/marksix/refresh' : API_BASE + '/marksix';
       var resp = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -160,7 +163,7 @@
     olderStatus.textContent = 'Loading...';
 
     try {
-      var resp = await fetch('/api/marksix/history', {
+      var resp = await fetch(API_BASE + '/marksix/history', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ limit: loadedCount + PAGE_SIZE }),

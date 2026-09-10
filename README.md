@@ -1,106 +1,102 @@
-# Mark Six PWA
+# Life Tool
 
-A Progressive Web App (PWA) that displays Hong Kong Mark Six lottery results. It pulls historical and latest results from multiple public sources, persists them to **Supabase (PostgreSQL)**, auto-refreshes on draw days (Tue/Thu/Sat), works offline, and is installable on iPhone/Android home screens.
+A hub of handy Progressive Web Apps (PWAs), served from a single Express server and deployed to Render. Each app lives under `apps/`, is mounted at its own URL path, and shares the same Supabase storage stack.
 
-- **Live app:** https://mark-six-pwa.onrender.com
+- **Live dashboard:** https://mark-six-pwa.onrender.com
 - **Repo:** https://github.com/beartoinfinity-crypto/mark-six-pwa
+- **Hosting:** Render (Node.js, single service)
 - **Storage:** Supabase (PostgreSQL)
-- **Hosting:** Render (Node.js)
 
----
+## Apps
 
-## Features
+| App | URL | Description |
+|-----|-----|-------------|
+| **Mark Six** | `/mark-six/` | Hong Kong Mark Six lottery results: latest draws, full history, special numbers, daily auto-refresh |
 
-- 📊 Shows the latest 10 draws, with "Load Older Results" to page through history
-- 🔢 Displays 6 main numbers + the 1 **special number** (marked with a `+` and red ring)
-- 🎨 Ball colors follow the official Mark Six color scheme (red/blue/green)
-- 🔄 Auto-refreshes at midnight on draw days only (Tue/Thu/Sat)
-- 🧭 Manual refresh button works any time
-- 📱 Installable PWA — standalone app on Android & iOS
-- 🛜 Offline support via a service worker (API is network-first, assets cache-first)
-- 🗄️ All history (1993–present, ~4,300 draws) persisted in Supabase
+Browsing to the root (`/`) shows a launcher dashboard with a card for each app.
 
 ---
 
 ## Quick Start (local)
 
 ```bash
-cd mark-six-pwa
 npm install
 npm start
 ```
 
-Open `http://localhost:3000` in a browser.
+Open `http://localhost:3000` — visit `/` for the dashboard and `/mark-six/` for the Mark Six app.
 
-> Prerequisite: you need a Supabase project and a `.env` file — see [Supabase Setup](#supabase-setup-storage).
+> Prerequisite: a Supabase project and a `.env` file — see [Supabase Setup](#supabase-setup-storage).
 
 ---
 
 ## Project Structure
 
 ```
-mark-six-pwa/
-├── server.js           # Production entry point — Express + Supabase
-├── supabase-db.js      # Supabase client + async store operations
-├── supabase-schema.sql # SQL: create tables + RLS in Supabase SQL Editor
-├── parsers.js          # HTML/JSON parsers for each data source
-├── app.js              # Client-side logic (UI, fetch, midnight refresh)
-├── sw.js               # Service worker (offline caching)
-├── index.html          # Main page
-├── styles.css          # Mobile-first responsive styles
-├── manifest.json       # PWA manifest
-├── icons/icon.svg      # App icon
-├── render.yaml         # Render Blueprint deploy config
-├── package.json        # Dependencies & scripts
-├── .env.example        # Template for environment variables
-│
-├── api.js              # Modular Express app (used by tests)
-├── db.js               # In-memory SQLite store (used by tests)
-├── scrapers.js         # HTTP fetch + scrape orchestrators (used by tests)
-├── draw-day.js         # Draw-day logic (used by tests)
-│
-└── test/               # Vitest suite
-    ├── parsers.test.js  # 21 tests
-    ├── db.test.js       # 15 tests
-    ├── api.test.js      #  8 tests
-    ├── draw-day.test.js # 11 tests
-    └── fixtures/        # Test HTML/JSON fixtures
+.
+├── server.js             # Hub server: dashboard + mounts each app
+├── public/               # Dashboard (served at /)
+│   ├── index.html
+│   ├── styles.css
+│   └── app.js            # Renders launcher cards (add new apps here)
+├── apps/
+│   └── mark-six/         # Mark Six PWA (mounted at /mark-six/)
+│       ├── server.js          # Express app (module) + ensureInitialData()
+│       ├── supabase-db.js     # Supabase client + store operations
+│       ├── supabase-schema.sql # SQL: tables + RLS for Supabase
+│       ├── parsers.js         # HTML/JSON parsers for data sources
+│       ├── api.js             # Modular Express app (used by tests)
+│       ├── db.js              # In-memory SQLite store (used by tests)
+│       ├── scrapers.js        # HTTP fetch + scrape orchestrators
+│       ├── draw-day.js        # Draw-day logic (Tue/Thu/Sat)
+│       ├── index.html         # App page
+│       ├── app.js             # Client-side logic
+│       ├── styles.css
+│       ├── manifest.json      # PWA manifest (scope /mark-six/)
+│       ├── sw.js              # Service worker (offline caching)
+│       ├── icons/icon.svg
+│       └── test/              # Vitest suite (55 tests) + fixtures
+├── render.yaml           # Render Blueprint config
+├── package.json
+├── .env.example
+└── vitest.config.mjs
 ```
 
-> **Note:** `server.js` is the only runtime entry point used in production and by the live app. The `api.js`/`db.js`/`scrapers.js`/`draw-day.js` modules are the extracted logic used by the offline test suite (with an in-memory SQLite store). `draw-day.js` is imported by tests but not currently used by `server.js` at runtime.
+### Adding a new app
+
+1. Create `apps/<name>/` with a `server.js` that exports `{ app, ensureInitialData? }` (an Express app plus an optional startup hook).
+2. In the hub `server.js`, mount it: `app.use('/<name>', require('./apps/<name>/server').app);`
+3. Add a card to `public/app.js` under `APPS`.
+4. Client code should use an `API_BASE` prefix matching its mount path (see `apps/mark-six/app.js`).
 
 ---
 
-## Architecture
+## Supabase Setup (storage)
 
-### Data Flow
+1. Create a project at [supabase.com](https://supabase.com).
+2. Copy `.env.example` to `.env` and fill in your values:
 
-```
-lotteryextreme.com ──┐
-                     ├──▶ server.js ──▶ supabase-db.js ──▶ Supabase (PostgreSQL) ──▶ /api ──▶ Browser
-GitHub JSON ──────── ┘
-```
+   ```
+   SUPABASE_URL=https://<your-project>.supabase.co
+   SUPABASE_KEY=your-publishable-key
+   PORT=3000
+   ```
 
-### Data Sources
+3. Open the **SQL Editor** and run `apps/mark-six/supabase-schema.sql` (creates `draws` and `meta` tables plus RLS policies).
+4. Start the server. If `draws` is empty, the Mark Six app auto-fills ~4,300 historical draws from GitHub.
 
-| Source | Coverage | Used for |
-|--------|----------|----------|
-| lotteryextreme.com | Latest ~20 draws | Daily refresh (append-only), incl. special numbers |
-| GitHub JSON | 1993–2025 (~4,288 draws) | Initial / historical backfill when DB is empty |
-| lottery.hk | All years | Historical backfill (bounded to current/previous year; often times out from Render) |
+> The `.env` file is git-ignored — never commit your keys.
 
-### Database (Supabase)
-
-Two tables, backed by the SQL in `supabase-schema.sql`:
+**Schema (Supabase):**
 
 ```sql
 CREATE TABLE draws (
   id       bigint generated always as identity primary key,
   draw     text not null unique,   -- e.g. "26/097"
-  date     text not null,          -- ISO date "2026-09-08"
-  numbers  text not null,          -- JSON array of 6 main numbers
-  special  integer,                -- the special number
-  source   text,                   -- "github" | "lotteryextreme" | ...
+  date     text not null,          -- ISO "2026-09-08"
+  numbers  text not null,          -- JSON: [9,23,28,29,35,41]
+  special  integer,                -- the special number (e.g. 38)
+  source   text,
   created_at timestamptz not null default now()
 );
 
@@ -111,19 +107,27 @@ CREATE TABLE meta (
 );
 ```
 
-Row Level Security (RLS) is enabled with permissive policies keyed to the publishable/anon key.
+---
 
-### API Endpoints (production `server.js`)
+## Mark Six app details
 
-All endpoints take/return JSON.
+### Data sources
+
+| Source | Coverage | Used for |
+|--------|----------|----------|
+| lotteryextreme.com | Latest ~20 draws | Daily refresh (append-only), incl. special numbers |
+| GitHub JSON | 1993–2025 (~4,288 draws) | Initial / historical backfill when empty |
+| lottery.hk | All years | Historical backfill (bounded to current/previous year) |
+
+### API endpoints (mounted under `/mark-six`)
 
 | Method | Endpoint | Request body | Description |
 |--------|----------|--------------|-------------|
-| POST | `/api/marksix` | `{ "lastNDraw": 10 }` | Latest N draws from DB (fast, no scraping) |
-| POST | `/api/marksix/refresh` | `{ "lastNDraw": 10 }` | Scrape latest draws, upsert new ones, return results |
-| POST | `/api/marksix/history` | `{ "year"?, "from"?, "to"?, "limit"? }` | Query history by year, date range, or limit |
+| POST | `/mark-six/api/marksix` | `{ "lastNDraw": 10 }` | Latest N draws from DB (fast) |
+| POST | `/mark-six/api/marksix/refresh` | `{ "lastNDraw": 10 }` | Scrape latest draws, upsert new, return results |
+| POST | `/mark-six/api/marksix/history` | `{ "year"?, "from"?, "to"?, "limit"? }` | Query by year, range, or limit |
 
-#### Response shape
+Response shape:
 
 ```json
 {
@@ -145,49 +149,31 @@ All endpoints take/return JSON.
 }
 ```
 
-### Client Behavior
+### Client behaviour
 
-- **First visit loads from cache** (`/api/marksix`) — instant, no scraping on page load
-- "Load Older Results" appends 10 more per click via `/api/marksix/history`
-- **Auto-refresh at midnight** on draw days only (Tue/Thu/Sat)
-- Manual refresh button calls `/api/marksix/refresh` (scrapes + upserts)
+- First visit loads from cache (`/mark-six/api/marksix`) — no scraping on page load
+- Auto-refresh at midnight on draw days only (Tue/Thu/Sat)
+- Manual refresh button scrapes a fresh copy of the latest draws
+- 6 main numbers + 1 **special number** (rendered with a `+` and red ring)
 
-### Service Worker
+### Ball colours
 
-- Caches the app shell on install
-- API requests (`/api/marksix*`): **network-first**, fall back to cache
-- Static assets: **cache-first**, updated in background
-- Cache versioned (`mark-six-v6`) — bump to force clients to fetch the new app shell
-
-### Ball Colors
-
-The official Mark Six ball-color grouping, applied to both main and special numbers:
-
-| Color | Numbers |
-|-------|---------|
+| Colour | Numbers |
+|--------|---------|
 | Red | 1, 2, 7, 8, 12, 13, 18, 19, 23, 24, 29, 30, 34, 35, 40, 45, 46 |
 | Blue | 3, 4, 9, 10, 14, 15, 20, 25, 26, 31, 36, 37, 41, 42, 47, 48 |
 | Green | 5, 6, 11, 16, 17, 21, 22, 27, 28, 32, 33, 38, 39, 43, 44, 49 |
 
-The special number renders with a `+` prefix and a red ring border to distinguish it from the 6 main numbers.
-
 ---
 
-## Supabase Setup (storage)
+## Testing
 
-1. Create a project at [supabase.com](https://supabase.com).
-2. Copy `.env.example` to `.env` and fill in your values:
+```bash
+npm test            # Run all tests once
+npm run test:watch  # Watch mode
+```
 
-   ```
-   SUPABASE_URL=https://<your-project>.supabase.co
-   SUPABASE_KEY=your-publishable-key
-   PORT=3000
-   ```
-
-3. Open the **SQL Editor** in your Supabase dashboard and run the entire contents of `supabase-schema.sql` (creates the `draws` and `meta` tables plus RLS policies).
-4. Start the server. If `draws` is empty, the server auto-fills ~4,300 historical draws from GitHub on first run.
-
-> The `.env` file is git-ignored — never commit your keys.
+55 tests across 4 files under `apps/mark-six/test/`. The suite uses in-memory SQLite + fixtures, so it runs offline without a Supabase connection.
 
 ---
 
@@ -201,50 +187,14 @@ The special number renders with a `+` prefix and a red ring border to distinguis
 
 ---
 
-## Testing
-
-```bash
-npm test            # Run all tests once
-npm run test:watch  # Watch mode
-```
-
-55 tests across 4 test files cover parsers, DB operations, API endpoints, and draw-day logic. The suite uses in-memory SQLite + fixtures, so it runs offline without a Supabase connection.
-
----
-
-## Installation as a PWA
-
-Open the deployed URL (or local `http://<your-ip>:3000`) on your phone, then:
-
-- **Android (Chrome):** menu → "Add to Home screen"
-- **iPhone (Safari):** Share → "Add to Home Screen"
-
-HTTPS is required for the install prompt — the Render deployment provides that automatically.
-
----
-
 ## Deployment
 
-See [DEPLOYMENT.md](./DEPLOYMENT.md) for deploying to **Render** (including environment variables and the Blueprint) and migrating data into Supabase.
-
----
-
-## Dependencies
-
-| Package | Purpose |
-|---------|---------|
-| express | HTTP server |
-| @supabase/supabase-js | Supabase client (async storage) |
-| dotenv | Load `.env` variables |
-| vitest | Test runner (dev) |
-| supertest | HTTP testing (dev) |
-| better-sqlite3 | SQLite (used by the offline test store) |
+See [DEPLOYMENT.md](./DEPLOYMENT.md) for the full Render + Supabase walkthrough.
 
 ---
 
 ## Notes
 
-- HKJC's official GraphQL API is IP-whitelisted and cannot be called directly from a public server.
-- Historic draws (1993–2025) are immutable and preloaded from GitHub; refresh only pulls recent draws.
-- Dates are stored as ISO (`YYYY-MM-DD`) and exposed with a `+08:00` offset.
-- On Render's free tier the instance sleeps after ~15 min idle, so the first request after a sleep may cold-start slowly.
+- The hub mounts sub-apps as Express apps; each is self-contained under `apps/`.
+- On Render's free tier the instance sleeps after ~15 min idle, so the first request after an idle period may cold-start slowly.
+- `marksix.db` (SQLite) is no longer used in production — storage is Supabase only.
