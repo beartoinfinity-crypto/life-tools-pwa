@@ -132,7 +132,7 @@ HTTPS is automatic, at a URL like `https://mark-six-pwa.onrender.com`.
 
 - `https://mark-six-pwa.onrender.com/` → **dashboard** (launcher cards)
 - `https://mark-six-pwa.onrender.com/mark-six/` → **Mark Six PWA**
-- `https://mark-six-pwa.onrender.com/bus-eta/` → **HK Bus ETA PWA** (prebuilt static bundle committed under `apps/hk-bus-eta/build/` — no build step on the server)
+- `https://mark-six-pwa.onrender.com/bus-eta/` → **HK Bus ETA** (static app committed under `apps/hk-bus-eta/build/` — no build step on the server; route data is fetched client-side)
 
 ---
 

@@ -1,23 +1,24 @@
-# HK Bus ETA (香港巴士預報)
+# HK Bus ETA (巴士預報)
 
-Hong Kong bus ETA PWA (KMB / LWB / CTB / NLB / MTR Bus, green minibus, light rail and MTR), served from the Life Tool hub at **`/bus-eta/`**.
+A focused, mobile-first bus ETA web app for Hong Kong, served from the Life Tool hub at **`/bus-eta/`**.
 
-This is the prebuilt static bundle of [hkbus/hk-independent-bus-eta](https://github.com/hkbus/hk-independent-bus-eta)
-**v11.2.0** (commit `cb5b1fcbed5f9f7cb14635ee29507084b9de2578`), built with `base: "/bus-eta/"`, included here for self-hosting.
+Replaces the upstream [hkbus/hk-independent-bus-eta](https://github.com/hkbus/hk-independent-bus-eta) PWA with a
+deliberately simple home-grown UI built around exactly two flows:
 
-## Build inputs
+1. **路線查詢 / Route** — type a route number (e.g. `1A`, `286X`, `A12`), pick a direction, see every stop with live
+   arrival chips (tap a time for details).
+2. **車站查詢 / Stop** — type a stop name (or use "附近的站" geolocation) to see *every route* serving that stop with
+   live arrivals.
 
-| Item | Value |
-|------|-------|
-| Upstream repo | https://github.com/hkbus/hk-independent-bus-eta (GPL-3.0) |
-| Version | 11.2.0 |
-| Upstream commit | `cb5b1fcbed5f9f7cb14635ee29507084b9de2578` |
-| This build | `vite build` with `base: "/bus-eta/"` (see #subpath-bundling) |
+Both views auto-refresh every 30 s, plus a manual refresh that re-downloads the route database.
 
 ## What's in this folder
 
-- `build/` — the production bundle to be served (this is what the hub mounts)
-- `LICENSE` — upstream GPL-3.0 license (required for redistribution)
+| Item | Description |
+|------|-------------|
+| `build/` | The served app (this is what the hub mounts): `index.html`, `app.js`, `styles.css`, `manifest.json`, `sw.js`, `vendor/`, `img/` |
+| `build-upstream/` | Archived prebuilt bundle of the upstream app v11.2.0 (commit `cb5b1fcbed5f9f7cb14635ee29507084b9de2578`) — kept for reference, **not served** |
+| `LICENSE` | Upstream GPL-3.0 license (the route database logic derives from upstream's hk-bus-eta library) |
 
 ## How the hub serves it
 
@@ -26,36 +27,38 @@ The hub (`server.js`) mounts this folder:
 ```
 /bus-eta          -> 302 /bus-eta/
 /bus-eta/*        -> static files from build/
-/bus-eta/<route>  -> SPA fallback to build/index.html  (client routing, e.g. /bus-eta/zh/route/1A)
+/bus-eta/<path>   -> SPA fallback to build/index.html
 ```
 
-## Subpath bundling
+## Data layer
 
-The upstream app is hardcoded for root hosting. To self-host under `/bus-eta/`
-the following changes were made to the source before building:
+All data is fetched client-side; no backend:
 
-- `vite.config.ts`: `base: "/bus-eta/"`; PWA manifest `scope: "/bus-eta/"`; workbox runtime-cache patterns use `/bus-eta/...` literals
-- `src/App.tsx`: `<BrowserRouter basename="/bus-eta">`
-- `src/db.ts`: `fetch("/schema-version.txt")` -> `${import.meta.env.BASE_URL}schema-version.txt`
-- `src/pages/SettingsPage.tsx`, `src/components/settings/InstallDialog.tsx`,
-  `src/components/map/maplibre/BaseMap.tsx`, `RouteMap.tsx`, `SearchMap.tsx`,
-  `src/components/layout/Header.tsx`, `src/components/emotion/EmotionTabbar.tsx`,
-  `src/pages/BookmarkedStopPage.tsx`: absolute `/img/...`, `/sw.js` refs -> `import.meta.env.BASE_URL` prefixed
-- `vite-plugin-eslint` was removed from the build so `vite build` doesn't fail on lint warnings
+- Route database — `hk-bus-eta` npm package (`fetchEtaDb()` -> `https://data.hkbus.app/routeFareList.min.json`,
+  ~8 MB). Cached in **IndexedDB** so repeat visits render instantly and work offline; refreshed on launch when stale.
+- Live arrivals — provider APIs via the library's `fetchEtas()` wrapper (KMB/CTB/NLB: `data.etabus.gov.hk` +
+  `data.gov.hk` public APIs; green minibuses, MTR, light rail and ferries via the library's providers).
 
-## Rebuilding
+The library (`hk-bus-eta@3.8.2`, GPL-3.0, MIT for the source? — see its own license) is bundled into
+`build/vendor/hk-bus-eta.esm.js` with esbuild:
 
 ```bash
-git clone https://github.com/hkbus/hk-independent-bus-eta.git
-cd hk-independent-bus-eta
-npm install --legacy-peer-deps    # upstream uses yarn; npm needs the flag
-# apply the #subpath-bundling changes above (mirror of this repo's git history)
-npx vite build                    # optional pre-step: tsc && vite build
-# output lands in build/  ->  copy to apps/hk-bus-eta/build
+npx esbuild node_modules/hk-bus-eta/esm/index.js --bundle --format=esm --minify --target=es2020 --outfile=build/vendor/hk-bus-eta.esm.js
 ```
 
-Data at runtime is fetched client-side from `data.hkbus.app` / `data.gov.hk` (public CORS APIs) — no backend needed.
+### ETA database shape
+
+`{ holidays, routeList, serviceDayMap, stopList, stopMap }`:
+
+- `routeList` — keyed `"<no>+<serviceType>+<orig en>+<dest en>"`; each entry has `bound, co[], dest, orig, route, seq,
+  serviceType, stops` (`stops.<co>` are provider stop ids, `[]` when the operator has no stops for that entry).
+- `stopList` — `{ stopId: { location, name:{en,zh} } }`. Small-int ids are the unified NLB/minibus ids; the ~7.6 k
+  hex keys are KMB/CTB provider stop ids.
+- `stopMap` — maps provider stop ids -> `[[co, providerId], ...]` for cross-company lookups.
+- "Routes serving a stop": precomputed client-side by scanning `routeList` into a `stopId -> rows` index after load.
 
 ## License
 
-GPL-3.0. See [LICENSE](./LICENSE). Upstream project: https://github.com/hkbus/hk-independent-bus-eta
+The app is original code. It bundles `hk-bus-eta` (GPL-3.0) and derives stop-resolution logic from the upstream
+app, both by [hkbus](https://github.com/hkbus). See [LICENSE](./LICENSE) (GPL-3.0) and the upstream repo:
+https://github.com/hkbus/hk-independent-bus-eta

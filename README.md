@@ -12,7 +12,7 @@ A hub of handy Progressive Web Apps (PWAs), served from a single Express server 
 | App | URL | Description |
 |-----|-----|-------------|
 | **Mark Six** | `/mark-six/` | Hong Kong Mark Six lottery results: latest draws, full history, special numbers, daily auto-refresh |
-| **HK Bus ETA** | `/bus-eta/` | Hong Kong bus ETA (KMB, LWB, CTB, NLB, MTR Bus, green minibus, light rail, MTR) — prebuilt PWA of [hkbus/hk-independent-bus-eta](https://github.com/hkbus/hk-independent-bus-eta) (GPL-3.0) |
+| **HK Bus ETA** | `/bus-eta/` | Hong Kong real-time bus/minibus ETA — search by **route number** or by **bus stop** ("all buses via"), auto-refresh every 30 s, offline-capable; data from `data.hkbus.app` / `data.gov.hk` via the bundled [hk-bus-eta](https://www.npmjs.com/package/hk-bus-eta) library (GPL-3.0) |
 
 Browsing to the root (`/`) shows a launcher dashboard with a card for each app.
 
@@ -57,9 +57,10 @@ Open `http://localhost:3000` — visit `/` for the dashboard and `/mark-six/` fo
 │       ├── sw.js              # Service worker (offline caching)
 │       ├── icons/icon.svg
 │       └── test/              # Vitest suite (55 tests) + fixtures
-│   └── hk-bus-eta/        # HK Bus ETA PWA (mounted at /bus-eta/)
-│       ├── build/             # Prebuilt static bundle (served)
-│       ├── README.md          # Attribution + rebuild steps
+│   └── hk-bus-eta/        # HK Bus ETA app (mounted at /bus-eta/)
+│       ├── build/             # Lite ETA UI (served): app.js + bundled hk-bus-eta library
+│       ├── build-upstream/    # Archived upstream PWA (not served)
+│       ├── README.md          # Attribution + data-layer notes
 │       └── LICENSE            # GPL-3.0 (upstream license, required)
 ├── render.yaml           # Render Blueprint config
 ├── package.json
@@ -173,11 +174,17 @@ Response shape:
 
 ## HK Bus ETA app
 
-`/bus-eta/` serves a **prebuilt static PWA** of the [hkbus/hk-independent-bus-eta](https://github.com/hkbus/hk-independent-bus-eta) project (GPL-3.0, v11.2.0). It requires no backend — ETA plus route/fare data is fetched client-side from `data.hkbus.app` / `data.gov.hk`.
+`/bus-eta/` is a focused, mobile-first PWA for Hong Kong bus/minibus ETA with two flows: **search by route number**
+(direction pills → every stop with live arrival chips) and **search by bus stop** (every route serving that stop).
+It auto-refreshes every 30 s, has an EN/ZH toggle, and stays usable offline.
 
-- The bundle lives in `apps/hk-bus-eta/build/`; the hub serves it with a SPA fallback so routes like `/bus-eta/zh/route/1A` render client-side.
-- It was built with `base: "/bus-eta/"` and a router `basename` — see `apps/hk-bus-eta/README.md` for the exact subpath changes and how to rebuild.
-- Source is not vendored; the upstream repo + commit are referenced in `apps/hk-bus-eta/README.md`, and the GPL-3.0 `LICENSE` is included as required.
+- No backend: routes come from `hk-bus-eta`'s `fetchEtaDb()` (`https://data.hkbus.app/routeFareList.min.json`, ~8 MB,
+  cached in IndexedDB); live arrivals come from the provider APIs (KMB/CTB/NLB/green minibus/MTR/light rail/ferries)
+  via the library's `fetchEtas()`.
+- The served files live in `apps/hk-bus-eta/build/` (original `index.html` / `app.js` / `styles.css` + a bundled
+  `vendor/hk-bus-eta.esm.js`); the **upstream prebuilt PWA** (hkbus/hk-independent-bus-eta v11.2.0) is archived in
+  `apps/hk-bus-eta/build-upstream/` and is **not served**.
+- The bundled library is GPL-3.0; the upstream LICENSE is included. See `apps/hk-bus-eta/README.md` for details.
 
 ---
 

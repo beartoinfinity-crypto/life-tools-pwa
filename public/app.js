@@ -12,7 +12,7 @@
     {
       id: 'bus-eta',
       title: 'HK Bus ETA',
-      desc: 'Real-time Hong Kong bus ETA for KMB, LWB, CTB, NLB and MTR Bus, with light rail and MTR arrivals.',
+      desc: 'Real-time HK bus & minibus ETA — search by route number or by bus stop (all buses via).',
       href: '/bus-eta/',
       icon: '巴'
     }
