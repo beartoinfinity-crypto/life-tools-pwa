@@ -17,6 +17,13 @@ const T = {
   stopEmpty: { zh: "輸入車站名稱或編號開始查詢", en: "Start typing a stop name" },
   tabRoute: { zh: "路線查詢", en: "Route" },
   tabStop: { zh: "車站查詢", en: "Stop" },
+  bookRoute: { zh: "收藏路線", en: "Bookmark" },
+  bookStop: { zh: "收藏車站", en: "Stops" },
+  bookEmptyR: { zh: "尚未收藏任何路線", en: "No bookmarked routes" },
+  bookEmptyS: { zh: "尚未收藏任何車站", en: "No bookmarked stops" },
+  bookAdded: { zh: "已加入收藏", en: "Bookmarked" },
+  bookRemoved: { zh: "已取消收藏", en: "Removed" },
+  bookToggle: { zh: "收藏此項目", en: "Bookmark this" },
   headingTo: { zh: "往", en: "To" },
   stopsN: { zh: "個站", en: "stops" },
   services: { zh: "個方向/班次", en: "services" },
@@ -48,6 +55,8 @@ const el = {
   stopInput: $("#stopInput"),
   routeResults: $("#routeResults"),
   stopResults: $("#stopResults"),
+  routeBookResults: $("#routeBookResults"),
+  stopBookResults: $("#stopBookResults"),
   viewHome: $("#viewHome"),
   viewDetail: $("#viewDetail"),
   detailTop: $("#detailTop"),
@@ -62,6 +71,8 @@ function setLang(l) {
   document.documentElement.lang = l === "zh" ? "zh-Hant" : "en";
   $(".tab[data-tab=route]").textContent = T.tabRoute[l];
   $(".tab[data-tab=stop]").textContent = T.tabStop[l];
+  $(".tab[data-tab=routebook]").textContent = T.bookRoute[l];
+  $(".tab[data-tab=stopbook]").textContent = T.bookStop[l];
   $("#routeInput").placeholder = l === "zh" ? "輸入路線號碼，如 1A、286X、A12" : "Enter route no., e.g. 1A, 286X, A12";
   $("#stopInput").placeholder =
     l === "zh" ? "輸入車站名稱或編號，如 怡和街、TA292" : "Enter stop name or code, e.g. Percival St, TA292";
@@ -334,6 +345,39 @@ function groupByDirection(no) {
   return [...map.values()].map((g, gi) => ({ ...g, gi }));
 }
 
+/* ---------------- bookmarks ---------------- */
+function bookRoutes() {
+  try { return JSON.parse(localStorage.getItem("buseta-book-routes") || "[]"); } catch { return []; }
+}
+function bookStops() {
+  try { return JSON.parse(localStorage.getItem("buseta-book-stops") || "[]"); } catch { return []; }
+}
+function isRouteBooked(no) {
+  return bookRoutes().includes(String(no).toUpperCase());
+}
+function isStopBooked(id) {
+  return bookStops().some((b) => b.id === id);
+}
+function toggleRouteBook(no) {
+  no = String(no).toUpperCase();
+  const a = bookRoutes();
+  const i = a.indexOf(no);
+  if (i >= 0) a.splice(i, 1); else a.push(no);
+  localStorage.setItem("buseta-book-routes", JSON.stringify(a));
+  return i < 0;
+}
+function toggleStopBook(id, name) {
+  const a = bookStops();
+  const i = a.findIndex((b) => b.id === id);
+  if (i >= 0) a.splice(i, 1); else a.push({ id, name: name || null });
+  localStorage.setItem("buseta-book-stops", JSON.stringify(a));
+  return i < 0;
+}
+function stopNameObj(ref) {
+  const s = state.db && state.db.stopList[ref];
+  return s && s.name ? s.name : null;
+}
+
 /* ---------------- route search ---------------- */
 function renderRouteResults(q) {
   const box = el.routeResults;
@@ -347,22 +391,24 @@ function renderRouteResults(q) {
   });
   keys = keys.slice(0, 25);
   if (!keys.length) { box.innerHTML = `<div class="msg">${T.noRoute[state.lang]}</div>`; return; }
-  keys.forEach((no) => {
-    const group = groupByDirection(no);
-    const dirs = group.slice(0, 3).map((g) => pickEntry(g).dest[state.lang]).filter(Boolean);
-    const cos = [...new Set(group.map((g) => pickEntry(g).co[0]))];
-    const card = document.createElement("div");
-    card.className = "card tappable route-row";
-    card.innerHTML = `
-      <div class="route-no">${esc(no)}</div>
-      <div class="route-dir">
-        <div class="rd">${esc(dirs.join(" · "))}</div>
-        <div class="rmeta">${esc(group.length + " " + T.services[state.lang])}
-          ${cos.map((c) => `<span class="tag">${esc(coTag(c))}</span>`).join("")}</div>
-      </div>`;
-    card.addEventListener("click", () => openRoute(no));
-    box.appendChild(card);
-  });
+  keys.forEach((no) => appendRouteRow(box, no));
+}
+function appendRouteRow(box, no) {
+  const group = groupByDirection(no);
+  if (!group.length) return;
+  const dirs = group.slice(0, 3).map((g) => pickEntry(g).dest[state.lang]).filter(Boolean);
+  const cos = [...new Set(group.map((g) => pickEntry(g).co[0]))];
+  const card = document.createElement("div");
+  card.className = "card tappable route-row";
+  card.innerHTML = `
+    <div class="route-no">${esc(no)}</div>
+    <div class="route-dir">
+      <div class="rd">${esc(dirs.join(" · "))}</div>
+      <div class="rmeta">${esc(group.length + " " + T.services[state.lang])}
+        ${cos.map((c) => `<span class="tag">${esc(coTag(c))}</span>`).join("")}</div>
+    </div>`;
+  card.addEventListener("click", () => openRoute(no));
+  box.appendChild(card);
 }
 
 /* ---------------- route detail ---------------- */
@@ -385,6 +431,8 @@ function renderDetail() {
         <div class="detail-title">${esc(state.detail.routeNo)} <span class="tag">${esc(coTag(e.co[0]))}</span>
         <span class="detail-sub">${esc(T.headingTo[state.lang] + " " + (e.dest[state.lang] || e.dest.en))}</span></div>
       </div>
+      <button class="btn-star${isRouteBooked(state.detail.routeNo) ? " on" : ""}" id="starBtn"
+        title="${esc(T.bookToggle[state.lang])}">${isRouteBooked(state.detail.routeNo) ? "★" : "☆"}</button>
     </div>
     <div class="pills">
       ${groups.map((x, i) => `<button class="pill${i === sel ? " active" : ""}" data-pi="${i}">
@@ -393,6 +441,13 @@ function renderDetail() {
     </div>
     <div class="note">${state.lang === "zh" ? "點擊車站查看經此站的所有路線 · 每 30 秒自動更新" : "Tap a stop to see all routes via it · auto-refresh 30s"}</div>`;
   el.detailTop.querySelector("#backBtn").addEventListener("click", goHome);
+  el.detailTop.querySelector("#starBtn").addEventListener("click", () => {
+    const on = toggleRouteBook(state.detail.routeNo);
+    const star = el.detailTop.querySelector("#starBtn");
+    star.textContent = on ? "★" : "☆";
+    star.classList.toggle("on", on);
+    statusNow(on ? T.bookAdded[state.lang] : T.bookRemoved[state.lang]);
+  });
   el.detailTop.querySelectorAll(".pill").forEach((p) =>
     p.addEventListener("click", () => {
       state.detail.sel = Number(p.dataset.pi);
@@ -457,6 +512,35 @@ function fetchRowEtas(cards) {
       const chips = r.el.querySelector(".eta-chips");
       if (chips) chips.innerHTML = chipsHTML(res[i]);
     });
+  });
+}
+
+/* ---------------- bookmark lists ---------------- */
+function renderRouteBook() {
+  const box = el.routeBookResults;
+  box.innerHTML = "";
+  const list = bookRoutes();
+  if (!list.length) { box.innerHTML = `<div class="msg">${T.bookEmptyR[state.lang]}</div>`; return; }
+  list.forEach((no) => appendRouteRow(box, String(no).toUpperCase()));
+}
+function renderStopBook() {
+  const box = el.stopBookResults;
+  box.innerHTML = "";
+  const list = bookStops();
+  if (!list.length) { box.innerHTML = `<div class="msg">${T.bookEmptyS[state.lang]}</div>`; return; }
+  list.forEach((b) => {
+    const zh = (b.name && b.name.zh) || stopName(b.id) || b.id;
+    const en = (b.name && b.name.en) || "";
+    const card = document.createElement("div");
+    card.className = "card tappable";
+    card.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+        <div><div style="font-weight:700;font-size:15px">${esc(zh)}</div>
+        <div style="font-size:12px;color:var(--ink-2)">${esc(en)}</div></div>
+        <div class="tag">${esc(stopRouteCount(b.id) + " " + T.routesN[state.lang])}</div>
+      </div>`;
+    card.addEventListener("click", () => openStop(b.id));
+    box.appendChild(card);
   });
 }
 
@@ -540,8 +624,17 @@ function openStop(ref, silent, from) {
         <div class="detail-title">${esc(stopName(ref))}</div>
         <div class="stop-count">${rows.length} ${T.routesN[state.lang]}</div>
       </div>
+      <button class="btn-star${isStopBooked(ref) ? " on" : ""}" id="starBtn"
+        title="${esc(T.bookToggle[state.lang])}">${isStopBooked(ref) ? "★" : "☆"}</button>
     </div>
     <div class="note">${T.noteStop[state.lang]}</div>`;
+  el.detailTop.querySelector("#starBtn").addEventListener("click", () => {
+    const on = toggleStopBook(ref, stopNameObj(ref));
+    const star = el.detailTop.querySelector("#starBtn");
+    star.textContent = on ? "★" : "☆";
+    star.classList.toggle("on", on);
+    statusNow(on ? T.bookAdded[state.lang] : T.bookRemoved[state.lang]);
+  });
   el.detailTop.querySelector("#backBtn").addEventListener("click", () => {
     const f = state.detail.from;
     if (f && f.kind === "route") {
@@ -689,7 +782,9 @@ function goHome() {
 }
 function renderCurrentList() {
   if (state.homeTab === "route") renderRouteResults(el.routeInput.value);
-  else renderStopResults(el.stopInput.value);
+  else if (state.homeTab === "stop") renderStopResults(el.stopInput.value);
+  else if (state.homeTab === "routebook") renderRouteBook();
+  else renderStopBook();
 }
 function applyLangToCurrent() {
   if (state.view === "detail") {
@@ -734,6 +829,9 @@ function init() {
       state.homeTab = t.dataset.tab;
       $("#panelRoute").classList.toggle("hidden", state.homeTab !== "route");
       $("#panelStop").classList.toggle("hidden", state.homeTab !== "stop");
+      $("#panelRouteBook").classList.toggle("hidden", state.homeTab !== "routebook");
+      $("#panelStopBook").classList.toggle("hidden", state.homeTab !== "stopbook");
+      renderCurrentList();
     })
   );
   ["routeInput", "stopInput"].forEach((id) => {

@@ -26,6 +26,8 @@
 <nav class="tabs" id="tabBar">
   <button type="button" class="tab active" data-tab="route">路線查詢</button>
   <button type="button" class="tab" data-tab="stop">車站查詢</button>
+  <button type="button" class="tab" data-tab="routebook">收藏路線</button>
+  <button type="button" class="tab" data-tab="stopbook">收藏車站</button>
 </nav>
 
 <main>
@@ -46,6 +48,12 @@
         <button id="nearBtn" type="button" class="near-btn">附近的站</button>
       </div>
       <div id="stopResults" class="results"></div>
+    </div>
+    <div id="panelRouteBook" class="panel hidden">
+      <div id="routeBookResults" class="results"></div>
+    </div>
+    <div id="panelStopBook" class="panel hidden">
+      <div id="stopBookResults" class="results"></div>
     </div>
   </section>
 
