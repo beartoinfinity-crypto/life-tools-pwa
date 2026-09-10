@@ -1,13 +1,14 @@
-const VERSION = "buseta-lite-v2";
+const BASE = "/bus-eta-lite/";
+const VERSION = "buseta-lite-v3";
 const SHELL = [
-  "/bus-eta/",
-  "/bus-eta/index.html",
-  "/bus-eta/styles.css",
-  "/bus-eta/app.js",
-  "/bus-eta/vendor/hk-bus-eta.esm.js",
-  "/bus-eta/manifest.json",
-  "/bus-eta/img/logo192.png",
-  "/bus-eta/img/logo512.png",
+  BASE,
+  BASE + "index.html",
+  BASE + "styles.css",
+  BASE + "app.js",
+  BASE + "vendor/hk-bus-eta.esm.js",
+  BASE + "manifest.json",
+  BASE + "img/logo192.png",
+  BASE + "img/logo512.png",
 ];
 
 self.addEventListener("install", (event) => {
@@ -34,16 +35,16 @@ self.addEventListener("fetch", (event) => {
     (async () => {
       const cache = await caches.open(VERSION);
       if (req.mode === "navigate") {
-        const cached = await cache.match("/bus-eta/index.html");
+        const cached = await cache.match("/bus-eta-lite/index.html");
         try {
           const fresh = await fetch(req);
-          if (fresh.ok) cache.put("/bus-eta/index.html", fresh.clone());
+          if (fresh.ok) cache.put("/bus-eta-lite/index.html", fresh.clone());
           return fresh;
         } catch {
           return cached || fetch(req);
         }
       }
-      if (url.pathname.startsWith("/bus-eta/")) {
+      if (url.pathname.startsWith("/bus-eta-lite/")) {
         const cached = await cache.match(req);
         const network = fetch(req).then((res) => {
           if (res.ok) cache.put(req, res.clone());

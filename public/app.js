@@ -11,10 +11,17 @@
     },
     {
       id: 'bus-eta',
-      title: 'HK Bus ETA',
-      desc: 'Real-time HK bus & minibus ETA — search by route number or by bus stop (all buses via).',
+      title: 'HK Bus ETA (original)',
+      desc: 'Upstream PWA (hkbus/hk-independent-bus-eta) — full-featured route/stop ETA, maps, saved stops.',
       href: '/bus-eta/',
       icon: '巴'
+    },
+    {
+      id: 'bus-eta-lite',
+      title: 'Bus ETA (lite)',
+      desc: 'Edited simple UI — search by route number or bus stop (all buses via), auto-refresh 30s.',
+      href: '/bus-eta-lite/',
+      icon: '汽'
     }
   ];
 

@@ -2,14 +2,14 @@
   "name": "巴士預報 Bus ETA",
   "short_name": "巴士預報",
   "description": "實時香港巴士及小巴到站時間 — 按路線或車站查詢。Real-time HK bus & minibus ETA by route or stop.",
-  "start_url": "/bus-eta/",
-  "scope": "/bus-eta/",
+  "start_url": "/bus-eta-lite/",
+  "scope": "/bus-eta-lite/",
   "display": "standalone",
   "background_color": "#f4f6f5",
   "theme_color": "#0b6e4f",
   "lang": "zh-Hant",
   "icons": [
-    { "src": "/bus-eta/img/logo192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "/bus-eta/img/logo512.png", "sizes": "512x512", "type": "image/png" }
+    { "src": "/bus-eta-lite/img/logo192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/bus-eta-lite/img/logo512.png", "sizes": "512x512", "type": "image/png" }
   ]
 }

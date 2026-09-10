@@ -700,7 +700,7 @@ function init() {
     );
   });
   if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("/bus-eta/sw.js").catch(() => {});
+    navigator.serviceWorker.register("/bus-eta-lite/sw.js").catch(() => {});
   }
   loadDb();
   startAutoRefresh();
