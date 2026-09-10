@@ -830,6 +830,11 @@ function init() {
       document.querySelectorAll(".tab").forEach((x) => x.classList.remove("active"));
       t.classList.add("active");
       state.homeTab = t.dataset.tab;
+      if (state.view !== "home") {
+        state.view = "home";
+        el.viewDetail.classList.add("hidden");
+        el.viewHome.classList.remove("hidden");
+      }
       $("#panelRoute").classList.toggle("hidden", state.homeTab !== "route");
       $("#panelStop").classList.toggle("hidden", state.homeTab !== "stop");
       $("#panelRouteBook").classList.toggle("hidden", state.homeTab !== "routebook");
