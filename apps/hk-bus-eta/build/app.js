@@ -355,7 +355,7 @@ function renderDetail() {
     <div class="back-bar">
       <button class="btn-back" id="backBtn" title="${esc(T.updated[state.lang])}">‹</button>
       <div>
-        <div class="detail-title">${esc(no)} <span class="tag">${esc(coTag(e.co[0]))}</span>
+        <div class="detail-title">${esc(state.detail.routeNo)} <span class="tag">${esc(coTag(e.co[0]))}</span>
         <span class="detail-sub">${esc(T.headingTo[state.lang] + " " + (e.dest[state.lang] || e.dest.en))}</span></div>
       </div>
     </div>
