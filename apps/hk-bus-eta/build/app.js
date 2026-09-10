@@ -393,6 +393,9 @@ function renderRouteResults(q) {
   if (!keys.length) { box.innerHTML = `<div class="msg">${T.noRoute[state.lang]}</div>`; return; }
   keys.forEach((no) => appendRouteRow(box, no));
 }
+function coBadgeClass(co) {
+  return "co-" + String(co || "").toLowerCase();
+}
 function appendRouteRow(box, no) {
   const group = groupByDirection(no);
   if (!group.length) return;
@@ -401,7 +404,7 @@ function appendRouteRow(box, no) {
   const card = document.createElement("div");
   card.className = "card tappable route-row";
   card.innerHTML = `
-    <div class="route-no">${esc(no)}</div>
+    <div class="route-no ${coBadgeClass(cos[0])}">${esc(no)}</div>
     <div class="route-dir">
       <div class="rd">${esc(dirs.join(" · "))}</div>
       <div class="rmeta">${esc(group.length + " " + T.services[state.lang])}
@@ -701,7 +704,7 @@ function appendStopRow(listEl, r) {
   const rowkey = "s" + Math.random().toString(36).slice(2, 9);
   line.dataset.rowkey = rowkey;
   line.innerHTML = `
-    <div class="route-no" style="min-width:58px">${esc(String(e.route))}</div>
+    <div class="route-no ${coBadgeClass(e.co[0])}" style="min-width:58px">${esc(String(e.route))}</div>
     <div class="rl-main">
       <div style="font-size:14px;font-weight:650">${esc(e.orig[state.lang] || e.orig.en || "")}
         <small style="color:var(--ink-2)"> → ${esc(e.dest[state.lang] || e.dest.en || "")}</small></div>

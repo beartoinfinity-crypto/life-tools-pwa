@@ -92,6 +92,11 @@ body {
   background: var(--route-badge-bg); color: #fff; border-radius: 10px;
   font-size: 17px; font-weight: 800; letter-spacing: .5px;
 }
+.route-no.co-kmb { background: #c9312b; }
+.route-no.co-ctb { background: #0b7a75; }
+.route-no.co-nlb { background: #2f5ba8; }
+.route-no.co-gmb { background: #2e7d32; }
+.route-no.co-nwf { background: #c05e12; }
 .route-dir { flex: 1; min-width: 0; }
 .route-dir .rd { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .route-dir .rd small { color: var(--ink-2); font-weight: 500; }
