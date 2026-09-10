@@ -66,7 +66,29 @@ function setLang(l) {
   $("#stopInput").placeholder =
     l === "zh" ? "輸入車站名稱或編號，如 怡和街、TA292" : "Enter stop name or code, e.g. Percival St, TA292";
   $("#nearBtn").textContent = l === "zh" ? "附近的站" : "Nearby";
+  renderThemeBtn();
   applyLangToCurrent();
+}
+
+/* ---------------- theme (day / night) ---------------- */
+function systemTheme() {
+  return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "night" : "day";
+}
+function applyTheme(t, persist) {
+  document.documentElement.dataset.theme = t === "night" ? "night" : "day";
+  const m = document.querySelector('meta[name="theme-color"]');
+  if (m) m.content = t === "night" ? "#101613" : "#0b6e4f";
+  if (persist) localStorage.setItem("buseta-theme", t === "night" ? "night" : "day");
+  renderThemeBtn();
+}
+function renderThemeBtn() {
+  const zh = state.lang === "zh";
+  const night = document.documentElement.dataset.theme === "night";
+  const btn = $("#themeBtn");
+  btn.textContent = night ? (zh ? "日" : "Day") : (zh ? "夜" : "Night");
+  btn.title = zh
+    ? (night ? "切換日間模式" : "切換夜間模式")
+    : (night ? "Switch to day mode" : "Switch to night mode");
 }
 
 /* ---------------- IndexedDB cache ---------------- */
@@ -692,7 +714,15 @@ async function manualRefresh() {
 
 /* ---------------- init ---------------- */
 function init() {
+  const savedTheme = localStorage.getItem("buseta-theme");
+  applyTheme(savedTheme || systemTheme(), false);
+  if (window.matchMedia && !savedTheme) {
+    window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", (e) =>
+      applyTheme(e.matches ? "night" : "day", false));
+  }
   setLang(state.lang);
+  $("#themeBtn").addEventListener("click", () =>
+    applyTheme(document.documentElement.dataset.theme === "night" ? "day" : "night", true));
   $("#langBtn").addEventListener("click", () => setLang(state.lang === "zh" ? "en" : "zh"));
   $("#refreshBtn").addEventListener("click", manualRefresh);
   $("#stopInput").placeholder =

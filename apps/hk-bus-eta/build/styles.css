@@ -206,17 +206,38 @@ body {
 @keyframes pulse { 50% { opacity: .4; } }
 
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="day"]) {
     --bg: #101613; --card: #1a211d; --ink: #e8efea;
     --ink-2: #8aa093; --line: #2a342f;
     --chip: #173025; --chip-ink: #7fe0b0;
   }
-  .search-input, .btn-more, .btn-back { background: #1a211d; color: var(--ink); }
-  .stop-idx { background: #2a342f; }
-  .eta-expanded { background: #141a17; }
-  .card.tappable:active { background: #222b26; }
-  .near-btn, .tab { color: var(--ink-2); background: #222b26; }
-  .stop-card:hover, .route-line:hover { background: rgba(255, 255, 255, 0.05); }
-  .stop-card:hover .stop-name .zh { color: #7fe0b0; }
-  .stop-card:hover .stop-more { color: #7fe0b0; }
+  :root:not([data-theme="day"]) .search-input,
+  :root:not([data-theme="day"]) .btn-more,
+  :root:not([data-theme="day"]) .btn-back { background: #1a211d; color: var(--ink); }
+  :root:not([data-theme="day"]) .stop-idx { background: #2a342f; }
+  :root:not([data-theme="day"]) .eta-expanded { background: #141a17; }
+  :root:not([data-theme="day"]) .card.tappable:active { background: #222b26; }
+  :root:not([data-theme="day"]) .near-btn,
+  :root:not([data-theme="day"]) .tab { color: var(--ink-2); background: #222b26; }
+  :root:not([data-theme="day"]) .stop-card:hover,
+  :root:not([data-theme="day"]) .route-line:hover { background: rgba(255, 255, 255, 0.05); }
+  :root:not([data-theme="day"]) .stop-card:hover .stop-name .zh { color: #7fe0b0; }
+  :root:not([data-theme="day"]) .stop-card:hover .stop-more { color: #7fe0b0; }
 }
+:root[data-theme="night"] {
+  --bg: #101613; --card: #1a211d; --ink: #e8efea;
+  --ink-2: #8aa093; --line: #2a342f;
+  --chip: #173025; --chip-ink: #7fe0b0;
+}
+:root[data-theme="night"] .search-input,
+:root[data-theme="night"] .btn-more,
+:root[data-theme="night"] .btn-back { background: #1a211d; color: var(--ink); }
+:root[data-theme="night"] .stop-idx { background: #2a342f; }
+:root[data-theme="night"] .eta-expanded { background: #141a17; }
+:root[data-theme="night"] .card.tappable:active { background: #222b26; }
+:root[data-theme="night"] .near-btn,
+:root[data-theme="night"] .tab { color: var(--ink-2); background: #222b26; }
+:root[data-theme="night"] .stop-card:hover,
+:root[data-theme="night"] .route-line:hover { background: rgba(255, 255, 255, 0.05); }
+:root[data-theme="night"] .stop-card:hover .stop-name .zh { color: #7fe0b0; }
+:root[data-theme="night"] .stop-card:hover .stop-more { color: #7fe0b0; }
