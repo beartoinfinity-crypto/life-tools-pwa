@@ -12,6 +12,7 @@ A hub of handy Progressive Web Apps (PWAs), served from a single Express server 
 | App | URL | Description |
 |-----|-----|-------------|
 | **Mark Six** | `/mark-six/` | Hong Kong Mark Six lottery results: latest draws, full history, special numbers, daily auto-refresh |
+| **HK Bus ETA** | `/bus-eta/` | Hong Kong bus ETA (KMB, LWB, CTB, NLB, MTR Bus, green minibus, light rail, MTR) — prebuilt PWA of [hkbus/hk-independent-bus-eta](https://github.com/hkbus/hk-independent-bus-eta) (GPL-3.0) |
 
 Browsing to the root (`/`) shows a launcher dashboard with a card for each app.
 
@@ -56,6 +57,10 @@ Open `http://localhost:3000` — visit `/` for the dashboard and `/mark-six/` fo
 │       ├── sw.js              # Service worker (offline caching)
 │       ├── icons/icon.svg
 │       └── test/              # Vitest suite (55 tests) + fixtures
+│   └── hk-bus-eta/        # HK Bus ETA PWA (mounted at /bus-eta/)
+│       ├── build/             # Prebuilt static bundle (served)
+│       ├── README.md          # Attribution + rebuild steps
+│       └── LICENSE            # GPL-3.0 (upstream license, required)
 ├── render.yaml           # Render Blueprint config
 ├── package.json
 ├── .env.example
@@ -64,7 +69,7 @@ Open `http://localhost:3000` — visit `/` for the dashboard and `/mark-six/` fo
 
 ### Adding a new app
 
-1. Create `apps/<name>/` with a `server.js` that exports `{ app, ensureInitialData? }` (an Express app plus an optional startup hook).
+1. Create `apps/<name>/` with a `server.js` that exports `{ app, ensureInitialData? }` (an Express app plus an optional startup hook) — or, for a static-only PWA, drop its build output in a folder and serve it with `express.static` + a SPA fallback (see the `bus-eta` mount in `server.js`).
 2. In the hub `server.js`, mount it: `app.use('/<name>', require('./apps/<name>/server').app);`
 3. Add a card to `public/app.js` under `APPS`.
 4. Client code should use an `API_BASE` prefix matching its mount path (see `apps/mark-six/app.js`).
@@ -163,6 +168,16 @@ Response shape:
 | Red | 1, 2, 7, 8, 12, 13, 18, 19, 23, 24, 29, 30, 34, 35, 40, 45, 46 |
 | Blue | 3, 4, 9, 10, 14, 15, 20, 25, 26, 31, 36, 37, 41, 42, 47, 48 |
 | Green | 5, 6, 11, 16, 17, 21, 22, 27, 28, 32, 33, 38, 39, 43, 44, 49 |
+
+---
+
+## HK Bus ETA app
+
+`/bus-eta/` serves a **prebuilt static PWA** of the [hkbus/hk-independent-bus-eta](https://github.com/hkbus/hk-independent-bus-eta) project (GPL-3.0, v11.2.0). It requires no backend — ETA plus route/fare data is fetched client-side from `data.hkbus.app` / `data.gov.hk`.
+
+- The bundle lives in `apps/hk-bus-eta/build/`; the hub serves it with a SPA fallback so routes like `/bus-eta/zh/route/1A` render client-side.
+- It was built with `base: "/bus-eta/"` and a router `basename` — see `apps/hk-bus-eta/README.md` for the exact subpath changes and how to rebuild.
+- Source is not vendored; the upstream repo + commit are referenced in `apps/hk-bus-eta/README.md`, and the GPL-3.0 `LICENSE` is included as required.
 
 ---
 
