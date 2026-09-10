@@ -63,7 +63,8 @@ function setLang(l) {
   $(".tab[data-tab=route]").textContent = T.tabRoute[l];
   $(".tab[data-tab=stop]").textContent = T.tabStop[l];
   $("#routeInput").placeholder = l === "zh" ? "輸入路線號碼，如 1A、286X、A12" : "Enter route no., e.g. 1A, 286X, A12";
-  $("#stopInput").placeholder = l === "zh" ? "輸入車站名稱，如 怡和街" : "Enter stop name, e.g. Percival St";
+  $("#stopInput").placeholder =
+    l === "zh" ? "輸入車站名稱或編號，如 怡和街、TA292" : "Enter stop name or code, e.g. Percival St, TA292";
   $("#nearBtn").textContent = l === "zh" ? "附近的站" : "Nearby";
   applyLangToCurrent();
 }
@@ -173,7 +174,7 @@ function buildIndexes() {
     if (!norm) continue;
     let o = seen.get(norm);
     if (o) { o.ids.push(ref); continue; }
-    o = { norm, ids: [ref], name: e.name, loc: e.location || null };
+    o = { norm, ids: [ref], name: e.name, loc: e.location || null, code: extractCode(e.name) };
     seen.set(norm, o);
     items.push(o);
   }
@@ -182,6 +183,10 @@ function buildIndexes() {
 }
 function normalizeName(name) {
   return String(name.zh || name.en || "").replace(/\s*\(.*\)$/, "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+function extractCode(name) {
+  const m = String(name.zh || name.en || "").match(/\(([^()]+)\)\s*$/);
+  return m ? m[1].trim().toUpperCase() : null;
 }
 
 /* ---------------- helpers ---------------- */
@@ -446,7 +451,9 @@ function renderStopResults(q) {
   box.innerHTML = "";
   const text = String(q || "").trim().toLowerCase();
   if (!text) { box.innerHTML = `<div class="msg">${T.stopEmpty[state.lang]}</div>`; return; }
-  const hits = state.uniqueStops.filter((o) => o.norm.includes(text)).slice(0, 25);
+  const hits = state.uniqueStops
+    .filter((o) => o.norm.includes(text) || (o.code && o.code.toLowerCase().includes(text)))
+    .slice(0, 25);
   if (!hits.length) { box.innerHTML = `<div class="msg">${T.noStop[state.lang]}</div>`; return; }
   hits.forEach((o) => {
     const ref = pickRef(o);
@@ -688,6 +695,8 @@ function init() {
   setLang(state.lang);
   $("#langBtn").addEventListener("click", () => setLang(state.lang === "zh" ? "en" : "zh"));
   $("#refreshBtn").addEventListener("click", manualRefresh);
+  $("#stopInput").placeholder =
+    state.lang === "zh" ? "輸入車站名稱或編號，如 怡和街、TA292" : "Enter stop name or code, e.g. Percival St, TA292";
   document.querySelectorAll(".tab").forEach((t) =>
     t.addEventListener("click", () => {
       document.querySelectorAll(".tab").forEach((x) => x.classList.remove("active"));
