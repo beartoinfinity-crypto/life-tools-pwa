@@ -396,7 +396,8 @@ function renderRouteStops(group) {
         <div class="zh">${esc(name)}</div>
       </div>
       <div class="co-tag">${esc(coTag(coMain))}</div>
-      <div class="eta-chips"><span class="skeleton"></span><span class="skeleton"></span><span class="skeleton"></span></div>`;
+      <div class="eta-chips"><span class="skeleton"></span><span class="skeleton"></span><span class="skeleton"></span></div>
+      <div class="stop-more">›</div>`;
     card.addEventListener("click", () =>
       openStop(ref, false, { kind: "route", routeNo: state.detail.routeNo, sel: state.detail.sel })
     );

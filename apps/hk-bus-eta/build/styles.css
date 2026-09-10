@@ -124,7 +124,9 @@ body {
 .stop-card {
   display: flex; align-items: center; gap: 12px; padding: 10px 0;
   border-top: 1px solid var(--line);
+  cursor: pointer;
 }
+.stop-card:hover { background: rgba(11, 110, 79, 0.06); }
 .stop-card:first-child { border-top: none; }
 .stop-idx {
   flex: 0 0 26px; height: 26px; line-height: 26px; text-align: center;
@@ -132,9 +134,22 @@ body {
 }
 .stop-idx.last { background: var(--warn); color: #fff; }
 .stop-name { flex: 1; min-width: 0; }
-.stop-name .zh { font-size: 15px; font-weight: 650; }
+.stop-name .zh {
+  font-size: 15px; font-weight: 650;
+  text-decoration: none; text-underline-offset: 4px;
+  transition: color 0.15s, text-decoration-color 0.15s;
+}
+.stop-card:hover .stop-name .zh {
+  color: var(--accent);
+  text-decoration: underline dotted 1.5px;
+}
 .stop-name .en { font-size: 11px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .co-tag { flex: 0 0 auto; font-size: 11px; font-weight: 700; color: var(--accent-2); background: var(--chip); padding: 2px 7px; border-radius: 6px; }
+.stop-more {
+  flex: 0 0 14px; color: var(--ink-2); font-size: 20px; font-weight: 600; line-height: 1;
+  opacity: 0.4; transition: opacity 0.15s, transform 0.15s, color 0.15s;
+}
+.stop-card:hover .stop-more { opacity: 1; color: var(--accent); transform: translateX(3px); }
 
 /* eta chips */
 .eta-chips { display: flex; gap: 6px; }
@@ -156,7 +171,8 @@ body {
 /* stop detail */
 .stop-title-row { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
 .stop-count { font-size: 13px; color: var(--accent); font-weight: 700; }
-.route-line { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
+.route-line { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); cursor: pointer; }
+.route-line:hover { background: rgba(11, 110, 79, 0.06); }
 .route-line:first-child { border-top: none; }
 .route-line .rl-main { flex: 1; min-width: 0; }
 
@@ -200,4 +216,7 @@ body {
   .eta-expanded { background: #141a17; }
   .card.tappable:active { background: #222b26; }
   .near-btn, .tab { color: var(--ink-2); background: #222b26; }
+  .stop-card:hover, .route-line:hover { background: rgba(255, 255, 255, 0.05); }
+  .stop-card:hover .stop-name .zh { color: #7fe0b0; }
+  .stop-card:hover .stop-more { color: #7fe0b0; }
 }
