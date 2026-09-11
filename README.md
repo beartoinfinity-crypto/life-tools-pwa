@@ -29,7 +29,8 @@ npm install
 npm start
 ```
 
-Open `http://localhost:3000` — visit `/` for the dashboard and `/mark-six/` for the Mark Six app.
+Open `http://localhost:3000` — visit `/` for the dashboard, `/mark-six/`, `/bus-eta-lite/` and `/traffic-news/`
+for the apps.
 
 > Prerequisite: a Supabase project and a `.env` file — see [Supabase Setup](#supabase-setup-storage).
 
@@ -54,7 +55,8 @@ Open `http://localhost:3000` — visit `/` for the dashboard and `/mark-six/` fo
 │   └── mark-six/         # Mark Six PWA (mounted at /mark-six/)
 │       ├── server.js          # Express app (module) + ensureInitialData()
 │       ├── supabase-db.js     # Supabase client + store operations
-│       ├── supabase-schema.sql # SQL: tables + RLS for Supabase
+│       ├── supabase-schema.sql # SQL: draws/meta/traffic_news tables + RLS (run in Supabase SQL editor)
+│       ├── supabase-revert.sql # SQL: drops everything the schema creates (undo an accidental run)
 │       ├── parsers.js         # HTML/JSON parsers for data sources
 │       ├── api.js             # Modular Express app (used by tests)
 │       ├── db.js              # In-memory SQLite store (used by tests)
@@ -85,8 +87,8 @@ Open `http://localhost:3000` — visit `/` for the dashboard and `/mark-six/` fo
 
 ### Adding a new app
 
-1. Create `apps/<name>/` with a `server.js` that exports `{ app, ensureInitialData? }` (an Express app plus an optional startup hook) — or, for a static-only PWA, drop its build output in a folder and serve it with `express.static` + a SPA fallback (see the `bus-eta` mount in `server.js`).
-2. In the hub `server.js`, mount it: `app.use('/<name>', require('./apps/<name>/server').app);`
+1. Create `apps/<name>/` with a `server.js` that exports `{ app, ensureInitialData? }` (an Express app plus an optional startup hook) — or, for a static-only PWA, drop its build output in a folder and serve it with `express.static` + a SPA fallback (see the `bus-eta` mount in `app.js`).
+2. In the hub `app.js`, mount it (with an exact-match `/name` → `/name/` redirect for PWAs that need one): `app.use('/<name>', require('./apps/<name>/server').app);`
 3. Add a card to `public/app.js` under `APPS`.
 4. Client code should use an `API_BASE` prefix matching its mount path (see `apps/mark-six/app.js`).
 
@@ -109,25 +111,25 @@ Open `http://localhost:3000` — visit `/` for the dashboard and `/mark-six/` fo
 
 > The `.env` file is git-ignored — never commit your keys.
 
-**Schema (Supabase):**
+**Schema (Supabase)** — `draws` and `meta` above, plus the traffic-news cache table:
 
 ```sql
-CREATE TABLE draws (
-  id       bigint generated always as identity primary key,
-  draw     text not null unique,   -- e.g. "26/097"
-  date     text not null,          -- ISO "2026-09-08"
-  numbers  text not null,          -- JSON: [9,23,28,29,35,41]
-  special  integer,                -- the special number (e.g. 38)
-  source   text,
+CREATE TABLE traffic_news (
+  id        text primary key,      -- routejam item id (md5 / RD# / IN- / DS-)
+  posted_at timestamptz,          -- incident time (HK, +08:00)
+  category  text,                 -- e.g. "道路事故-交通意外"
+  status    text,                 -- "最新情況" or "完結"
+  location  text,
+  detail    text,
+  source    text,
+  lat       double precision,     -- map marker (null when routejam has none)
+  lng       double precision,
   created_at timestamptz not null default now()
 );
-
-CREATE TABLE meta (
-  key   text primary key,
-  value text,
-  updated_at timestamptz not null default now()
-);
 ```
+
+To undo a schema run (e.g. on the wrong project), use `apps/mark-six/supabase-revert.sql` — it drops all three
+tables and their policies.
 
 ---
 
@@ -213,9 +215,9 @@ Other features:
 
 - **Operator-coloured badges** — route numbers render in the operator's colour: 九巴 red, 城巴 yellow-on-red, 嶼巴 blue, 綠Van green, NWFB orange; a route served by several operators (e.g. 170) gets a mixed violet badge. The same palette also colours the operator tags, the direction pills, and each stop row's operator chip.
 - **Day / Night toggle** — header button, persisted in `localStorage`, follows the system preference until you choose manually (override wins over `prefers-color-scheme`).
-- **Bookmarks** — star a route or stop from its detail page; stored in `localStorage`, listed under the two bookmark tabs, tap to reopen.
+- **Bookmarks** — star a route or stop from its detail page; stored in `localStorage`, listed under the two bookmark tabs, tap to reopen. Route bookmarks also remember the **direction** you were viewing (switching pills on a starred route updates it).
 - **Auto-refresh** — live arrival chips refresh every 30 s; manual refresh re-downloads the route database.
-- **Offline-first** — route database cached in IndexedDB; service worker caches the shell (`buseta-lite-v19`).
+- **Offline-first** — route database cached in IndexedDB; service worker caches the shell (`buseta-lite-v20`).
 - **EN/ZH** toggle; near-black UI in night mode with corrected chip/badge colours.
 
 Served files are in `apps/hk-bus-eta/build/` (includes the bundled `vendor/hk-bus-eta.esm.js`). The route database is
@@ -229,19 +231,20 @@ The bundled library is GPL-3.0; the upstream LICENSE is included in `apps/hk-bus
 
 ## Traffic News (`/traffic-news/`)
 
-A standalone PWA showing the latest Hong Kong traffic incidents from [Routejam 路暢](https://news.routejam.com/),
-scraped server-side and cached in Supabase (table `traffic_news`) so reads stay fast. The app shows the last
-**12 hours** of incidents with 最新/完結 badges, relative timestamps in HK time, tap-to-expand details, a manual
-refresh button and a 1-minute auto-poll; installable like the other apps (manifest + service worker).
+A standalone PWA showing the latest Hong Kong traffic incidents from [Routejam 路暢](https://news.routejam.com/).
+The browser only ever reads the Supabase cache (table `traffic_news`); routejam is scraped server-side and
+upserted into Supabase, so page loads stay fast and routejam is hit at most once a minute. The app shows the
+last **12 hours** of incidents with 最新/完結 badges, HK-time + relative timestamps, tap-to-expand details, a
+manual refresh button and a 1-minute auto-poll; installable like the other apps (manifest + service worker).
 
 | Method | Endpoint | Request body | Description |
 |--------|----------|--------------|-------------|
-| POST | `/traffic-news/api/news` | `{ "limit"?: 30, "status"?: "最新情況" }` | Latest cached news from Supabase |
-| POST | `/traffic-news/api/news/refresh` | `{ "limit"? }` | Scrape routejam, upsert, return latest |
+| POST | `/traffic-news/api/news` | `{ "limit"?: 30, "status"?: "最新情況", "hours"?: 12 }` | Latest cached news from Supabase (default: last 12 h) |
+| POST | `/traffic-news/api/news/refresh` | `{ "limit"?, "hours"? }` | Scrape routejam, upsert, return latest |
 
-- **Refresh cadence** — on Render/local the server scrapes every 60 s (`setInterval` in `server.js`). On Vercel
-  (serverless, no timers) each read kicks a background re-scrape when the cache is older than 60 s
-  (stale-while-revalidate in `api/index.js`); the dashboard also re-polls every minute.
+- **Refresh cadence** — on Render/local the server scrapes at boot + every 60 s (`setInterval` in `server.js`).
+  On Vercel (serverless, no timers) each read kicks a background re-scrape when the cache is older than 60 s
+  (stale-while-revalidate in `api/index.js`); the app's refresh button scrapes on demand.
 - **Parser** — `apps/traffic-news/parser.js` reads routejam's server-rendered accordion HTML: item id, posted time
   (converted to ISO `+08:00`), category/status, location, detail, source, and map coordinates (when present).
   Covered by unit tests with a fixture page.
