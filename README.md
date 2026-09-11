@@ -1,10 +1,10 @@
 # Life Tool
 
-A hub of handy Progressive Web Apps (PWAs), served from a single Express server and deployed to Render. Each app lives under `apps/`, is mounted at its own URL path, and shares the same Supabase storage stack.
+A hub of handy Progressive Web Apps (PWAs), served by one Express app and deployed to Vercel (with a legacy Render host). Each app lives under `apps/`, is mounted at its own URL path, and shares the same Supabase storage stack.
 
-- **Live dashboard:** https://mark-six-pwa.onrender.com
+- **Live dashboard:** https://mark-six-pwa.onrender.com (Render — legacy host)
 - **Repo:** https://github.com/beartoinfinity-crypto/mark-six-pwa
-- **Hosting:** Render (Node.js, single service)
+- **Hosting:** Vercel (serverless Functions + CDN static), legacy Render single service
 - **Storage:** Supabase (PostgreSQL)
 
 ## Apps
@@ -38,7 +38,11 @@ Open `http://localhost:3000` — visit `/` for the dashboard and `/mark-six/` fo
 
 ```
 .
-├── server.js             # Hub server: dashboard + mounts each app
+├── server.js             # Local/Render launcher: listen + start-up backfill (requires app.js)
+├── app.js                # The Express app as a module (dashboard + all mounts); shared by server.js and Vercel
+├── api/index.js          # Vercel serverless function: wraps app.js + lazy first-request backfill
+├── build-vercel.mjs      # Assembles vercel-out/ (dashboard + static apps) for Vercel
+├── vercel.json           # Vercel config: build/output dir + catch-all rewrite to /api/index
 ├── public/               # Dashboard (served at /)
 │   ├── index.html
 │   ├── styles.css
@@ -238,6 +242,24 @@ npm run test:watch  # Watch mode
 ---
 
 ## Deployment
+
+The hub runs on Render today and deploys to Vercel too.
+
+### Vercel (preferred)
+
+The repo is Vercel-ready — no further setup beyond the project.
+
+1. Push the repo and import it at [vercel.com/new](https://vercel.com/new) (or run `vercel` from the CLI).
+2. Framework Preset: **Other** (no build framework). The `vercel.json` sets the build command, output directory and routing.
+3. Add the environment variables `SUPABASE_URL` and `SUPABASE_KEY` (same as the Render host).
+4. Deploy. Nothing to configure for routing:
+   - `vercel-out/` (produced by `npm run build:vercel`, runs `build-vercel.mjs`) holds the dashboard + all three static apps at their hub paths.
+   - The whole Express API runs inside a single serverless function (`api/index.js`) via the catch-all rewrite in `vercel.json`. Static files are served by Vercel's CDN; anything unmatched (APIs, SPA fallbacks, `bus-eta` redirects) is handled by Express, exactly like `server.js` does locally.
+   - On a fresh Supabase DB the first Mark Six data request backfills the ~4,300 historical draws once, lazily.
+
+Local dev still works unchanged: `npm start` → `node server.js` (port 3000, auto-backfill on boot).
+
+### Render (legacy)
 
 See [DEPLOYMENT.md](./DEPLOYMENT.md) for the full Render + Supabase walkthrough.
 

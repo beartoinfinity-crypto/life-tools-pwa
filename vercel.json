@@ -1,0 +1,9 @@
+{
+  "version": 2,
+  "framework": null,
+  "buildCommand": "node build-vercel.mjs",
+  "outputDirectory": "vercel-out",
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/api/index" }
+  ]
+}
