@@ -18,6 +18,10 @@ app.use('/mark-six', (req, res, next) => {
 const { app: markSixApp } = require('./apps/mark-six/server');
 app.use('/mark-six', markSixApp);
 
+// Traffic news API (scrapes news.routejam.com into Supabase)
+const { app: trafficNewsApp, ensureTrafficNews } = require('./apps/traffic-news/server');
+app.use('/traffic-news', trafficNewsApp);
+
 // Mount a static subpath app at /<name> with an exact-match redirect and an SPA fallback
 function mountStatic(name, buildDir) {
   app.use(`/${name}`, (req, res, next) => {

@@ -16,8 +16,9 @@ A hub of handy Progressive Web Apps (PWAs), served by one Express app and deploy
 | **Bus ETA (lite)** | `/bus-eta-lite/` | Home-grown simple ETA UI — route & stop search, bookmarks, day/night theme, operator-coloured badges; data via the bundled [hk-bus-eta](https://www.npmjs.com/package/hk-bus-eta) library (GPL-3.0) |
 
 Browsing to the root (`/`) shows a launcher dashboard with a card per app. The dashboard itself has a **Dark/Light
-toggle** (persisted, defaults to system), a theme-aware favicon, and the cards can be **drag-reordered** (order persists
-in `localStorage`).
+toggle** (persisted, defaults to system), a theme-aware favicon, cards that can be **drag-reordered** (order persists
+in `localStorage`), and a **Traffic News panel** — the latest Routejam (路暢) traffic incidents for Hong Kong, served
+from a Supabase cache and auto-polling every minute; tap an item to expand its detail.
 
 ---
 
@@ -71,6 +72,10 @@ Open `http://localhost:3000` — visit `/` for the dashboard and `/mark-six/` fo
 │       ├── build-upstream/    # Archived upstream PWA (served at /bus-eta/, not from this dir)
 │       ├── README.md          # Attribution + data-layer notes
 │       └── LICENSE            # GPL-3.0 (upstream license, required)
+│   └── traffic-news/      # Traffic news scraper (mounted at /traffic-news/): routejam parser + Supabase cache
+│       ├── parser.js          # Parses news.routejam.com accordion HTML (date/category/location/detail/coords)
+│       ├── server.js          # Express app: POST /api/news, POST /api/news/refresh + refreshTrafficNews()
+│       └── test/              # Parser tests (fixture HTML)
 ├── render.yaml           # Render Blueprint config
 ├── package.json
 ├── .env.example
@@ -97,7 +102,8 @@ Open `http://localhost:3000` — visit `/` for the dashboard and `/mark-six/` fo
    PORT=3000
    ```
 
-3. Open the **SQL Editor** and run `apps/mark-six/supabase-schema.sql` (creates `draws` and `meta` tables plus RLS policies).
+3. Open the **SQL Editor** and run `apps/mark-six/supabase-schema.sql` (creates `draws`, `meta` and `traffic_news`
+   tables plus RLS policies).
 4. Start the server. If `draws` is empty, the Mark Six app auto-fills ~4,300 historical draws from GitHub.
 
 > The `.env` file is git-ignored — never commit your keys.
@@ -220,6 +226,26 @@ The bundled library is GPL-3.0; the upstream LICENSE is included in `apps/hk-bus
 
 ---
 
+## Traffic news (hub dashboard)
+
+The dashboard shows the latest Hong Kong traffic incidents from [Routejam 路暢](https://news.routejam.com/),
+scraped server-side and cached in Supabase (table `traffic_news`) so the hub reads fast without hitting routejam
+on every visit.
+
+| Method | Endpoint | Request body | Description |
+|--------|----------|--------------|-------------|
+| POST | `/traffic-news/api/news` | `{ "limit"?: 30, "status"?: "最新情況" }` | Latest cached news from Supabase |
+| POST | `/traffic-news/api/news/refresh` | `{ "limit"? }` | Scrape routejam, upsert, return latest |
+
+- **Refresh cadence** — on Render/local the server scrapes every 60 s (`setInterval` in `server.js`). On Vercel
+  (serverless, no timers) each read kicks a background re-scrape when the cache is older than 60 s
+  (stale-while-revalidate in `api/index.js`); the dashboard also re-polls every minute.
+- **Parser** — `apps/traffic-news/parser.js` reads routejam's server-rendered accordion HTML: item id, posted time
+  (converted to ISO `+08:00`), category/status, location, detail, source, and map coordinates (when present).
+  Covered by unit tests with a fixture page.
+
+---
+
 ## Testing
 
 ```bash
@@ -227,7 +253,7 @@ npm test            # Run all tests once
 npm run test:watch  # Watch mode
 ```
 
-55 tests across 4 files under `apps/mark-six/test/`. The suite uses in-memory SQLite + fixtures, so it runs offline without a Supabase connection.
+67 tests across 5 files under `apps/mark-six/test/` and `apps/traffic-news/test/`. The suite uses in-memory SQLite + fixtures, so it runs offline without a Supabase connection.
 
 ---
 

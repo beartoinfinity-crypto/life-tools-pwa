@@ -1,5 +1,6 @@
 const app = require('../app');
 const { ensureInitialData } = require('../apps/mark-six/server');
+const { refreshTrafficNews, readTrafficNews } = require('../apps/traffic-news/server');
 
 let backfillPromise = null;
 
@@ -17,5 +18,17 @@ module.exports = async function handler(req, res) {
     // backfill is best-effort; serve whatever state the DB is in
     console.error('backfill await failed:', e.message);
   }
+
+  // Traffic news stale-while-revalidate: no always-on process on serverless,
+  // so kick a background refresh when the cached copy is older than 60 s.
+  if (req.method === 'POST' && (req.url || '').indexOf('/traffic-news/api/news') === 0) {
+    try {
+      const { lastRefresh } = await readTrafficNews({ limit: 1 });
+      if (!lastRefresh || Date.now() - new Date(lastRefresh).getTime() > 60 * 1000) {
+        refreshTrafficNews().catch(() => {});
+      }
+    } catch (e) { /* serve stale */ }
+  }
+
   return app(req, res);
 };

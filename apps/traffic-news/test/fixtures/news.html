@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Routejam - 路暢 (fixture)</title>
+<script type="text/javascript">
+let map;
+let marker;
+function initMap() {
+    map = new google.maps.Map(document.getElementById("map"), {
+        center: { lat: 22.3923063, lng: 113.9772982 },
+        zoom: 15,
+        disableDefaultUI: true
+    });
+}
+function init(){
+    $('#collapseOne').on('show.bs.collapse', function () {
+        $('#mapdiv').detach().appendTo('#collapseOne .accordion-body');
+    });
+
+    
+                    
+                    $('#collapseabc123').on('show.bs.collapse', function () {
+                        if(marker){
+                            marker.setMap(null);
+                        }
+
+                        marker = new google.maps.Marker({
+                            position: new google.maps.LatLng(22.3177553599667,114.159893278781)
+                        });
+                        marker.setMap(map);
+
+                        map.setCenter({
+                            lat : 22.3177553599667,
+                            lng : 114.159893278781
+                        });
+                        $('#mapdiv').show();
+                        $('#mapdiv').detach().appendTo('#collapseabc123 .accordion-body');
+                    });
+                
+                    $('#collapseRD#deadbeef').on('show.bs.collapse', function () {
+                        if(marker){
+                            marker.setMap(null);
+                        }
+
+                        marker = new google.maps.Marker({
+                            position: new google.maps.LatLng(22.2854080198983,114.156805854919)
+                        });
+                        marker.setMap(map);
+                    });
+                
+
+            
+            marker = new google.maps.Marker({
+                position: new google.maps.LatLng(22.3177553599667,114.159893278781)
+            });
+            marker.setMap(map);
+            
+        }
+    </script>
+</head>
+<body onload="init();">
+<nav class="navbar navbar-dark bg-dark"><a class="navbar-brand" href="#">香港最新交通消息</a></nav>
+<div class="accordion" id="accordionExample">
+    
+        <div class="accordion-item">
+            <h2 class="accordion-header" id="abc123">
+                <button class="accordion-button  text-danger" type="button" data-bs-toggle="collapse" data-bs-target="#collapseabc123" aria-expanded="true" aria-controls="collapseabc123">
+                    <tabke>
+                        <tr><td>
+                        <b>2026年9月11日 下午02:58 (4分鐘前)</b><br/></td></tr>
+                    <tr><td><b>道路事故-交通意外 (最新情況)</b><br/></td></tr>
+                    <tr><td><b>西九龍公路,奧運港鐵站 [往西隧]</b><br/></td></tr>
+                    <tr><td>較早前西九龍公路往西隧方向，近奧運港鐵站的交通意外清場。<br />資料來源: 香港電台</td></tr></tabke>
+                </button>
+            </h2>
+            <div id="collapseabc123" class="accordion-collapse collapse show" aria-labelledby="abc123" data-bs-parent="#accordionExample">
+                <div class="accordion-body"></div>
+            </div>
+        </div>
+    
+        <div class="accordion-item">
+            <h2 class="accordion-header" id="RD#deadbeef">
+                <button class="accordion-button collapsed " type="button" data-bs-toggle="collapse" data-bs-target="#collapseRD#deadbeef" aria-expanded="false" aria-controls="collapseRD#deadbeef">
+                    <tabke>
+                        <tr><td>
+                        <b>2026年9月11日 上午08:16 (7小時前)</b><br/></td></tr>
+                    <tr><td><b>道路事故-封閉措施 (完結)</b><br/></td></tr>
+                    <tr><td><b>干諾道西</b><br/></td></tr>
+                    <tr><td>以下路段的交通現已恢復正常:<br />–龍富路(往龍鼓灘方向)。<br />資料來源: https://data.gov.hk/</td></tr></tabke>
+                </button>
+            </h2>
+            <div id="collapseRD#deadbeef" class="accordion-collapse collapse " aria-labelledby="RD#deadbeef" data-bs-parent="#accordionExample">
+                <div class="accordion-body"></div>
+            </div>
+        </div>
+    
+        <div class="accordion-item">
+            <h2 class="accordion-header" id="DS-4936472438243328">
+                <button class="accordion-button collapsed text-danger" type="button" data-bs-toggle="collapse" data-bs-target="#collapseDS-4936472438243328" aria-expanded="false" aria-controls="collapseDS-4936472438243328">
+                    <tabke>
+                        <tr><td>
+                        <b>2026年9月11日 下午03:20 (19分鐘前)</b><br/></td></tr>
+                    <tr><td><b>擠塞信號-車多關係 (最新情況)</b><br/></td></tr>
+                    <tr><td><b>石排灣道,華貴邨</b><br/></td></tr>
+                    <tr><td>根據系統分析，石排灣道近華貴邨可能出現交通擠塞。<br />資料來源: Routejam<br />(*此信號是通過分析政府提供的行車速度計所得)</td></tr></tabke>
+                </button>
+            </h2>
+            <div id="collapseDS-4936472438243328" class="accordion-collapse collapse " aria-labelledby="DS-4936472438243328" data-bs-parent="#accordionExample">
+                <div class="accordion-body"></div>
+            </div>
+        </div>
+    
+        <div class="accordion-item">
+            <h2 class="accordion-header" id="IN-26-06664">
+                <button class="accordion-button collapsed " type="button" data-bs-toggle="collapse" data-bs-target="#collapseIN-26-06664" aria-expanded="false" aria-controls="collapseIN-26-06664">
+                    <tabke>
+                        <tr><td>
+                        <b>2026年9月11日 上午07:02 (8小時前)</b><br/></td></tr>
+                    <tr><td><b>其他事故-兔仔跑西貢2026活動臨時封路安排 (完結)</b><br/></td></tr>
+                    <tr><td><b></b><br/></td></tr>
+                    <tr><td>為配合2026年9月13日(星期日)舉行的兔仔跑西貢2026活動：<br /><br />上午6時45分至7時45分<br />-大網仔路間歇性封閉。<br />資料來源: https://data.gov.hk/</td></tr></tabke>
+                </button>
+            </h2>
+            <div id="collapseIN-26-06664" class="accordion-collapse collapse " aria-labelledby="IN-26-06664" data-bs-parent="#accordionExample">
+                <div class="accordion-body"></div>
+            </div>
+        </div>
+    
+</div>
+</body>
+</html>
