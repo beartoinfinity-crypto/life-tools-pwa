@@ -22,6 +22,13 @@
       desc: 'Edited simple UI — search by route number or bus stop (all buses via), auto-refresh 30s.',
       href: '/bus-eta-lite/',
       icon: '汽'
+    },
+    {
+      id: 'traffic-news',
+      title: 'Traffic News',
+      desc: 'Latest HK traffic incidents from Routejam (路暢) — updated every minute.',
+      href: '#trafficNews',
+      icon: '交'
     }
   ];
 

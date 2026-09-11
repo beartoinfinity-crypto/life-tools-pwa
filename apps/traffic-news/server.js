@@ -54,11 +54,13 @@ async function refreshTrafficNews() {
   return { fetched: items.length };
 }
 
-/** Latest news straight from Supabase (no scraping). */
-async function readTrafficNews({ limit = 30, status } = {}) {
+/** Latest news straight from Supabase (no scraping). Only the last 12 hours. */
+async function readTrafficNews({ limit = 30, status, hours = 12 } = {}) {
+  const since = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
   let query = supabase
     .from('traffic_news')
     .select('*')
+    .gte('posted_at', since)
     .order('posted_at', { ascending: false })
     .order('id', { ascending: false })
     .limit(Math.min(parseInt(limit) || 30, 100));
@@ -82,8 +84,8 @@ app.use(express.json());
 // Read the latest cached news (fast path, no scrape)
 app.post('/api/news', async (req, res) => {
   try {
-    const { limit, status } = req.body || {};
-    res.json(await readTrafficNews({ limit, status }));
+    const { limit, status, hours } = req.body || {};
+    res.json(await readTrafficNews({ limit, status, hours }));
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -93,8 +95,8 @@ app.post('/api/news', async (req, res) => {
 app.post('/api/news/refresh', async (req, res) => {
   try {
     const r = await refreshTrafficNews();
-    const { limit, status } = req.body || {};
-    const out = await readTrafficNews({ limit, status });
+    const { limit, status, hours } = req.body || {};
+    const out = await readTrafficNews({ limit, status, hours });
     res.json({ ...out, fetched: r.fetched });
   } catch (e) {
     res.status(500).json({ error: e.message });
