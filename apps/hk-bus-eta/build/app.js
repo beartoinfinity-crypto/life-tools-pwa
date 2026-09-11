@@ -429,9 +429,9 @@ function appendRouteRow(box, no) {
 }
 
 /* ---------------- route detail ---------------- */
-function openRoute(no, silent) {
+function openRoute(no, silent, from) {
   state.view = "detail";
-  state.detail = { kind: "route", routeNo: no, groups: groupByDirection(no), sel: 0 };
+  state.detail = { kind: "route", routeNo: no, groups: groupByDirection(no), sel: 0, from: from || null };
   renderDetail();
   if (!silent) renderCurrentList();
 }
@@ -459,7 +459,17 @@ function renderDetail() {
       </button>`).join("")}
     </div>
     <div class="note">${state.lang === "zh" ? "點擊車站查看經此站的所有路線 · 每 30 秒自動更新" : "Tap a stop to see all routes via it · auto-refresh 30s"}</div>`;
-  el.detailTop.querySelector("#backBtn").addEventListener("click", goHome);
+  el.detailTop.querySelector("#backBtn").addEventListener("click", () => {
+    const f = state.detail.from;
+    if (f && f.kind === "stop") {
+      openStop(f.stopId, true, f.from || null);
+    } else if (f && f.kind === "route" && typeof f.sel === "number") {
+      state.detail = { kind: "route", routeNo: f.routeNo, groups: groupByDirection(f.routeNo), sel: f.sel, from: f.from || null };
+      renderDetail();
+    } else {
+      goHome();
+    }
+  });
   el.detailTop.querySelector("#starBtn").addEventListener("click", () => {
     const on = toggleRouteBook(state.detail.routeNo);
     const star = el.detailTop.querySelector("#starBtn");
@@ -728,15 +738,8 @@ function appendStopRow(listEl, r) {
     </div>
     <div class="eta-chips"></div>`;
   line.addEventListener("click", () => {
-    const ex = line.querySelector(".eta-expanded");
-    if (ex) { ex.remove(); return; }
-    const info = state.etaRows.get(rowkey);
-    if (info) {
-      const d = document.createElement("div");
-      d.className = "eta-expanded";
-      d.innerHTML = expandedHTML(info.etas);
-      line.appendChild(d);
-    }
+    const stopFrom = state.detail.from;
+    openRoute(String(e.route), true, { kind: "stop", stopId: state.detail.stopId, from: stopFrom || null });
   });
   listEl.appendChild(line);
   state.etaRows.set(rowkey, { etas: null });
