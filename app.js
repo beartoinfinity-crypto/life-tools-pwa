@@ -14,11 +14,23 @@ app.use('/mark-six', (req, res, next) => {
   next();
 });
 
+// Redirect /mark-six -> /mark-six/ so relative paths in the app resolve correctly
+app.use('/mark-six', (req, res, next) => {
+  const p = req.originalUrl.split('?')[0];
+  if (p === '/mark-six') return res.redirect('/mark-six/');
+  next();
+});
+
 // Mount the Mark Six PWA
 const { app: markSixApp } = require('./apps/mark-six/server');
 app.use('/mark-six', markSixApp);
 
-// Traffic news API (scrapes news.routejam.com into Supabase)
+// Traffic news PWA + API (scrapes news.routejam.com into Supabase)
+app.use('/traffic-news', (req, res, next) => {
+  const p = req.originalUrl.split('?')[0];
+  if (p === '/traffic-news') return res.redirect('/traffic-news/');
+  next();
+});
 const { app: trafficNewsApp, ensureTrafficNews } = require('./apps/traffic-news/server');
 app.use('/traffic-news', trafficNewsApp);
 

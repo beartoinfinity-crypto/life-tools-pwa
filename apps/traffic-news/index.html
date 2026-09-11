@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#d84315" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Traffic News" />
+  <meta name="description" content="Hong Kong latest traffic news (Routejam 路暢)" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="icons/icon.svg" />
+  <title>Traffic News 交通消息</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header>
+    <div class="header-content">
+      <svg class="logo" viewBox="0 0 36 36" width="36" height="36" aria-hidden="true">
+        <rect x="2" y="2" width="32" height="32" rx="8" fill="#d84315" />
+        <text x="18" y="25" text-anchor="middle" fill="#fff" font-size="18" font-weight="bold">交</text>
+      </svg>
+      <h1>交通消息</h1>
+      <button id="refreshBtn" class="refresh-btn" title="Refresh">
+        <svg class="refresh-icon" viewBox="0 0 24 24" width="24" height="24">
+          <path d="M17.65 6.35A7.958 7.958 0 0012 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0112 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z" fill="currentColor"/>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <main>
+    <div id="statusBar" class="status-bar">
+      <span id="lastUpdate">Loading...</span>
+    </div>
+    <div id="newsList" class="news-list">
+      <div class="news-empty">Loading traffic news…</div>
+    </div>
+    <a class="news-src" href="https://news.routejam.com/" target="_blank" rel="noopener">Source: Routejam 路暢 &rarr;</a>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

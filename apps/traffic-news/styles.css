@@ -1,0 +1,194 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+:root {
+  --bg: #f5f5f5;
+  --card-bg: #ffffff;
+  --text: #1a1a1a;
+  --text-secondary: #555555;
+  --border: #e0e0e0;
+  --primary: #263238;
+  --accent: #d84315;
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --radius: 16px;
+  --safe-top: env(safe-area-inset-top);
+  --safe-bottom: env(safe-area-inset-bottom);
+}
+
+:root[data-theme="night"] {
+  --bg: #12161a;
+  --card-bg: #1c2329;
+  --text: #e6edf2;
+  --text-secondary: #93a2ad;
+  --border: #2b333b;
+  --primary: #b0bec5;
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  padding-top: var(--safe-top);
+  padding-bottom: var(--safe-bottom);
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior-y: contain;
+  font-size: 18px;
+  line-height: 1.5;
+}
+
+/* Header */
+header {
+  background: linear-gradient(160deg, #f4511e 0%, #d84315 50%, #bf360c 100%);
+  color: #fff;
+  padding: 18px 20px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: 0 4px 20px rgba(216, 67, 21, 0.35);
+}
+
+.header-content {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.header-content h1 {
+  font-size: 24px;
+  font-weight: 800;
+  flex: 1;
+  letter-spacing: 0.5px;
+}
+
+.refresh-btn {
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.refresh-btn:active { background: rgba(255, 255, 255, 0.28); }
+
+.refresh-btn.spinning .refresh-icon { animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Main */
+main {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 20px 16px 40px;
+}
+
+.status-bar {
+  font-size: 13px;
+  color: var(--text-secondary);
+  text-align: center;
+  margin-bottom: 14px;
+}
+
+.news-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.news-empty {
+  color: var(--text-secondary);
+  font-size: 15px;
+  padding: 40px 4px;
+  text-align: center;
+  background: var(--card-bg);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+}
+
+.news-item {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-sm);
+  padding: 12px 14px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.news-item:active { background: rgba(0, 0, 0, 0.04); }
+:root[data-theme="night"] .news-item:active { background: rgba(255, 255, 255, 0.06); }
+
+.news-item .ni-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+
+.news-item .ni-rel { margin-left: auto; white-space: nowrap; }
+
+.news-item .ni-status {
+  font-size: 11px;
+  font-weight: 800;
+  padding: 1px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.news-item .ni-status.latest {
+  background: #c9312b;
+  color: #fff;
+}
+
+.news-item .ni-status.closed {
+  background: var(--border);
+  color: var(--text-secondary);
+}
+
+.news-item .ni-loc {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--primary);
+  line-height: 1.4;
+}
+
+.news-item .ni-cat {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+.news-item .ni-detail {
+  display: none;
+  margin-top: 8px;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+  white-space: pre-line;
+  border-top: 1px dashed var(--border);
+  padding-top: 8px;
+}
+
+.news-item.open .ni-detail { display: block; }
+
+.news-src {
+  display: block;
+  margin-top: 18px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-align: center;
+}

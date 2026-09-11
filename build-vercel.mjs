@@ -22,4 +22,9 @@ for (const f of ['index.html', 'app.js', 'styles.css', 'manifest.json', 'sw.js',
   copyEntry(`apps/mark-six/${f}`, 'mark-six', f);
 }
 
+// Traffic news static assets only (its API is served by the Express function)
+for (const f of ['index.html', 'app.js', 'styles.css', 'manifest.json', 'sw.js', 'icons']) {
+  copyEntry(`apps/traffic-news/${f}`, 'traffic-news', f);
+}
+
 console.log('vercel-out assembled');

@@ -81,6 +81,9 @@ async function readTrafficNews({ limit = 30, status, hours = 12 } = {}) {
 const app = express();
 app.use(express.json());
 
+// Static PWA (mounted at /traffic-news/ by the hub)
+app.use(express.static(require('path').join(__dirname)));
+
 // Read the latest cached news (fast path, no scrape)
 app.post('/api/news', async (req, res) => {
   try {
@@ -101,6 +104,11 @@ app.post('/api/news/refresh', async (req, res) => {
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
+});
+
+// SPA fallback
+app.get('*', (req, res) => {
+  res.sendFile(require('path').join(__dirname, 'index.html'));
 });
 
 let ensurePromise = null;

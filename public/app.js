@@ -27,7 +27,7 @@
       id: 'traffic-news',
       title: 'Traffic News',
       desc: 'Latest HK traffic incidents from Routejam (路暢) — updated every minute.',
-      href: '#trafficNews',
+      href: '/traffic-news/',
       icon: '交'
     }
   ];
@@ -153,76 +153,6 @@
     mq.addEventListener('change', function () { applyTheme(systemTheme(), false); });
   }
   applyTheme(theme(), false);
-
-  /* --- traffic news (Routejam via Supabase cache) --- */
-  var newsList = document.getElementById('newsList');
-  var newsUpdated = document.getElementById('newsUpdated');
-
-  function fmtAgo(iso) {
-    if (!iso) return '';
-    var s = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
-    if (s < 60) return s + 's ago';
-    if (s < 3600) return Math.floor(s / 60) + 'm ago';
-    if (s < 86400) return Math.floor(s / 3600) + 'h ago';
-    return Math.floor(s / 86400) + 'd ago';
-  }
-  function fmtTime(iso) {
-    var d = new Date(iso);
-    if (isNaN(d)) return '';
-    var h = d.getHours(), min = ('0' + d.getMinutes()).slice(-2);
-    var ampm = h < 12 ? '上午' : '下午';
-    var h12 = h % 12; if (h12 === 0) h12 = 12;
-    var m = d.getMonth() + 1, day = d.getDate();
-    return (m < 10 ? '0' + m : m) + '-' + (day < 10 ? '0' + day : day) + ' ' + ampm + ' ' + ('0' + h12).slice(-2) + ':' + min;
-  }
-
-  function esc(s) {
-    return String(s == null ? '' : s)
-      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
-  }
-
-  function renderNews(payload) {
-    var items = (payload && payload.data) || [];
-    if (newsUpdated) {
-      newsUpdated.textContent = payload && payload.lastRefresh ? 'updated ' + fmtAgo(payload.lastRefresh) : '';
-    }
-    if (!items.length) {
-      newsList.innerHTML = '<div class="news-empty">No traffic news right now.</div>';
-      return;
-    }
-    newsList.innerHTML = items.map(function (n) {
-      var latest = n.status === '最新情況';
-      return '<div class="news-item' + (latest ? '' : ' closed-item') + '" role="button" tabindex="0">' +
-          '<div class="ni-meta">' +
-            '<span class="ni-status ' + (latest ? 'latest' : 'closed') + '">' + (latest ? '最新' : '完結') + '</span>' +
-            '<span>' + esc(fmtTime(n.posted_at)) + '</span>' +
-            '<span>&middot;</span>' +
-            '<span>' + esc(n.category) + '</span>' +
-          '</div>' +
-          '<div class="ni-loc">' + esc(n.location || n.category || '') + '</div>' +
-          '<div class="ni-detail">' + esc(n.detail) + '</div>' +
-        '</div>';
-    }).join('');
-    Array.prototype.forEach.call(newsList.querySelectorAll('.news-item'), function (el) {
-      el.addEventListener('click', function () { el.classList.toggle('open'); });
-    });
-  }
-
-  function loadNews() {
-    fetch('/traffic-news/api/news', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ limit: 30 })
-    })
-      .then(function (r) { return r.json(); })
-      .then(renderNews)
-      .catch(function () {
-        newsList.innerHTML = '<div class="news-empty">Failed to load traffic news.</div>';
-      });
-  }
-  loadNews();
-  setInterval(loadNews, 60 * 1000);
 
   render();
 })();

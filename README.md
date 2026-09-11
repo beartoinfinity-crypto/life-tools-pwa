@@ -14,11 +14,11 @@ A hub of handy Progressive Web Apps (PWAs), served by one Express app and deploy
 | **Mark Six** | `/mark-six/` | Hong Kong Mark Six lottery results: latest draws, full history, special numbers, daily auto-refresh |
 | **HK Bus ETA (original)** | `/bus-eta/` | Archived upstream PWA (hkbus/hk-independent-bus-eta) — full-featured, mounted unmodified |
 | **Bus ETA (lite)** | `/bus-eta-lite/` | Home-grown simple ETA UI — route & stop search, bookmarks, day/night theme, operator-coloured badges; data via the bundled [hk-bus-eta](https://www.npmjs.com/package/hk-bus-eta) library (GPL-3.0) |
+| **Traffic News** | `/traffic-news/` | Latest HK traffic incidents from Routejam (路暢), cached in Supabase and refreshed every minute |
 
 Browsing to the root (`/`) shows a launcher dashboard with a card per app. The dashboard itself has a **Dark/Light
-toggle** (persisted, defaults to system), a theme-aware favicon, cards that can be **drag-reordered** (order persists
-in `localStorage`), and a **Traffic News panel** — the latest Routejam (路暢) traffic incidents for Hong Kong, served
-from a Supabase cache and auto-polling every minute; tap an item to expand its detail.
+toggle** (persisted, defaults to system), a theme-aware favicon, and the cards can be **drag-reordered** (order
+persists in `localStorage`).
 
 ---
 
@@ -72,9 +72,10 @@ Open `http://localhost:3000` — visit `/` for the dashboard and `/mark-six/` fo
 │       ├── build-upstream/    # Archived upstream PWA (served at /bus-eta/, not from this dir)
 │       ├── README.md          # Attribution + data-layer notes
 │       └── LICENSE            # GPL-3.0 (upstream license, required)
-│   └── traffic-news/      # Traffic news scraper (mounted at /traffic-news/): routejam parser + Supabase cache
+│   └── traffic-news/      # Traffic News PWA (mounted at /traffic-news/)
 │       ├── parser.js          # Parses news.routejam.com accordion HTML (date/category/location/detail/coords)
-│       ├── server.js          # Express app: POST /api/news, POST /api/news/refresh + refreshTrafficNews()
+│       ├── server.js          # Express app: static PWA + POST /api/news(+refresh) + refreshTrafficNews()
+│       ├── index.html / app.js / styles.css / manifest.json / sw.js / icons/  # The PWA itself
 │       └── test/              # Parser tests (fixture HTML)
 ├── render.yaml           # Render Blueprint config
 ├── package.json
@@ -226,11 +227,12 @@ The bundled library is GPL-3.0; the upstream LICENSE is included in `apps/hk-bus
 
 ---
 
-## Traffic news (hub dashboard)
+## Traffic News (`/traffic-news/`)
 
-The dashboard shows the latest Hong Kong traffic incidents from [Routejam 路暢](https://news.routejam.com/),
-scraped server-side and cached in Supabase (table `traffic_news`) so the hub reads fast without hitting routejam
-on every visit.
+A standalone PWA showing the latest Hong Kong traffic incidents from [Routejam 路暢](https://news.routejam.com/),
+scraped server-side and cached in Supabase (table `traffic_news`) so reads stay fast. The app shows the last
+**12 hours** of incidents with 最新/完結 badges, relative timestamps in HK time, tap-to-expand details, a manual
+refresh button and a 1-minute auto-poll; installable like the other apps (manifest + service worker).
 
 | Method | Endpoint | Request body | Description |
 |--------|----------|--------------|-------------|

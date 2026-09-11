@@ -1,0 +1,19 @@
+{
+  "name": "Traffic News 交通消息",
+  "short_name": "Traffic News",
+  "description": "Hong Kong latest traffic news (Routejam 路暢) - incidents from the last 12 hours",
+  "start_url": "/traffic-news/",
+  "scope": "/traffic-news/",
+  "display": "standalone",
+  "background_color": "#f5f5f5",
+  "theme_color": "#d84315",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
