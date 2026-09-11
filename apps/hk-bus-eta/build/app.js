@@ -347,22 +347,33 @@ function groupByDirection(no) {
 
 /* ---------------- bookmarks ---------------- */
 function bookRoutes() {
-  try { return JSON.parse(localStorage.getItem("buseta-book-routes") || "[]"); } catch { return []; }
+  let a;
+  try { a = JSON.parse(localStorage.getItem("buseta-book-routes") || "[]"); } catch { a = []; }
+  return a.map((b) => (typeof b === "string" ? { no: b, dir: null } : b)).filter((b) => b && b.no);
 }
 function bookStops() {
   try { return JSON.parse(localStorage.getItem("buseta-book-stops") || "[]"); } catch { return []; }
 }
 function isRouteBooked(no) {
-  return bookRoutes().includes(String(no).toUpperCase());
+  return bookRoutes().some((b) => String(b.no).toUpperCase() === String(no).toUpperCase());
 }
 function isStopBooked(id) {
   return bookStops().some((b) => b.id === id);
 }
-function toggleRouteBook(no) {
+function setRouteBookDir(no, dir) {
   no = String(no).toUpperCase();
   const a = bookRoutes();
-  const i = a.indexOf(no);
-  if (i >= 0) a.splice(i, 1); else a.push(no);
+  const b = a.find((x) => String(x.no).toUpperCase() === no);
+  if (!b || b.dir === dir) return;
+  b.dir = dir || null;
+  localStorage.setItem("buseta-book-routes", JSON.stringify(a));
+}
+function toggleRouteBook(no, dir) {
+  no = String(no).toUpperCase();
+  const a = bookRoutes();
+  const i = a.findIndex((b) => String(b.no).toUpperCase() === no);
+  if (i >= 0) a.splice(i, 1);
+  else a.push({ no, dir: dir || null });
   localStorage.setItem("buseta-book-routes", JSON.stringify(a));
   return i < 0;
 }
@@ -410,7 +421,7 @@ function groupOpsClass(g) {
   const ops = [...new Set(g.entries.map((en) => en.co && en.co[0]).filter(Boolean))];
   return ops.length === 1 ? coBadgeClass(ops[0]) : ops.length > 1 ? "co-mixed" : "";
 }
-function appendRouteRow(box, no) {
+function appendRouteRow(box, no, dir) {
   const group = groupByDirection(no);
   if (!group.length) return;
   const dirs = group.slice(0, 3).map((g) => pickEntry(g).dest[state.lang]).filter(Boolean);
@@ -424,14 +435,20 @@ function appendRouteRow(box, no) {
       <div class="rmeta">${esc(group.length + " " + T.services[state.lang])}
         ${cos.map((c) => `<span class="tag ${coBadgeClass(c)}">${esc(coTag(c))}</span>`).join("")}</div>
     </div>`;
-  card.addEventListener("click", () => openRoute(no));
+  card.addEventListener("click", () => openRoute(no, false, null, dir));
   box.appendChild(card);
 }
 
 /* ---------------- route detail ---------------- */
-function openRoute(no, silent, from) {
+function openRoute(no, silent, from, dir) {
   state.view = "detail";
-  state.detail = { kind: "route", routeNo: no, groups: groupByDirection(no), sel: 0, from: from || null };
+  const groups = groupByDirection(no);
+  let sel = 0;
+  if (dir) {
+    const i = groups.findIndex((g) => g.key === dir);
+    if (i >= 0) sel = i;
+  }
+  state.detail = { kind: "route", routeNo: no, groups, sel, from: from || null };
   renderDetail();
   if (!silent) renderCurrentList();
 }
@@ -471,7 +488,7 @@ function renderDetail() {
     }
   });
   el.detailTop.querySelector("#starBtn").addEventListener("click", () => {
-    const on = toggleRouteBook(state.detail.routeNo);
+    const on = toggleRouteBook(state.detail.routeNo, state.detail.groups[sel] && state.detail.groups[sel].key);
     const star = el.detailTop.querySelector("#starBtn");
     star.textContent = on ? "★" : "☆";
     star.classList.toggle("on", on);
@@ -480,6 +497,7 @@ function renderDetail() {
   el.detailTop.querySelectorAll(".pill").forEach((p) =>
     p.addEventListener("click", () => {
       state.detail.sel = Number(p.dataset.pi);
+      if (isRouteBooked(state.detail.routeNo)) setRouteBookDir(state.detail.routeNo, state.detail.groups[state.detail.sel].key);
       renderDetail();
     })
   );
@@ -550,7 +568,7 @@ function renderRouteBook() {
   box.innerHTML = "";
   const list = bookRoutes();
   if (!list.length) { box.innerHTML = `<div class="msg">${T.bookEmptyR[state.lang]}</div>`; return; }
-  list.forEach((no) => appendRouteRow(box, String(no).toUpperCase()));
+  list.forEach((b) => appendRouteRow(box, String(b.no).toUpperCase(), b.dir));
 }
 function renderStopBook() {
   const box = el.stopBookResults;
