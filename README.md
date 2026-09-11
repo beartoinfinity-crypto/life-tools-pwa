@@ -197,7 +197,7 @@ A mobile-first, vanilla-JS re-implementation tuned for quick glance-and-leave us
 
 | Tab | Purpose |
 |-----|---------|
-| 路線查詢 / Route | Type a route number (e.g. `1A`, `286X`, `A12`) → direction pills → every stop with live arrival chips; **tap a stop** to see *all routes via it* |
+| 路線查詢 / Route | Type a route number (e.g. `1A`, `286X`, `A12`) → direction pills → every stop with live arrival chips; **tap a stop** to see *all routes via it*, and **tap a route** in that list to jump to its own detail |
 | 車站查詢 / Stop | Fuzzy-like match on stop **name** *or* **code** (e.g. `TA296`) — the code in the bracket is searchable; "附近的站" geolocation also available |
 | 收藏路線 / Bookmark | All bookmarked routes (★ on the route detail page) |
 | 收藏車站 / Stops | All bookmarked stops |
@@ -208,7 +208,7 @@ Other features:
 - **Day / Night toggle** — header button, persisted in `localStorage`, follows the system preference until you choose manually (override wins over `prefers-color-scheme`).
 - **Bookmarks** — star a route or stop from its detail page; stored in `localStorage`, listed under the two bookmark tabs, tap to reopen.
 - **Auto-refresh** — live arrival chips refresh every 30 s; manual refresh re-downloads the route database.
-- **Offline-first** — route database cached in IndexedDB; service worker caches the shell (`buseta-lite-v18`).
+- **Offline-first** — route database cached in IndexedDB; service worker caches the shell (`buseta-lite-v19`).
 - **EN/ZH** toggle; near-black UI in night mode with corrected chip/badge colours.
 
 Served files are in `apps/hk-bus-eta/build/` (includes the bundled `vendor/hk-bus-eta.esm.js`). The route database is
