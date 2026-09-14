@@ -34,12 +34,20 @@
       <span id="lastUpdate">Loading...</span>
     </div>
 
+    <div class="country-tabs" id="countryTabs"></div>
+
     <div class="tabs" id="listTabs">
       <button class="tab active" data-list="trending">熱門趨勢</button>
       <button class="tab" data-list="cantonese">廣東歌</button>
       <button class="tab" data-list="chinese">國語歌</button>
       <button class="tab" data-list="my">我的歌單</button>
     </div>
+
+    <div id="myTools" class="my-tools hidden">
+      <button id="myUploadBtn" class="my-tool-btn">⇧ 上傳歌單</button>
+      <button id="myPickerBtn" class="my-tool-btn">⇩ 下載歌單</button>
+    </div>
+    <div id="myPicker" class="my-picker hidden"></div>
 
     <div id="playList" class="song-list">
       <div class="loading-note">Loading playlists…</div>
@@ -54,6 +62,7 @@
       <div class="p-info">
         <div id="nowName" class="p-name">—</div>
         <div id="nowArtist" class="p-artist">—</div>
+        <span id="pTime" class="p-time">0:00 / --:--</span>
       </div>
       <div class="p-controls">
         <button id="shuffleBtn" class="p-btn p-shuffle" title="Random: off">

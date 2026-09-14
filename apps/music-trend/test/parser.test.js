@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildPlaylists, isCantonese, isMandarin } from '../parser.js';
+import { buildPlaylists, isCantonese, isMandarin, feedUrl } from '../parser.js';
 
 const song = (over) => ({
   id: '1',
@@ -79,5 +79,17 @@ describe('buildPlaylists', () => {
     expect(empty.trending).toEqual([]);
     expect(empty.cantonese).toEqual([]);
     expect(empty.chinese).toEqual([]);
+  });
+});
+
+describe('feedUrl', () => {
+  it('builds a per-country most-played URL, lowercased', () => {
+    expect(feedUrl('HK')).toBe('https://rss.applemarketingtools.com/api/v2/hk/music/most-played/100/songs.json');
+  });
+  it('defaults to hk', () => {
+    expect(feedUrl()).toBe('https://rss.applemarketingtools.com/api/v2/hk/music/most-played/100/songs.json');
+  });
+  it('supports non-hk countries', () => {
+    expect(feedUrl('tw')).toBe('https://rss.applemarketingtools.com/api/v2/tw/music/most-played/100/songs.json');
   });
 });

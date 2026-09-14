@@ -40,14 +40,25 @@ create table if not exists public.traffic_news (
 
 create index if not exists idx_traffic_news_posted on public.traffic_news (posted_at desc);
 
--- Music trend table: cached Apple Music HK chart playlists
+-- Music trend table: cached Apple Music chart playlists.
+-- Each row is one playlist for one country, keyed "<cc>:<list>"
+-- (e.g. 'hk:trending', 'tw:cantonese').
 create table if not exists public.music_trend (
-  list text primary key,                -- 'trending' | 'cantonese' | 'chinese'
+  list text primary key,                -- '<cc>:trending' | '<cc>:cantonese' | '<cc>:chinese'
   chart_title text,                     -- e.g. "熱門歌曲"
   updated_at_src text,                  -- Apple feed "updated" timestamp
   songs jsonb not null,                 -- [{rank,id,name,artist,artwork,...}]
   refreshed_at timestamptz,             -- when we scraped it
   created_at timestamptz not null default now()
+);
+
+-- My-playlist sync: user playlist name is the key, so the same name typed on
+-- another device reloads the same songs (cross-device sync).
+create table if not exists public.music_user_playlists (
+  name text primary key,                -- user-chosen name of the playlist
+  songs jsonb not null,                 -- [{rank,id,name,artist,artwork,youtubeId,...}]
+  created_at timestamptz not null default now(),
+  updated_at timestamptz
 );
 
 -- ============================================================
@@ -61,6 +72,7 @@ alter table public.draws enable row level security;
 alter table public.meta enable row level security;
 alter table public.traffic_news enable row level security;
 alter table public.music_trend enable row level security;
+alter table public.music_user_playlists enable row level security;
 
 create policy "allow all invites" on public.draws
   for all using (true) with check (true);
@@ -72,4 +84,7 @@ create policy "allow all traffic news" on public.traffic_news
   for all using (true) with check (true);
 
 create policy "allow all music trend" on public.music_trend
+  for all using (true) with check (true);
+
+create policy "allow all music user playlists" on public.music_user_playlists
   for all using (true) with check (true);

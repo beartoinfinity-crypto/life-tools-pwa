@@ -2,8 +2,22 @@ const express = require('express');
 const https = require('https');
 const { createClient } = require('@supabase/supabase-js');
 
-const { buildPlaylists, FEED_URL } = require('./parser');
+const { buildPlaylists, feedUrl } = require('./parser');
 const { searchYouTube, mapLimit } = require('./youtube');
+
+/** Countries whose Apple Music charts are available (code -> label). */
+const COUNTRIES = {
+  hk: '香港',
+  tw: '台灣',
+  cn: '中國',
+  jp: '日本',
+  kr: '韓國',
+  us: '美國',
+  sg: '新加坡',
+  my: '馬來西亞',
+  au: '澳洲',
+  gb: '英國'
+};
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
@@ -39,14 +53,14 @@ const YT_DEADLINE_MS = 50 * 1000;
 
 /**
  * Resolve YouTube ids for songs, reusing ids cached from previous runs
- * (matched by song id) so only new/missing songs hit youtube — a rolling
- * window per run keeps scrapes bounded. Never rejects.
+ * (matched by song id, country-scoped) so only new/missing songs hit
+ * youtube — a rolling window per run keeps scrapes bounded. Never rejects.
  */
-async function resolveYouTube(songs) {
+async function resolveYouTube(country, songs) {
   // Reuse previously cached ids
   let cached = new Map();
   try {
-    const { data } = await supabase.from('music_trend').select('songs').eq('list', 'trending').single();
+    const { data } = await supabase.from('music_trend').select('songs').eq('list', `${country}:trending`).single();
     for (const s of JSON.parse(data.songs || '[]')) {
       if (s.youtubeId) cached.set(String(s.id), { youtubeId: s.youtubeId, youtubeTitle: s.youtubeTitle });
     }
@@ -72,17 +86,19 @@ async function resolveYouTube(songs) {
 }
 
 /**
- * Scrape the Apple Music HK top-songs feed, split into playlists,
- * resolve YouTube ids (rolling window), and cache each playlist as one
- * JSON row in Supabase.
+ * Scrape the Apple Music most-played feed for a country, split into
+ * playlists, resolve YouTube ids (rolling window), and cache each playlist
+ * as one JSON row in Supabase keyed "<cc>:<list>".
  */
-async function refreshMusicTrend() {
-  const { status, data } = await fetchUrl(FEED_URL);
+async function refreshMusicTrend(country) {
+  const cc = String(country || 'hk').toLowerCase();
+  if (!COUNTRIES[cc]) throw new Error(`unknown country: ${cc}`);
+  const { status, data } = await fetchUrl(feedUrl(cc));
   if (status !== 200) throw new Error(`Apple feed returned ${status}`);
   const lists = buildPlaylists(JSON.parse(data));
   if (!lists.trending.length) throw new Error('feed had no songs');
 
-  await resolveYouTube(lists.trending);
+  await resolveYouTube(cc, lists.trending);
 
   // resolveYouTube mutates only the trending copies of each song; propagate the
   // resolved ids to the cantonese/chinese playlists (same songs, new objects).
@@ -95,7 +111,7 @@ async function refreshMusicTrend() {
   }
 
   const rows = ['trending', 'cantonese', 'chinese'].map((list) => ({
-    list,
+    list: `${cc}:${list}`,
     chart_title: lists.chartTitle,
     updated_at_src: lists.updatedAt,
     songs: JSON.stringify(lists[list]),
@@ -104,30 +120,41 @@ async function refreshMusicTrend() {
   const { error } = await supabase.from('music_trend').upsert(rows, { onConflict: 'list' });
   if (error) throw error;
 
+  // One-time/idempotent cleanup: drop legacy un-prefixed rows from the pre-multi-country era
+  await supabase.from('music_trend').delete().not('list', 'like', '%:%');
+
   await supabase.from('meta').upsert(
-    { key: 'musicTrendLastRefresh', value: new Date().toISOString(), updated_at: new Date().toISOString() },
+    { key: `musicTrendLastRefresh:${cc}`, value: new Date().toISOString(), updated_at: new Date().toISOString() },
     { onConflict: 'key' }
   );
   return {
+    country: cc,
     fetched: lists.trending.length,
     resolved: lists.trending.filter((s) => s.youtubeId).length
   };
 }
 
-/** Cached playlists straight from Supabase. Returns { data, lastRefresh }. */
-async function readMusicTrend(list) {
+/** Cached playlists straight from Supabase. Returns { data, lastRefresh, countries }. */
+async function readMusicTrend({ country, list } = {}) {
   let query = supabase
     .from('music_trend')
     .select('list, chart_title, updated_at_src, refreshed_at, songs')
     .order('list', { ascending: true });
-  if (list) query = query.eq('list', list);
+  if (country) {
+    const cc = String(country).toLowerCase();
+    query = query.like('list', `${cc}:%`);
+    if (list) query = query.eq('list', `${cc}:${list}`);
+  } else if (list) {
+    query = query.eq('list', `hk:${list}`);
+  }
   const { data, error } = await query;
   if (error) throw error;
 
+  const cc = String(country || 'hk').toLowerCase();
   const lastRefresh = await supabase
     .from('meta')
     .select('value')
-    .eq('key', 'musicTrendLastRefresh')
+    .eq('key', `musicTrendLastRefresh:${cc}`)
     .single();
 
   return {
@@ -137,7 +164,8 @@ async function readMusicTrend(list) {
       updatedAtSrc: r.updated_at_src,
       songs: JSON.parse(r.songs)
     })),
-    lastRefresh: lastRefresh.data ? lastRefresh.data.value : null
+    lastRefresh: lastRefresh.data ? lastRefresh.data.value : null,
+    countries: COUNTRIES
   };
 }
 
@@ -147,11 +175,23 @@ app.use(express.json());
 // Static PWA (mounted at /music-trend/ by the hub)
 app.use(express.static(require('path').join(__dirname)));
 
-// Cached playlists (fast path, no scrape)
+// Cached playlists (fast path, no scrape). On serverless (Vercel) there is
+// no always-on process, so a stale country (>1h) is re-scraped in the
+// background (stale-while-revalidate) — the response still returns the cache.
 app.post('/api/playlists', async (req, res) => {
   try {
-    const { list } = req.body || {};
-    res.json(await readMusicTrend(list));
+    const { country, list } = req.body || {};
+    if (process.env.VERCEL) {
+      const cc = String(country || 'hk').toLowerCase();
+      if (COUNTRIES[cc]) {
+        try {
+          const { data: meta } = await supabase.from('meta').select('value').eq('key', `musicTrendLastRefresh:${cc}`).single();
+          const stale = !meta || !meta.value || Date.now() - new Date(meta.value).getTime() > 60 * 60 * 1000;
+          if (stale) refreshMusicTrend(cc).catch(() => {});
+        } catch (e) { /* serve stale */ }
+      }
+    }
+    res.json(await readMusicTrend({ country, list }));
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -160,13 +200,61 @@ app.post('/api/playlists', async (req, res) => {
 // Scrape + upsert, then return the cached playlists
 app.post('/api/playlists/refresh', async (req, res) => {
   try {
-    const r = await refreshMusicTrend();
-    const { list } = req.body || {};
-    const out = await readMusicTrend(list);
-    res.json({ ...out, fetched: r.fetched });
+    const { country, list } = req.body || {};
+    const r = await refreshMusicTrend(country);
+    const out = await readMusicTrend({ country: r.country, list });
+    res.json({ ...out, fetched: r.fetched, resolved: r.resolved });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
+});
+
+// Cross-device my-playlist store (table music_user_playlists). The name the
+// user types IS the key, so the same name on another device reloads the songs.
+app.get('/api/myplaylists', async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('music_user_playlists')
+      .select('name, updated_at, songs')
+      .order('updated_at', { ascending: false })
+      .limit(100);
+    if (error) throw error;
+    res.json({
+      data: (data || []).map((r) => ({
+        name: r.name,
+        count: JSON.parse(r.songs || '[]').length,
+        updated_at: r.updated_at
+      }))
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/myplaylists', async (req, res) => {
+  try {
+    const { name, songs } = req.body || {};
+    if (!name || !String(name).trim()) throw new Error('name required');
+    if (!Array.isArray(songs)) throw new Error('songs must be an array');
+    const trimmed = String(name).trim().slice(0, 100);
+    const { error } = await supabase.from('music_user_playlists').upsert(
+      { name: trimmed, songs: JSON.stringify(songs), updated_at: new Date().toISOString() },
+      { onConflict: 'name' }
+    );
+    if (error) throw error;
+    res.json({ ok: true, name: trimmed, count: songs.length });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/myplaylists/:name', async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('music_user_playlists')
+      .select('name, updated_at, songs')
+      .eq('name', req.params.name)
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) return res.status(404).json({ error: 'not found' });
+    res.json({ name: data.name, updated_at: data.updated_at, songs: JSON.parse(data.songs || '[]') });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // SPA fallback
@@ -175,10 +263,10 @@ app.get('*', (req, res) => {
 });
 
 let ensurePromise = null;
-/** Scrape once at startup / first request (idempotent, reuses in-flight promise). */
+/** Scrape the default (hk) charts once at startup / first request. */
 function ensureMusicTrend() {
   if (!ensurePromise) {
-    ensurePromise = refreshMusicTrend().catch((e) => {
+    ensurePromise = refreshMusicTrend('hk').catch((e) => {
       console.log('music trend initial refresh failed:', e.message);
       ensurePromise = null; // retry on the next call
     });
@@ -186,4 +274,4 @@ function ensureMusicTrend() {
   return ensurePromise;
 }
 
-module.exports = { app, refreshMusicTrend, readMusicTrend, ensureMusicTrend };
+module.exports = { app, refreshMusicTrend, readMusicTrend, ensureMusicTrend, COUNTRIES };

@@ -11,6 +11,12 @@
 
 const FEED_URL = 'https://rss.applemarketingtools.com/api/v2/hk/music/most-played/100/songs.json';
 
+/** Apple "most played" feed for a country code (hk, tw, cn, jp, kr, us, ...). */
+function feedUrl(country) {
+  const cc = String(country || 'hk').toLowerCase();
+  return `https://rss.applemarketingtools.com/api/v2/${cc}/music/most-played/100/songs.json`;
+}
+
 const CANTO_RE = /廣東|香港流行|canton/i;
 const MANDO_RE = /國語|華語|普通話|mandopop|c-pop|chinese pop/i;
 
@@ -55,4 +61,4 @@ function buildPlaylists(feed) {
   };
 }
 
-module.exports = { buildPlaylists, isCantonese, isMandarin, FEED_URL };
+module.exports = { buildPlaylists, isCantonese, isMandarin, FEED_URL, feedUrl };

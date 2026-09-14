@@ -2,7 +2,6 @@ require('dotenv').config();
 const app = require('./app');
 const { ensureInitialData } = require('./apps/mark-six/server');
 const { refreshTrafficNews } = require('./apps/traffic-news/server');
-const { refreshMusicTrend } = require('./apps/music-trend/server');
 
 const PORT = process.env.PORT || 3000;
 
@@ -23,10 +22,18 @@ app.listen(PORT, async () => {
   }, 60 * 1000);
   timer.unref && timer.unref();
 
-  // Music trend: scrape now, then hourly (Apple chart updates ~daily)
-  refreshMusicTrend().catch((e) => console.log('music trend refresh failed:', e.message));
+  // Music trend: scrape all countries at boot, then hourly round-robin
+  // (one country per 6-minute tick so bursts stay small)
+  const { refreshMusicTrend, COUNTRIES } = require('./apps/music-trend/server');
+  const ccs = Object.keys(COUNTRIES);
+  const refreshCc = (cc) => refreshMusicTrend(cc).catch((e) => console.log(`music trend ${cc} refresh failed:`, e.message));
+  (async () => {
+    for (const cc of ccs) await refreshCc(cc);
+  })();
+  let rr = 0;
   const mtTimer = setInterval(() => {
-    refreshMusicTrend().catch((e) => console.log('music trend refresh failed:', e.message));
-  }, 60 * 60 * 1000);
+    refreshCc(ccs[rr % ccs.length]);
+    rr++;
+  }, 6 * 60 * 1000);
   mtTimer.unref && mtTimer.unref();
 });

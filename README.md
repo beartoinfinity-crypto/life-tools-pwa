@@ -15,7 +15,7 @@ A hub of handy Progressive Web Apps (PWAs), served by one Express app and deploy
 | **HK Bus ETA (original)** | `/bus-eta/` | Archived upstream PWA (hkbus/hk-independent-bus-eta) — full-featured, mounted unmodified |
 | **Bus ETA (lite)** | `/bus-eta-lite/` | Home-grown simple ETA UI — route & stop search, bookmarks, day/night theme, operator-coloured badges; data via the bundled [hk-bus-eta](https://www.npmjs.com/package/hk-bus-eta) library (GPL-3.0) |
 | **Traffic News** | `/traffic-news/` | Latest HK traffic incidents from Routejam (路暢), cached in Supabase and refreshed every minute |
-| **Music Trend** | `/music-trend/` | HK Apple Music top 100 — 熱門趨勢 / 廣東歌 / 國語歌 playlists, cached in Supabase |
+| **Music Trend** | `/music-trend/` | Apple Music top-100 charts for 10 countries — 熱門趨勢 / 廣東歌 / 國語歌 playlists + cross-device 我的歌單, cached in Supabase |
 
 Browsing to the root (`/`) shows a launcher dashboard with a card per app. The dashboard itself has a **Dark/Light
 toggle** (persisted, defaults to system), a theme-aware favicon, and the cards can be **drag-reordered** (order
@@ -112,8 +112,8 @@ for the apps.
    PORT=3000
    ```
 
-3. Open the **SQL Editor** and run `apps/mark-six/supabase-schema.sql` (creates `draws`, `meta`, `traffic_news`
-   and `music_trend` tables plus RLS policies).
+3. Open the **SQL Editor** and run `apps/mark-six/supabase-schema.sql` (creates `draws`, `meta`, `traffic_news`,
+   `music_trend` and `music_user_playlists` tables plus RLS policies).
 4. Start the server. If `draws` is empty, the Mark Six app auto-fills ~4,300 historical draws from GitHub.
 
 > The `.env` file is git-ignored — never commit your keys.
@@ -135,16 +135,23 @@ CREATE TABLE traffic_news (
 );
 
 CREATE TABLE music_trend (
-  list          text primary key, -- 'trending' | 'cantonese' | 'chinese'
+  list          text primary key, -- '<cc>:trending' | '<cc>:cantonese' | '<cc>:chinese'
   chart_title   text,
   updated_at_src text,           -- Apple feed "updated" timestamp
   songs         jsonb not null,   -- [{rank,id,name,artist,artwork,...}]
   refreshed_at  timestamptz,
   created_at    timestamptz not null default now()
 );
+
+CREATE TABLE music_user_playlists (
+  name       text primary key,   -- user-chosen key for cross-device my-playlist sync
+  songs      jsonb not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz
+);
 ```
 
-To undo a schema run (e.g. on the wrong project), use `apps/mark-six/supabase-revert.sql` — it drops all three
+To undo a schema run (e.g. on the wrong project), use `apps/mark-six/supabase-revert.sql` — it drops all five
 tables and their policies.
 
 ---
@@ -269,10 +276,11 @@ manual refresh button and a 1-minute auto-poll; installable like the other apps 
 
 ## Music Trend (`/music-trend/`)
 
-A standalone PWA showing the current Hong Kong Apple Music charts, scraped server-side from Apple's public
-["most played" RSS feed](https://rss.applemarketingtools.com/api/v2/hk/music/most-played/100/songs.json) (top 100)
-and cached in Supabase (table `music_trend`, one JSON row per playlist). Three playlists are derived from each
-song's primary genre:
+A standalone PWA showing Apple Music "most played" charts, scraped server-side from Apple's public
+[RSS feeds](https://rss.applemarketingtools.com/api/v2/hk/music/most-played/100/songs.json) (top 100) and cached
+in Supabase (table `music_trend`, one JSON row per playlist per country, keyed `"<cc>:<list>"`). Supported
+countries: **HK, TW, CN, JP, KR, US, SG, MY, AU, GB** (country chip row above the tabs). Three playlists are
+derived from each song's primary genre:
 
 - **熱門趨勢 (trending)** — the full top-100 chart order
 - **廣東歌 (cantonese)** — primary genre 廣東歌/香港流行樂 (`genreId 1251`)
@@ -280,21 +288,31 @@ song's primary genre:
 
 | Method | Endpoint | Request body | Description |
 |--------|----------|--------------|-------------|
-| POST | `/music-trend/api/playlists` | `{ "list"?: "trending" }` | Cached playlists from Supabase |
-| POST | `/music-trend/api/playlists/refresh` | `{ "list"? }` | Scrape the Apple feed, upsert, return playlists |
+| POST | `/music-trend/api/playlists` | `{ "country"?: "hk", "list"?: "trending" }` | Cached playlists from Supabase |
+| POST | `/music-trend/api/playlists/refresh` | `{ "country"?, "list"? }` | Scrape the Apple feed for a country, upsert, return playlists |
+| GET | `/music-trend/api/myplaylists` | — | List saved playlists (name + song count + updated) |
+| POST | `/music-trend/api/myplaylists` | `{ "name", "songs" }` | Save/overwrite a named playlist |
+| GET | `/music-trend/api/myplaylists/:name` | — | Fetch a saved playlist's songs |
 
 - **我的歌單 (my playlist)** — tap ＋ on any song to keep it in a personal playlist (4th tab), stored in
   `localStorage` on the device; ✕ removes it there. Plays like any other list (auto-advance, shuffle).
-- **Refresh cadence** — Render/local scrapes at boot + hourly (the chart updates ~daily). On Vercel, reads kick a
-  background re-scrape when the cache is older than 1 h; the app re-polls every 10 min and the refresh button
-  forces a scrape.
+  **Cross-device sync** — ⇧ 上傳歌單 saves the current list to Supabase under a name you type (that name *is* the
+  key), and ⇩ 下載歌單 lists saved playlists and loads one onto any device. Requires the `music_user_playlists`
+  table (see schema SQL).
+- **Player time** — the compact player bar shows the current playback position and song duration
+  (e.g. `1:12 / 4:11`), refreshed every 500 ms from the YouTube player.
+- **Load-on-demand** — only the currently selected playlist+country is fetched (default 熱門趨勢), so opening the
+  app never downloads the other lists until you tap their tab.
+- **Refresh cadence** — Render/local scrapes all countries at boot then round-robins one country every 6 min. On
+  Vercel, reads kick a background re-scrape when a country's cache is older than 1 h; the app re-polls the active
+  list every 10 min and the refresh button forces a scrape.
 - **In-page YouTube playback, audio-first** — no Apple Music account needed. Each song is resolved to a YouTube
-  video id (`apps/music-trend/youtube.js`, search-scrape, no API key; ids cached in Supabase and reused, rolling
-  window of ~20 new resolutions per refresh run). Tap any song with a ▶ badge and a compact player bar plays it
-  in-page via the YouTube IFrame API — a 96×54 thumbnail-sized player keeps the stream at its lowest bitrate
-  (~144p, minimal data), with one-by-one auto-advance, prev/next/pause, unplayable videos skipped, and a ▶▶
-  toggle to expand the full 16:9 video only when wanted.
-- **Classification** — `apps/music-trend/parser.js` (`buildPlaylists`/`isCantonese`/`isMandarin`), covered by unit tests.
+  video id (`apps/music-trend/youtube.js`, search-scrape, no API key; ids cached in Supabase per country and
+  reused, rolling window of ~20 new resolutions per refresh run). Tap any song with a ▶ badge and a compact player
+  bar plays it in-page via the YouTube IFrame API — a 96×54 thumbnail-sized player keeps the stream at its lowest
+  bitrate (~144p, minimal data), with one-by-one auto-advance, prev/next/pause, shuffle, unplayable videos
+  skipped, and a ▶▶ toggle to expand the full 16:9 video only when wanted.
+- **Classification** — `apps/music-trend/parser.js` (`buildPlaylists`/`isCantonese`/`isMandarin`/`feedUrl`), covered by unit tests.
 - The UI shows rank, upscaled artwork, song/artist (artist links to Apple Music), and genre per row.
 
 ---
@@ -306,7 +324,7 @@ npm test            # Run all tests once
 npm run test:watch  # Watch mode
 ```
 
-85 tests across 7 files under `apps/mark-six/test/`, `apps/traffic-news/test/` and `apps/music-trend/test/`. The suite uses in-memory SQLite + fixtures, so it runs offline without a Supabase connection.
+88 tests across 7 files under `apps/mark-six/test/`, `apps/traffic-news/test/` and `apps/music-trend/test/`. The suite uses in-memory SQLite + fixtures, so it runs offline without a Supabase connection.
 
 ---
 

@@ -1,7 +1,6 @@
 const app = require('../app');
 const { ensureInitialData } = require('../apps/mark-six/server');
 const { refreshTrafficNews, readTrafficNews } = require('../apps/traffic-news/server');
-const { refreshMusicTrend, readMusicTrend } = require('../apps/music-trend/server');
 
 let backfillPromise = null;
 
@@ -32,14 +31,7 @@ module.exports = async function handler(req, res) {
   }
 
   // Music trend stale-while-revalidate: Apple charts update ~daily, re-scrape hourly.
-  if (req.method === 'POST' && (req.url || '').indexOf('/music-trend/api/playlists') === 0) {
-    try {
-      const { lastRefresh } = await readMusicTrend();
-      if (!lastRefresh || Date.now() - new Date(lastRefresh).getTime() > 60 * 60 * 1000) {
-        refreshMusicTrend().catch(() => {});
-      }
-    } catch (e) { /* serve stale */ }
-  }
-
+  // The country lives in the POST body, so SWR is handled inside the module's
+  // /api/playlists handler (where Express has parsed the body).
   return app(req, res);
 };
