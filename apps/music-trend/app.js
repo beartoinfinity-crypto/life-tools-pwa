@@ -15,6 +15,7 @@
   var playPauseBtn = document.getElementById('playPauseBtn');
   var nextBtn = document.getElementById('nextBtn');
   var closeBtn = document.getElementById('closeBtn');
+  var videoBtn = document.getElementById('videoBtn');
 
   var current = 'trending';
   var cache = null;
@@ -40,7 +41,7 @@
   }
 
   function artworkBigger(url) {
-    return String(url || '').replace('100x100bb', '300x300bb');
+    return url; // data-saving: keep the feed's small 100x100 artwork
   }
 
   function findList(name) {
@@ -219,6 +220,11 @@
 
   prevBtn.addEventListener('click', prevSong);
   nextBtn.addEventListener('click', function () { nextSong(false); });
+  videoBtn.addEventListener('click', function () {
+    var bar = document.getElementById('playerBar');
+    var on = bar.classList.toggle('video-mode');
+    videoBtn.title = on ? 'Hide video' : 'Show video';
+  });
   playPauseBtn.addEventListener('click', function () {
     if (!ytReady || !ytPlayer) return;
     if (wantPlaying) { ytPlayer.pauseVideo(); }
