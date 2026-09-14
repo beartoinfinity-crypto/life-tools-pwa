@@ -26,6 +26,26 @@
   var pendingPlay = null;    // videoId queued while the API loads
   var wantPlaying = false;
   var shuffle = false;
+  var MY_KEY = 'music-my-list';
+
+  /* ---- my playlist (localStorage, per device) ---- */
+  function mySongs() {
+    try { return JSON.parse(localStorage.getItem(MY_KEY) || '[]'); } catch (e) { return []; }
+  }
+  function saveMySongs(a) {
+    try { localStorage.setItem(MY_KEY, JSON.stringify(a)); } catch (e) {}
+  }
+  function inMyList(id) {
+    return mySongs().some(function (s) { return String(s.id) === String(id); });
+  }
+  function toggleMyList(s) {
+    var a = mySongs();
+    var i = a.findIndex(function (x) { return String(x.id) === String(s.id); });
+    if (i >= 0) a.splice(i, 1);
+    else a.push(s);
+    saveMySongs(a);
+    return i < 0;
+  }
 
   function esc(s) {
     return String(s == null ? '' : s)
@@ -47,6 +67,7 @@
   }
 
   function findList(name) {
+    if (name === 'my') return { list: 'my', chartTitle: '我的歌單', songs: mySongs() };
     if (!cache) return null;
     for (var i = 0; i < cache.data.length; i++) {
       if (cache.data[i].list === name) return cache.data[i];
@@ -162,14 +183,19 @@
 
   /* ---------------- list rendering ---------------- */
 
-  function songRow(s, i, playableRow) {
+  function songRow(s, i, playableRow, opts) {
+    opts = opts || {};
     var art = s.artwork
-      ? '<img class="s-art" src="' + esc(artworkBigger(s.artwork)) + '" alt="" loading="lazy" />'
+      ? '<img class="s-art" src="' + esc(s.artwork) + '" alt="" loading="lazy" />'
       : '<div class="s-art s-art-none"></div>';
     var artist = s.artistUrl
       ? '<a class="s-artist" href="' + esc(s.artistUrl) + '" target="_blank" rel="noopener">' + esc(s.artist) + '</a>'
       : '<span class="s-artist">' + esc(s.artist) + '</span>';
     var playBadge = playableRow ? '<div class="s-play">▶</div>' : '';
+    var addBtn = opts.showAdd
+      ? '<button class="s-add' + (inMyList(s.id) ? ' on' : '') + '" data-addid="' + esc(s.id) + '" title="My playlist">' +
+          (opts.removeMode ? '✕' : inMyList(s.id) ? '✓' : '＋') + '</button>'
+      : '';
     return '<div class="song-row' + (playableRow ? ' tappable' : '') + '"' +
         (playableRow ? ' data-videoid="' + esc(s.youtubeId) + '"' : '') + '>' +
         '<div class="s-rank">' + (i + 1) + '</div>' +
@@ -180,6 +206,7 @@
         '</div>' +
         '<div class="s-genre">' + esc(s.genre) + '</div>' +
         playBadge +
+        addBtn +
       '</div>';
   }
 
@@ -194,15 +221,20 @@
       var extra = entry ? ' · ' + entry.songs.length + ' songs · ' + playable(entry).length + ' playable' : '';
       lastUpdate.textContent = 'chart: ' + fmtAgo(cache.lastRefresh) + extra;
     }
+    if (current === 'my') {
+      lastUpdate.textContent = 'my playlist · ' + mySongs().length + ' songs';
+    }
 
     if (!entry || !entry.songs.length) {
-      listEl.innerHTML = '<div class="loading-note">No songs in this playlist.</div>';
+      listEl.innerHTML = '<div class="loading-note">' +
+        (current === 'my' ? '你的歌單是空的 — 在其他歌單按 ＋ 加入歌曲。' : 'No songs in this playlist.') +
+        '</div>';
       return;
     }
 
     var html = '';
     entry.songs.forEach(function (s, i) {
-      html += songRow(s, i, !!s.youtubeId);
+      html += songRow(s, i, !!s.youtubeId, { showAdd: true, removeMode: current === 'my' });
     });
     listEl.innerHTML = html;
   }
@@ -210,16 +242,50 @@
   /* ---------------- events ---------------- */
 
   listEl.addEventListener('click', function (e) {
+    var add = e.target.closest ? e.target.closest('.s-add') : null;
+    if (add) {
+      var entry = findList(current);
+      var all = (entry && entry.songs) || [];
+      var song = null;
+      for (var j = 0; j < all.length; j++) {
+        if (String(all[j].id) === String(add.dataset.addid)) { song = all[j]; break; }
+      }
+      if (song) {
+        var added = toggleMyList(song);
+        statusFlash(added ? '已加入我的歌單' : '已從我的歌單移除');
+        if (current === 'my') { currentSong = -1; }
+        render();
+      }
+      return;
+    }
     var row = e.target.closest ? e.target.closest('.song-row.tappable') : null;
     if (!row) return;
-    var entry = findList(current);
-    var list = playable(entry);
+    var entry2 = findList(current);
+    var list = playable(entry2);
     var idx = -1;
     for (var i = 0; i < list.length; i++) {
       if (list[i].youtubeId === row.dataset.videoid) { idx = i; break; }
     }
-    if (idx >= 0) playSong(entry, idx, true);
+    if (idx >= 0) playSong(entry2, idx, true);
   });
+
+  var flashTimer = null;
+  function statusFlash(msg) {
+    var el = document.getElementById('statusBar');
+    el.textContent = msg;
+    el.classList.add('flash');
+    clearTimeout(flashTimer);
+    flashTimer = setTimeout(function () { el.classList.remove('flash'); renderStatus(); }, 1600);
+  }
+  function renderStatus() {
+    if (current === 'my') {
+      lastUpdate.textContent = 'my playlist · ' + mySongs().length + ' songs';
+    } else if (cache && cache.lastRefresh) {
+      var entry = findList(current);
+      var extra = entry ? ' · ' + entry.songs.length + ' songs · ' + playable(entry).length + ' playable' : '';
+      lastUpdate.textContent = 'chart: ' + fmtAgo(cache.lastRefresh) + extra;
+    }
+  }
 
   tabsEl.addEventListener('click', function (e) {
     var btn = e.target.closest ? e.target.closest('.tab') : null;

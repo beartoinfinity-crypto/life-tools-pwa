@@ -246,6 +246,35 @@ main {
   font-size: 13px;
 }
 
+/* Add-to-my-playlist button */
+.song-row .s-add {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border);
+  background: var(--card-bg);
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.song-row .s-add.on {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.status-bar.flash {
+  color: var(--accent);
+  font-weight: 700;
+}
+
 /* Player bar (sticky bottom) — compact audio-first by default:
    a 96x54 player drives YouTube to its lowest (~144p) bitrate, saving data.
    Tap ▶▶ to expand the full 16:9 video. */

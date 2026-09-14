@@ -283,6 +283,8 @@ song's primary genre:
 | POST | `/music-trend/api/playlists` | `{ "list"?: "trending" }` | Cached playlists from Supabase |
 | POST | `/music-trend/api/playlists/refresh` | `{ "list"? }` | Scrape the Apple feed, upsert, return playlists |
 
+- **我的歌單 (my playlist)** — tap ＋ on any song to keep it in a personal playlist (4th tab), stored in
+  `localStorage` on the device; ✕ removes it there. Plays like any other list (auto-advance, shuffle).
 - **Refresh cadence** — Render/local scrapes at boot + hourly (the chart updates ~daily). On Vercel, reads kick a
   background re-scrape when the cache is older than 1 h; the app re-polls every 10 min and the refresh button
   forces a scrape.
