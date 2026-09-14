@@ -13,6 +13,7 @@
 drop policy if exists "allow all invites" on public.draws;
 drop policy if exists "allow all meta" on public.meta;
 drop policy if exists "allow all traffic news" on public.traffic_news;
+drop policy if exists "allow all music trend" on public.music_trend;
 
 -- Indexes (also dropped with the tables; listed for completeness)
 drop index if exists public.idx_draws_date;
@@ -23,3 +24,4 @@ drop index if exists public.idx_traffic_news_posted;
 drop table if exists public.draws cascade;
 drop table if exists public.meta cascade;
 drop table if exists public.traffic_news cascade;
+drop table if exists public.music_trend cascade;

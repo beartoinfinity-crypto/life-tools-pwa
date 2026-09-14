@@ -15,6 +15,7 @@ A hub of handy Progressive Web Apps (PWAs), served by one Express app and deploy
 | **HK Bus ETA (original)** | `/bus-eta/` | Archived upstream PWA (hkbus/hk-independent-bus-eta) — full-featured, mounted unmodified |
 | **Bus ETA (lite)** | `/bus-eta-lite/` | Home-grown simple ETA UI — route & stop search, bookmarks, day/night theme, operator-coloured badges; data via the bundled [hk-bus-eta](https://www.npmjs.com/package/hk-bus-eta) library (GPL-3.0) |
 | **Traffic News** | `/traffic-news/` | Latest HK traffic incidents from Routejam (路暢), cached in Supabase and refreshed every minute |
+| **Music Trend** | `/music-trend/` | HK Apple Music top 100 — 熱門趨勢 / 廣東歌 / 國語歌 playlists, cached in Supabase |
 
 Browsing to the root (`/`) shows a launcher dashboard with a card per app. The dashboard itself has a **Dark/Light
 toggle** (persisted, defaults to system), a theme-aware favicon, and the cards can be **drag-reordered** (order
@@ -79,6 +80,11 @@ for the apps.
 │       ├── server.js          # Express app: static PWA + POST /api/news(+refresh) + refreshTrafficNews()
 │       ├── index.html / app.js / styles.css / manifest.json / sw.js / icons/  # The PWA itself
 │       └── test/              # Parser tests (fixture HTML)
+│   └── music-trend/       # Music Trend PWA (mounted at /music-trend/)
+│       ├── parser.js          # Classifies Apple Music HK chart songs by genre (Cantonese/Mandarin)
+│       ├── server.js          # Express app: static PWA + POST /api/playlists(+refresh) + refreshMusicTrend()
+│       ├── index.html / app.js / styles.css / manifest.json / sw.js / icons/  # The PWA itself
+│       └── test/              # Parser tests
 ├── render.yaml           # Render Blueprint config
 ├── package.json
 ├── .env.example
@@ -105,13 +111,13 @@ for the apps.
    PORT=3000
    ```
 
-3. Open the **SQL Editor** and run `apps/mark-six/supabase-schema.sql` (creates `draws`, `meta` and `traffic_news`
-   tables plus RLS policies).
+3. Open the **SQL Editor** and run `apps/mark-six/supabase-schema.sql` (creates `draws`, `meta`, `traffic_news`
+   and `music_trend` tables plus RLS policies).
 4. Start the server. If `draws` is empty, the Mark Six app auto-fills ~4,300 historical draws from GitHub.
 
 > The `.env` file is git-ignored — never commit your keys.
 
-**Schema (Supabase)** — `draws` and `meta` above, plus the traffic-news cache table:
+**Schema (Supabase)** — `draws` and `meta` above, plus the cache tables:
 
 ```sql
 CREATE TABLE traffic_news (
@@ -125,6 +131,15 @@ CREATE TABLE traffic_news (
   lat       double precision,     -- map marker (null when routejam has none)
   lng       double precision,
   created_at timestamptz not null default now()
+);
+
+CREATE TABLE music_trend (
+  list          text primary key, -- 'trending' | 'cantonese' | 'chinese'
+  chart_title   text,
+  updated_at_src text,           -- Apple feed "updated" timestamp
+  songs         jsonb not null,   -- [{rank,id,name,artist,artwork,...}]
+  refreshed_at  timestamptz,
+  created_at    timestamptz not null default now()
 );
 ```
 
@@ -251,6 +266,30 @@ manual refresh button and a 1-minute auto-poll; installable like the other apps 
 
 ---
 
+## Music Trend (`/music-trend/`)
+
+A standalone PWA showing the current Hong Kong Apple Music charts, scraped server-side from Apple's public
+["most played" RSS feed](https://rss.applemarketingtools.com/api/v2/hk/music/most-played/100/songs.json) (top 100)
+and cached in Supabase (table `music_trend`, one JSON row per playlist). Three playlists are derived from each
+song's primary genre:
+
+- **熱門趨勢 (trending)** — the full top-100 chart order
+- **廣東歌 (cantonese)** — primary genre 廣東歌/香港流行樂 (`genreId 1251`)
+- **國語歌 (chinese)** — primary genre 國語流行樂/華語 (`genreId 1252`)
+
+| Method | Endpoint | Request body | Description |
+|--------|----------|--------------|-------------|
+| POST | `/music-trend/api/playlists` | `{ "list"?: "trending" }` | Cached playlists from Supabase |
+| POST | `/music-trend/api/playlists/refresh` | `{ "list"? }` | Scrape the Apple feed, upsert, return playlists |
+
+- **Refresh cadence** — Render/local scrapes at boot + hourly (the chart updates ~daily). On Vercel, reads kick a
+  background re-scrape when the cache is older than 1 h; the app re-polls every 10 min and the refresh button
+  forces a scrape.
+- **Classification** — `apps/music-trend/parser.js` (`buildPlaylists`/`isCantonese`/`isMandarin`), covered by unit tests.
+- The UI shows rank, upscaled artwork, song/artist (artist links to Apple Music), and genre per row.
+
+---
+
 ## Testing
 
 ```bash
@@ -258,7 +297,7 @@ npm test            # Run all tests once
 npm run test:watch  # Watch mode
 ```
 
-67 tests across 5 files under `apps/mark-six/test/` and `apps/traffic-news/test/`. The suite uses in-memory SQLite + fixtures, so it runs offline without a Supabase connection.
+78 tests across 6 files under `apps/mark-six/test/`, `apps/traffic-news/test/` and `apps/music-trend/test/`. The suite uses in-memory SQLite + fixtures, so it runs offline without a Supabase connection.
 
 ---
 

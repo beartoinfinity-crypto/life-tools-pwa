@@ -29,6 +29,13 @@
       desc: 'Latest HK traffic incidents from Routejam (路暢) — updated every minute.',
       href: '/traffic-news/',
       icon: '交'
+    },
+    {
+      id: 'music-trend',
+      title: 'Music Trend',
+      desc: 'HK top 100 Apple Music charts — trending, Cantonese and Mandarin playlists.',
+      href: '/music-trend/',
+      icon: '樂'
     }
   ];
 

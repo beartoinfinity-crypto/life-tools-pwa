@@ -34,6 +34,15 @@ app.use('/traffic-news', (req, res, next) => {
 const { app: trafficNewsApp, ensureTrafficNews } = require('./apps/traffic-news/server');
 app.use('/traffic-news', trafficNewsApp);
 
+// Music trend PWA + API (Apple Music HK top charts into Supabase)
+app.use('/music-trend', (req, res, next) => {
+  const p = req.originalUrl.split('?')[0];
+  if (p === '/music-trend') return res.redirect('/music-trend/');
+  next();
+});
+const { app: musicTrendApp } = require('./apps/music-trend/server');
+app.use('/music-trend', musicTrendApp);
+
 // Mount a static subpath app at /<name> with an exact-match redirect and an SPA fallback
 function mountStatic(name, buildDir) {
   app.use(`/${name}`, (req, res, next) => {

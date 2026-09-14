@@ -27,4 +27,9 @@ for (const f of ['index.html', 'app.js', 'styles.css', 'manifest.json', 'sw.js',
   copyEntry(`apps/traffic-news/${f}`, 'traffic-news', f);
 }
 
+// Music trend static assets only (its API is served by the Express function)
+for (const f of ['index.html', 'app.js', 'styles.css', 'manifest.json', 'sw.js', 'icons']) {
+  copyEntry(`apps/music-trend/${f}`, 'music-trend', f);
+}
+
 console.log('vercel-out assembled');

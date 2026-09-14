@@ -40,6 +40,16 @@ create table if not exists public.traffic_news (
 
 create index if not exists idx_traffic_news_posted on public.traffic_news (posted_at desc);
 
+-- Music trend table: cached Apple Music HK chart playlists
+create table if not exists public.music_trend (
+  list text primary key,                -- 'trending' | 'cantonese' | 'chinese'
+  chart_title text,                     -- e.g. "熱門歌曲"
+  updated_at_src text,                  -- Apple feed "updated" timestamp
+  songs jsonb not null,                 -- [{rank,id,name,artist,artwork,...}]
+  refreshed_at timestamptz,             -- when we scraped it
+  created_at timestamptz not null default now()
+);
+
 -- ============================================================
 -- Row Level Security (RLS)
 -- The app uses the anon key (read/write). For a personal app
@@ -50,6 +60,7 @@ create index if not exists idx_traffic_news_posted on public.traffic_news (poste
 alter table public.draws enable row level security;
 alter table public.meta enable row level security;
 alter table public.traffic_news enable row level security;
+alter table public.music_trend enable row level security;
 
 create policy "allow all invites" on public.draws
   for all using (true) with check (true);
@@ -58,4 +69,7 @@ create policy "allow all meta" on public.meta
   for all using (true) with check (true);
 
 create policy "allow all traffic news" on public.traffic_news
+  for all using (true) with check (true);
+
+create policy "allow all music trend" on public.music_trend
   for all using (true) with check (true);
