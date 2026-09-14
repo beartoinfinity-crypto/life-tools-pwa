@@ -223,3 +223,132 @@ main {
   color: var(--text-secondary);
   text-align: center;
 }
+
+/* Playing row highlight */
+.song-row.playing {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(123, 31, 162, 0.25);
+}
+
+.song-row.tappable { cursor: pointer; }
+.song-row.tappable:active { background: rgba(123, 31, 162, 0.08); }
+
+.song-row .s-play {
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+}
+
+/* Player bar (sticky bottom) */
+.player-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 200;
+  max-width: 720px;
+  margin: 0 auto;
+  background: var(--card-bg);
+  border-top: 1px solid var(--border);
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.18);
+  padding: 10px 12px calc(10px + var(--safe-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.player-bar.hidden { display: none; }
+
+.player-mount {
+  position: relative;
+  width: 100%;
+  padding-top: 56.25%; /* 16:9 */
+  border-radius: 10px;
+  overflow: hidden;
+  background: #000;
+}
+
+.player-mount iframe,
+.player-mount #ytFrame {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.player-bar .p-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.p-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.p-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.p-artist {
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.p-controls {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.p-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--card-bg);
+  color: var(--text);
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.p-btn.p-main {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-size: 15px;
+}
+
+.p-btn.p-close { color: var(--text-secondary); }
+
+/* Layout when the player is visible: keep controls beside the info */
+.player-bar .p-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}

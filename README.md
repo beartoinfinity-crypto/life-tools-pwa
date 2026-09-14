@@ -82,9 +82,10 @@ for the apps.
 │       └── test/              # Parser tests (fixture HTML)
 │   └── music-trend/       # Music Trend PWA (mounted at /music-trend/)
 │       ├── parser.js          # Classifies Apple Music HK chart songs by genre (Cantonese/Mandarin)
+│       ├── youtube.js         # Resolves songs to YouTube video ids (search scrape, no API key)
 │       ├── server.js          # Express app: static PWA + POST /api/playlists(+refresh) + refreshMusicTrend()
 │       ├── index.html / app.js / styles.css / manifest.json / sw.js / icons/  # The PWA itself
-│       └── test/              # Parser tests
+│       └── test/              # Parser + youtube tests
 ├── render.yaml           # Render Blueprint config
 ├── package.json
 ├── .env.example
@@ -285,6 +286,11 @@ song's primary genre:
 - **Refresh cadence** — Render/local scrapes at boot + hourly (the chart updates ~daily). On Vercel, reads kick a
   background re-scrape when the cache is older than 1 h; the app re-polls every 10 min and the refresh button
   forces a scrape.
+- **In-page YouTube playback** — no Apple Music account needed. Each song is resolved to a YouTube video id
+  (`apps/music-trend/youtube.js`, search-scrape, no API key; ids cached in Supabase and reused, rolling window of
+  ~20 new resolutions per refresh run). Tap any song with a ▶ badge and a sticky player bar plays it in-page via
+  the YouTube IFrame API — one-by-one auto-advance through the playlist, prev/next/pause controls, unplayable
+  videos are skipped automatically.
 - **Classification** — `apps/music-trend/parser.js` (`buildPlaylists`/`isCantonese`/`isMandarin`), covered by unit tests.
 - The UI shows rank, upscaled artwork, song/artist (artist links to Apple Music), and genre per row.
 
@@ -297,7 +303,7 @@ npm test            # Run all tests once
 npm run test:watch  # Watch mode
 ```
 
-78 tests across 6 files under `apps/mark-six/test/`, `apps/traffic-news/test/` and `apps/music-trend/test/`. The suite uses in-memory SQLite + fixtures, so it runs offline without a Supabase connection.
+85 tests across 7 files under `apps/mark-six/test/`, `apps/traffic-news/test/` and `apps/music-trend/test/`. The suite uses in-memory SQLite + fixtures, so it runs offline without a Supabase connection.
 
 ---
 

@@ -3,6 +3,7 @@ const https = require('https');
 const { createClient } = require('@supabase/supabase-js');
 
 const { buildPlaylists, FEED_URL } = require('./parser');
+const { searchYouTube, mapLimit } = require('./youtube');
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
@@ -28,15 +29,70 @@ function fetchUrl(url, timeout = 20000) {
   });
 }
 
+// How many songs to (re-)resolve to YouTube ids per refresh run. Apple charts
+// move slowly, so a rolling window keeps the cache fresh without hammering
+// youtube or blowing serverless timeouts. Best-effort: a slow YouTube never
+// fails the refresh, it just resolves fewer songs this run.
+const YT_RESOLVE_PER_RUN = 20;
+const YT_CONCURRENCY = 4;
+const YT_DEADLINE_MS = 50 * 1000;
+
+/**
+ * Resolve YouTube ids for songs, reusing ids cached from previous runs
+ * (matched by song id) so only new/missing songs hit youtube — a rolling
+ * window per run keeps scrapes bounded. Never rejects.
+ */
+async function resolveYouTube(songs) {
+  // Reuse previously cached ids
+  let cached = new Map();
+  try {
+    const { data } = await supabase.from('music_trend').select('songs').eq('list', 'trending').single();
+    for (const s of JSON.parse(data.songs || '[]')) {
+      if (s.youtubeId) cached.set(String(s.id), { youtubeId: s.youtubeId, youtubeTitle: s.youtubeTitle });
+    }
+  } catch { /* first run / no cache */ }
+
+  for (const s of songs) {
+    const c = cached.get(String(s.id));
+    if (c) { s.youtubeId = c.youtubeId; s.youtubeTitle = c.youtubeTitle; }
+  }
+
+  const need = songs.filter((s) => !s.youtubeId).slice(0, YT_RESOLVE_PER_RUN);
+  if (!need.length) return;
+
+  const deadline = Date.now() + YT_DEADLINE_MS;
+  await mapLimit(need, YT_CONCURRENCY, async (s) => {
+    if (Date.now() > deadline) return; // stop resolving, keep this run short
+    const hit = await searchYouTube(s);
+    if (hit) {
+      s.youtubeId = hit.videoId;
+      s.youtubeTitle = hit.title;
+    }
+  });
+}
+
 /**
  * Scrape the Apple Music HK top-songs feed, split into playlists,
- * and cache them as one JSON row per playlist in Supabase.
+ * resolve YouTube ids (rolling window), and cache each playlist as one
+ * JSON row in Supabase.
  */
 async function refreshMusicTrend() {
   const { status, data } = await fetchUrl(FEED_URL);
   if (status !== 200) throw new Error(`Apple feed returned ${status}`);
   const lists = buildPlaylists(JSON.parse(data));
   if (!lists.trending.length) throw new Error('feed had no songs');
+
+  await resolveYouTube(lists.trending);
+
+  // resolveYouTube mutates only the trending copies of each song; propagate the
+  // resolved ids to the cantonese/chinese playlists (same songs, new objects).
+  const ytById = new Map(lists.trending.filter((s) => s.youtubeId).map((s) => [String(s.id), s]));
+  for (const name of ['cantonese', 'chinese']) {
+    for (const s of lists[name]) {
+      const src = ytById.get(String(s.id));
+      if (src) { s.youtubeId = src.youtubeId; s.youtubeTitle = src.youtubeTitle; }
+    }
+  }
 
   const rows = ['trending', 'cantonese', 'chinese'].map((list) => ({
     list,
@@ -52,7 +108,10 @@ async function refreshMusicTrend() {
     { key: 'musicTrendLastRefresh', value: new Date().toISOString(), updated_at: new Date().toISOString() },
     { onConflict: 'key' }
   );
-  return { fetched: lists.trending.length };
+  return {
+    fetched: lists.trending.length,
+    resolved: lists.trending.filter((s) => s.youtubeId).length
+  };
 }
 
 /** Cached playlists straight from Supabase. Returns { data, lastRefresh }. */
