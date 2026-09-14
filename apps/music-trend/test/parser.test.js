@@ -47,6 +47,33 @@ describe('genre classification', () => {
     expect(isCantonese(none)).toBe(false);
     expect(isMandarin(none)).toBe(false);
   });
+  it('title fallback: Mandarin for a Chinese-char title with a generic genre (e.g. CN feed)', () => {
+    const s = song({ name: '晴天', genres: [{ genreId: '34', name: '音乐' }], artistName: '周杰倫' });
+    expect(isMandarin(s)).toBe(true);
+    expect(isCantonese(s)).toBe(false);
+  });
+  it('title fallback: Cantonese for a title with Cantonese-only characters', () => {
+    const s = song({ name: '你係唔係我嘅歌', genres: [{ genreId: '34', name: '音乐' }] });
+    expect(isCantonese(s)).toBe(true);
+    expect(isMandarin(s)).toBe(false);
+  });
+  it('title fallback: simple 廣東歌 via marker', () => {
+    const s = song({ name: '唔好再問', genres: [{ genreId: '14', name: '流行樂' }] });
+    expect(isCantonese(s)).toBe(true);
+  });
+  it('title fallback: Japanese kana titles are never Chinese', () => {
+    const jp = song({ name: 'ありふれた世界の果てに', genres: [{ genreId: '34', name: '音楽' }] });
+    expect(isCantonese(jp)).toBe(false);
+    expect(isMandarin(jp)).toBe(false);
+  });
+  it('title fallback: Korean / ASCII titles are never Chinese', () => {
+    const kr = song({ name: '노스탈지아', genres: [{ genreId: '51', name: '한국 팝' }] });
+    expect(isCantonese(kr)).toBe(false);
+    expect(isMandarin(kr)).toBe(false);
+    const ascii = song({ name: 'Choosin Texas', genres: [{ genreId: '14', name: 'Pop' }] });
+    expect(isCantonese(ascii)).toBe(false);
+    expect(isMandarin(ascii)).toBe(false);
+  });
 });
 
 describe('buildPlaylists', () => {

@@ -312,7 +312,10 @@ derived from each song's primary genre:
   bar plays it in-page via the YouTube IFrame API — a 96×54 thumbnail-sized player keeps the stream at its lowest
   bitrate (~144p, minimal data), with one-by-one auto-advance, prev/next/pause, shuffle, unplayable videos
   skipped, and a ▶▶ toggle to expand the full 16:9 video only when wanted.
-- **Classification** — `apps/music-trend/parser.js` (`buildPlaylists`/`isCantonese`/`isMandarin`/`feedUrl`), covered by unit tests.
+- **Classification** — `apps/music-trend/parser.js` (`buildPlaylists`/`isCantonese`/`isMandarin`/`feedUrl`), covered by unit
+  tests. Apple only tags Cantonese/Mandarin on the HK & TW feeds, so classification falls back to the **title language**
+  for other regions (Chinese characters in the title; Cantonese-only characters 嘅咗唔喺嗰啲冇… mark 廣東歌). That is why
+  a country like CN has a full 國語歌 list while KR stays empty (K-pop, correctly not Chinese).
 - The UI shows rank, upscaled artwork, song/artist (artist links to Apple Music), and genre per row.
 
 ---
@@ -324,7 +327,7 @@ npm test            # Run all tests once
 npm run test:watch  # Watch mode
 ```
 
-88 tests across 7 files under `apps/mark-six/test/`, `apps/traffic-news/test/` and `apps/music-trend/test/`. The suite uses in-memory SQLite + fixtures, so it runs offline without a Supabase connection.
+93 tests across 7 files under `apps/mark-six/test/`, `apps/traffic-news/test/` and `apps/music-trend/test/`. The suite uses in-memory SQLite + fixtures, so it runs offline without a Supabase connection.
 
 ---
 

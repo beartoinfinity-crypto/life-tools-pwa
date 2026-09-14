@@ -1,12 +1,13 @@
 /**
- * Classifier + normalizer for the Apple Music HK "most played" RSS feed
- * (https://rss.applemarketingtools.com/api/v2/hk/music/most-played/100/songs.json).
+ * Classifier for the Apple Music "most played" RSS feeds.
  *
- * Each result carries genres; the primary (first) genre decides the language
- * playlist membership:
+ * Each result carries genres; the primary (first) genre picks the playlist
+ * for HK/TW where Apple tags them:
  *   - Cantonese: genreId 1251 / name ~ 廣東歌/香港流行樂
- *   - Mandarin:  genreId 1252 / name ~ 國語流行樂/華語 (also C-pop, Mandopop)
- *   - otherwise (K-pop, plain 流行樂, Hip-Hop…): trending only.
+ *   - Mandarin:  genreId 1252 / TW genreId 1253 / name ~ 國語流行樂/華語/Mandopop
+ * Other regions (CN, SG, KR…) don't tag Cantonese/Mandarin, so falls back to
+ * the song-title language: Chinese characters in the title decide membership,
+ * with Cantonese-only characters (嘅咗唔喺嗰啲冇…) marking 廣東歌.
  */
 
 const FEED_URL = 'https://rss.applemarketingtools.com/api/v2/hk/music/most-played/100/songs.json';
@@ -17,17 +18,37 @@ function feedUrl(country) {
   return `https://rss.applemarketingtools.com/api/v2/${cc}/music/most-played/100/songs.json`;
 }
 
-const CANTO_RE = /廣東|香港流行|canton/i;
-const MANDO_RE = /國語|華語|普通話|mandopop|c-pop|chinese pop/i;
+const CANTO_RE = /廣東|香港流行|粵語|canton/i;
+const MANDO_RE = /國語|華語|普通話|mandopop|c-pop|chinese pop|华语|国语|普通话/i;
+
+// Chinese characters (CJK unified + extension + radicals/symbols)
+const CJK_RE = /[\u2E80-\u2EFF\u3400-\u4DBF\u4E00-\u9FFF]/;
+// Hiragana + Katakana: presence means the title is Japanese, not Chinese
+const JAPANESE_KANA_RE = /[\u3040-\u30FF]/;
+// Cantonese-only colloquial characters: effectively never appear in a
+// standard Mandarin title, so a title containing one is 廣東歌.
+const CANTO_TITLE_MARKERS = ['嘅', '咗', '喺', '嗰', '啲', '冇', '哋', '佢', '乜', '咁', '咩', '唔'];
+
+function titleIsChinese(name) {
+  if (!CJK_RE.test(name)) return false;
+  if (JAPANESE_KANA_RE.test(name)) return false; // has kana => Japanese, skip
+  return true;
+}
 
 function isCantonese(song) {
   const g = song.genres && song.genres[0];
-  return !!g && (g.genreId === '1251' || CANTO_RE.test(g.name || ''));
+  if (g && (String(g.genreId) === '1251' || CANTO_RE.test(String(g.name || '')))) return true;
+  const name = String(song.name || '');
+  if (!titleIsChinese(name)) return false;
+  return CANTO_TITLE_MARKERS.some((m) => name.indexOf(m) >= 0);
 }
 
 function isMandarin(song) {
   const g = song.genres && song.genres[0];
-  return !!g && (g.genreId === '1252' || MANDO_RE.test(g.name || ''));
+  if (g && (String(g.genreId) === '1252' || MANDO_RE.test(String(g.name || '')))) return true;
+  const name = String(song.name || '');
+  if (!titleIsChinese(name)) return false;
+  return !CANTO_TITLE_MARKERS.some((m) => name.indexOf(m) >= 0);
 }
 
 /** feed result -> compact song record */
