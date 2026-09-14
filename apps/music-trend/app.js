@@ -245,9 +245,17 @@
     renderCountries();
     myTools.classList.toggle('hidden', current !== 'my');
     if (current !== 'my') myPicker.classList.add('hidden');
+    // Mirror the server's CANTO_COUNTRIES / MANDO_COUNTRIES (parser.js): 廣東歌
+    // only exists in 香港, 國語歌 only in 香港/台灣/中國/新加坡. Hide the tab
+    // everywhere the server returns [] for that country so we never show an
+    // empty list for a scene the country doesn't have.
+    var cantoOn = country === 'hk';
+    var mandoOn = country === 'hk' || country === 'tw' || country === 'cn' || country === 'sg';
     var tabs = tabsEl.querySelectorAll('.tab');
     Array.prototype.forEach.call(tabs, function (t) {
-      t.classList.toggle('active', t.dataset.list === current);
+      var on = !(t.dataset.list === 'cantonese' && !cantoOn) && !(t.dataset.list === 'chinese' && !mandoOn);
+      t.classList.toggle('hidden', !on);
+      t.classList.toggle('active', on && t.dataset.list === current);
     });
 
     if (current === 'my') {

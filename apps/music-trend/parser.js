@@ -66,10 +66,23 @@ function toSong(s, rank) {
 }
 
 /**
- * Build the three playlists from a feed payload (already JSON.parsed).
+ * Countries that actually have a Cantonese / Mandarin scene in their Apple
+ * most-played chart. Everywhere else the 廣東歌/國語歌 tags don't apply, so we
+ * don't build (or show) those playlists at all:
+ *   - 廣東歌  -> Hong Kong only
+ *   - 國語歌  -> HK, TW, CN, SG
+ */
+export const CANTO_COUNTRIES = new Set(['hk']);
+export const MANDO_COUNTRIES = new Set(['hk', 'tw', 'cn', 'sg']);
+
+/**
+ * Build the three playlists from a feed payload (already JSON.parsed) for a
+ * country. 廣東歌/國語歌 are only built for the countries that have that scene
+ * (see CANTO_COUNTRIES / MANDO_COUNTRIES); everywhere else those lists are [].
  * Returns { trending: [...], cantonese: [...], chinese: [...], updatedAt, chartTitle }
  */
-function buildPlaylists(feed) {
+function buildPlaylists(feed, country) {
+  const cc = String(country || 'hk').toLowerCase();
   const results = (feed && feed.feed && feed.feed.results) || [];
   const songs = results.map((s, i) => toSong(s, i + 1));
   const pick = (fn) => results.filter(fn).map((s) => toSong(s, results.indexOf(s) + 1));
@@ -77,8 +90,8 @@ function buildPlaylists(feed) {
     chartTitle: (feed && feed.feed && feed.feed.title) || '熱門歌曲',
     updatedAt: (feed && feed.feed && feed.feed.updated) || '',
     trending: songs,
-    cantonese: pick(isCantonese),
-    chinese: pick(isMandarin)
+    cantonese: CANTO_COUNTRIES.has(cc) ? pick(isCantonese) : [],
+    chinese: MANDO_COUNTRIES.has(cc) ? pick(isMandarin) : []
   };
 }
 

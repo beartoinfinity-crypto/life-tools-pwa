@@ -95,7 +95,7 @@ async function refreshMusicTrend(country) {
   if (!COUNTRIES[cc]) throw new Error(`unknown country: ${cc}`);
   const { status, data } = await fetchUrl(feedUrl(cc));
   if (status !== 200) throw new Error(`Apple feed returned ${status}`);
-  const lists = buildPlaylists(JSON.parse(data));
+  const lists = buildPlaylists(JSON.parse(data), cc);
   if (!lists.trending.length) throw new Error('feed had no songs');
 
   await resolveYouTube(cc, lists.trending);
