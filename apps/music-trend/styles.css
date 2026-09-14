@@ -367,3 +367,11 @@ main {
 }
 
 .p-btn.p-close { color: var(--text-secondary); }
+
+.p-btn.p-shuffle { color: var(--text-secondary); }
+
+.p-btn.p-shuffle.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}

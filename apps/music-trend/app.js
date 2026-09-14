@@ -16,6 +16,7 @@
   var nextBtn = document.getElementById('nextBtn');
   var closeBtn = document.getElementById('closeBtn');
   var videoBtn = document.getElementById('videoBtn');
+  var shuffleBtn = document.getElementById('shuffleBtn');
 
   var current = 'trending';
   var cache = null;
@@ -24,6 +25,7 @@
   var ytReady = false;
   var pendingPlay = null;    // videoId queued while the API loads
   var wantPlaying = false;
+  var shuffle = false;
 
   function esc(s) {
     return String(s == null ? '' : s)
@@ -125,15 +127,24 @@
     else ytPlayer.pauseVideo();
   }
 
+  function randomOtherIdx(list) {
+    if (list.length < 2) return currentSong;
+    var i;
+    do { i = Math.floor(Math.random() * list.length); } while (i === currentSong);
+    return i;
+  }
+
   function nextSong(auto) {
     var entry = findList(current);
     var list = playable(entry);
     if (!list.length) return;
-    playSong(entry, currentSong + 1, true);
+    if (shuffle) playSong(entry, randomOtherIdx(list), true);
+    else playSong(entry, currentSong + 1, true);
   }
 
   function prevSong() {
     var entry = findList(current);
+    if (shuffle) { playSong(entry, randomOtherIdx(playable(entry)), wantPlaying); return; }
     playSong(entry, currentSong - 1, wantPlaying);
   }
 
@@ -217,6 +228,15 @@
     currentSong = -1;
     render();
   });
+
+  function setShuffle(on, persist) {
+    shuffle = !!on;
+    shuffleBtn.classList.toggle('on', shuffle);
+    shuffleBtn.title = shuffle ? 'Random: on' : 'Random: off';
+    if (persist) { try { localStorage.setItem('music-shuffle', shuffle ? '1' : '0'); } catch (e) {} }
+  }
+  shuffleBtn.addEventListener('click', function () { setShuffle(!shuffle, true); });
+  try { setShuffle(localStorage.getItem('music-shuffle') === '1', false); } catch (e) { setShuffle(false, false); }
 
   prevBtn.addEventListener('click', prevSong);
   nextBtn.addEventListener('click', function () { nextSong(false); });
