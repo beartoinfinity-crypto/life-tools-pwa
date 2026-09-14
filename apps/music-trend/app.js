@@ -329,6 +329,7 @@
     country = btn.dataset.cc;
     try { localStorage.setItem('music-country', country); } catch (e2) {}
     cache = null;
+    current = 'trending';
     currentSong = -1;
     render();
     load(false);
