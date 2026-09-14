@@ -253,9 +253,21 @@
     var mandoOn = country === 'hk' || country === 'tw' || country === 'cn' || country === 'sg';
     var tabs = tabsEl.querySelectorAll('.tab');
     Array.prototype.forEach.call(tabs, function (t) {
-      var on = !(t.dataset.list === 'cantonese' && !cantoOn) && !(t.dataset.list === 'chinese' && !mandoOn);
-      t.classList.toggle('hidden', !on);
-      t.classList.toggle('active', on && t.dataset.list === current);
+      var sceneOn =
+        !(t.dataset.list === 'cantonese' && !cantoOn) &&
+        !(t.dataset.list === 'chinese' && !mandoOn);
+      // Data check on top of the country gate: a genre tab with zero songs or
+      // zero playable (YouTube-resolved) songs is useless — hide it exactly
+      // like the country-gated scenes. Gated on `cache` so a first load or
+      // country switch (cache === null) never flashes all tabs away, and never
+      // applied to `trending`/`my` so the default tab and the user's list can't
+      // disappear from the tab bar.
+      if (sceneOn && cache && t.dataset.list !== 'trending' && t.dataset.list !== 'my') {
+        var e = findList(t.dataset.list);
+        sceneOn = !!(e && e.songs && e.songs.length && playable(e).length);
+      }
+      t.classList.toggle('hidden', !sceneOn);
+      t.classList.toggle('active', sceneOn && t.dataset.list === current);
     });
 
     if (current === 'my') {

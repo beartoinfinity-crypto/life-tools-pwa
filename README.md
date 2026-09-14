@@ -280,7 +280,9 @@ A standalone PWA showing Apple Music "most played" charts, scraped server-side f
 [RSS feeds](https://rss.applemarketingtools.com/api/v2/hk/music/most-played/100/songs.json) (top 100) and cached
 in Supabase (table `music_trend`, one JSON row per playlist per country, keyed `"<cc>:<list>"`). Supported
 countries: **HK, TW, CN, JP, KR, US, SG, MY, AU, GB** (country chip row above the tabs). Three playlists are
-derived from each song's primary genre:
+derived from each song's primary genre, but not every country has every genre — the server and the tab bar both
+gate by country (`CANTO_COUNTRIES` = `{hk}` and `MANDO_COUNTRIES` = `{hk,tw,cn,sg}` in `parser.js`, mirrored in
+`app.js`):
 
 - **熱門趨勢 (trending)** — the full top-100 chart order
 - **廣東歌 (cantonese)** — primary genre 廣東歌/香港流行樂 (`genreId 1251`)
@@ -312,10 +314,13 @@ derived from each song's primary genre:
   bar plays it in-page via the YouTube IFrame API — a 96×54 thumbnail-sized player keeps the stream at its lowest
   bitrate (~144p, minimal data), with one-by-one auto-advance, prev/next/pause, shuffle, unplayable videos
   skipped, and a ▶▶ toggle to expand the full 16:9 video only when wanted.
-- **Classification** — `apps/music-trend/parser.js` (`buildPlaylists`/`isCantonese`/`isMandarin`/`feedUrl`), covered by unit
-  tests. Apple only tags Cantonese/Mandarin on the HK & TW feeds, so classification falls back to the **title language**
-  for other regions (Chinese characters in the title; Cantonese-only characters 嘅咗唔喺嗰啲冇… mark 廣東歌). That is why
-  a country like CN has a full 國語歌 list while KR stays empty (K-pop, correctly not Chinese).
+- **Classification + per-country gating** — `apps/music-trend/parser.js` (`buildPlaylists`/`isCantonese`/`isMandarin`/
+  `feedUrl`), covered by unit tests. Apple only tags Cantonese/Mandarin on the HK & TW feeds, so the genre tag comes
+  from the **title language** (Chinese characters in the title; Cantonese-only characters 嘅咗唔喺嗰啲冇… mark 廣東歌).
+  The **server gated per country** so a scene a country doesn't have is `[]` rather than guessed: 廣東歌 only for
+  `hk`, 國語歌 only for `hk/tw/cn/sg` (`CANTO_COUNTRIES`/`MANDO_COUNTRIES` in `parser.js`). That is why CN has a full
+  國語歌 list while KR stays empty (K-pop, correctly not Chinese) — and why the client hides the 廣東歌/國語歌 tabs
+  everywhere the server returns `[]` for that country, resetting to 熱門趨勢 on country switch.
 - The UI shows rank, upscaled artwork, song/artist (artist links to Apple Music), and genre per row.
 
 ---
