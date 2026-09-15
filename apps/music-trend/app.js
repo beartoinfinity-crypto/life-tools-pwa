@@ -418,6 +418,17 @@
 
   function songRow(s, i, playableRow, opts) {
     opts = opts || {};
+    // Data-savings badge: roughly how many MB this track would have burned if we
+    // hadn't pinned it to the lowest quality. Comparison is vs. the 720p that
+    // YouTube picks by default. ~1.1 Mbps saved ≈ 0.14 MB/s (720p≈1.5Mbps vs
+    // pinned 144p≈0.35Mbps), scaled by the track's real duration. Only shown for
+    // rows that actually stream (playableRow), and omitted when we can't know the
+    // length — no fake numbers.
+    var saveBadge = '';
+    if (playableRow && s.durationMs) {
+      var mb = Math.round((s.durationMs / 1000) * 0.14);
+      if (mb > 0) saveBadge = '<div class="s-save" title="省下約 ' + mb + ' MB 流量（對比 720p 預設畫質）">省 ' + mb + ' MB</div>';
+    }
     var art = s.artwork
       ? '<img class="s-art" src="' + esc(s.artwork) + '" alt="" loading="lazy" />'
       : '<div class="s-art s-art-none"></div>';
@@ -425,6 +436,7 @@
       ? '<a class="s-artist" href="' + esc(s.artistUrl) + '" target="_blank" rel="noopener">' + esc(s.artist) + '</a>'
       : '<span class="s-artist">' + esc(s.artist) + '</span>';
     var playBadge = playableRow ? '<div class="s-play">▶</div>' : '';
+    saveBadge = saveBadge || '';
     var addBtn = opts.showAdd
       ? '<button class="s-add' + (inMyList(s.id) ? ' on' : '') + '" data-addid="' + esc(s.id) + '" title="My playlist">' +
           (opts.removeMode ? '✕' : inMyList(s.id) ? '✓' : '＋') + '</button>'
@@ -439,6 +451,7 @@
         '</div>' +
         '<div class="s-genre">' + esc(s.genre) + '</div>' +
         playBadge +
+        saveBadge +
         addBtn +
       '</div>';
   }

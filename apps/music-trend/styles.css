@@ -304,6 +304,24 @@ main {
   white-space: nowrap;
 }
 
+/* Data-savings badge: proves this row is pinned to ~144p instead of the 720p
+ * default, and shows roughly how many MB watching it would have burned on a
+ * normal stream. ~0.14 MB/s saved, scaled by the real track length. */
+.song-row .s-save {
+  flex: 0 0 auto;
+  align-self: center;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  color: #0a7d3c;
+  background: rgba(10, 125, 60, 0.10);
+  border: 1px solid rgba(10, 125, 60, 0.35);
+  border-radius: 8px;
+  padding: 3px 6px;
+  margin-left: 4px;
+  white-space: nowrap;
+}
+
 .src-link {
   display: block;
   margin-top: 18px;
