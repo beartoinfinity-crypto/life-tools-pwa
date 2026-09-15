@@ -139,7 +139,8 @@
         onReady: function () {
           ytReady = true;
           if (pendingPlay) {
-            ytPlayer.loadVideoById(pendingPlay);
+            
+            forceLowQuality();
             if (wantPlaying) ytPlayer.playVideo();
             pendingPlay = null;
           }
@@ -148,6 +149,7 @@
           if (e.data === YT.PlayerState.ENDED) {
             nextSong(true);
           } else if (e.data === YT.PlayerState.PLAYING) {
+            forceLowQuality();
             clearStallWatch();
             wantPlaying = true;
             playPauseBtn.textContent = '❚❚';
@@ -220,6 +222,24 @@
 
   function clearStallWatch() {
     if (stallTimer) { clearTimeout(stallTimer); stallTimer = null; }
+  }
+  // ----- third trick: pin the LOWEST quality to save mobile data (README: ~144p) --
+  // YouTube defaults to Auto (usually 720p+), which burns a phone data plan.
+  // getAvailableQualityLevels() returns the levels valid right now; we pick the
+  // absolute lowest (tiny/small/medium ~= 144/240/360p) and setPlaybackQuality()
+  // it on every new load AND on PLAYING, because the IFrame API can bump the
+  // bitrate back up on its own once playback starts.
+  function forceLowQuality() {
+    if (!ytPlayer || !ytPlayer.getAvailableQualityLevels) return;
+    var lv, i, r, best = null, bRank = 99;
+    var rank = { tiny: 0, small: 1, medium: 2, large: 3, hd720: 4, hd1080: 5, highres: 6 };
+    try { lv = ytPlayer.getAvailableQualityLevels(); } catch (e) { return; }
+    if (!lv || !lv.length) return;
+    for (i = 0; i < lv.length; i++) {
+      r = rank[lv[i]];
+      if (r !== undefined && r < bRank) { bRank = r; best = lv[i]; }
+    }
+    if (best) try { ytPlayer.setPlaybackQuality(best); } catch (e) {}
   }
 
   // ----- second opinion: reconnect retry loop ---------------------------------
@@ -297,7 +317,8 @@
       loadYTApi();
       return;
     }
-    ytPlayer.loadVideoById(s.youtubeId);
+    
+    forceLowQuality();
     try { if (r.at > 1 && ytPlayer.seekTo) ytPlayer.seekTo(r.at, true); } catch (e) {}
     if (r.wantPlaying) ytPlayer.playVideo();
     else ytPlayer.pauseVideo();
@@ -351,7 +372,8 @@
       loadYTApi();
       return;
     }
-    ytPlayer.loadVideoById(s.youtubeId);
+    
+    forceLowQuality();
     if (autoplay) ytPlayer.playVideo();
     else ytPlayer.pauseVideo();
   }
