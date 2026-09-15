@@ -33,6 +33,9 @@
                              // signal drop stalls the current song; consumed by 'online'
                              // to resume the SAME song/position instead of skipping.
   var stallTimer = null;     // BUFFERING watchdog: fires if we sit stalled ~10s on a drop
+  var resumeRetryTimer = null;   // second-opinion loop: if the browser never fires
+                                 // 'online' on a weak signal, poll a resume try every
+                                 // ~15s for up to ~2 min, then go quiet.
   var MY_KEY = 'music-my-list';
   var pTimeEl = document.getElementById('pTime');
   var myTools = document.getElementById('myTools');
@@ -150,10 +153,14 @@
             playPauseBtn.textContent = '❚❚';
           } else if (e.data === YT.PlayerState.PAUSED) {
             // A drop also surfaces here: the IFrame API pauses mid-song when signal
-            // dies. If we're offline, DON'T flip wantPlaying to false — that would
-            // orphan our resume intent and the reconnect handler would come back
-            // quietly. Only a real user pause (while online) is authoritative.
-            if (navigator.onLine) {
+            // dies. If we're offline, or a stall watchdog / resume is already
+            // pending, DON'T flip wantPlaying to false — that would orphan our
+            // resume intent and the reconnect handler would come back quietly.
+            // The player may stay paused for 1-2 min (or longer) until the
+            // connection returns; only a real user pause — online and with nothing
+            // pending — is authoritative.
+            var dropPaused = !navigator.onLine || stallTimer || resumeInfo;
+            if (!dropPaused) {
               wantPlaying = false;
               playPauseBtn.textContent = '▶';
             }
@@ -215,6 +222,37 @@
     if (stallTimer) { clearTimeout(stallTimer); stallTimer = null; }
   }
 
+  // ----- second opinion: reconnect retry loop ---------------------------------
+  // The browser fires 'online' when it sees the signal come back, but on a weak
+  // or flaky signal it sometimes DOESN'T fire the event even though the network
+  // is usable again. So we keep a tamer "second opinion": every ~15s for up to
+  // ~2 min (only while we actually want audio and have a spot captured) we try
+  // finishResume() as a nudge. If the radio quietly comes back, the resume then
+  // just works without any taps. After ~2 min we go quiet so WhatsApp only gets
+  // the taps when there's a real signal, not a dead net we keep poking.
+
+  var resumeRetryTimer = null;     // setInterval handle for the reconnect loop
+  var resumeRetryStart = 0;        // when we started poking, so we can go quiet
+
+  function armResumeRetry() {
+    if (resumeRetryTimer) return;                // already poking
+    resumeRetryStart = Date.now();
+    resumeRetryTimer = setInterval(function () {
+      if (!resumeInfo || !wantPlaying) { clearResumeRetry(); return; }  // nothing to resume
+      if (Date.now() - resumeRetryStart > 120000) { clearResumeRetry(); return; }  // gone quiet
+      finishResume();                            // nudge: exact song/position, no taps
+    }, 15000);
+  }
+
+  function clearResumeRetry() {
+    if (resumeRetryTimer) { clearInterval(resumeRetryTimer); resumeRetryTimer = null; }
+  }
+
+  function armResumeRetryIfNeeded() {
+    // Only poke while there's a captured spot AND the user still wants audio.
+    if (resumeInfo && wantPlaying) armResumeRetry();
+  }
+
   function resumeFromSpot() {
     if (resumeInfo) return;                       // already captured; don't overwrite
     var entry = findList(current);
@@ -233,6 +271,7 @@
     };
     if (playPauseBtn) playPauseBtn.textContent = '⏳';   // "waiting for signal"
     if (nowName) nowName.textContent = (nowName.textContent || '');   // keep label
+    armResumeRetry();   // second opinion: keep nudging in case 'online' never fires
   }
 
   function finishResume() {
@@ -245,7 +284,7 @@
     if (r.list !== current || r.country !== country) return;
     var entry = findList(current);
     var list = playable(entry);
-    if (!list.length || r.idx < 0 || r.idx >= list.length) returnimar;
+    if (!list.length || r.idx < 0 || r.idx >= list.length) return;   // spot no longer valid
 
     var s = list[r.idx];
     if (!s || s.youtubeId !== r.ytId) { nextSong(true); return; }   // list changed
@@ -263,7 +302,8 @@
     if (r.wantPlaying) ytPlayer.playVideo();
     else ytPlayer.pauseVideo();
     wantPlaying = r.wantPlaying;
-    returnSongUI(r.idxhed);
+    clearResumeRetry();   // the resume actually happened; stop the nudge loop
+    returnSongUI(r.idx);
   }
 
   function returnSongUI(idx) {
