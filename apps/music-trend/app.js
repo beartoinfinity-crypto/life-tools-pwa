@@ -140,6 +140,7 @@
           ytReady = true;
           if (pendingPlay) {
             
+            ytPlayer.loadVideoById(pendingPlay);
             forceLowQuality();
             if (wantPlaying) ytPlayer.playVideo();
             pendingPlay = null;
@@ -318,6 +319,7 @@
       return;
     }
     
+    ytPlayer.loadVideoById(s.youtubeId);
     forceLowQuality();
     try { if (r.at > 1 && ytPlayer.seekTo) ytPlayer.seekTo(r.at, true); } catch (e) {}
     if (r.wantPlaying) ytPlayer.playVideo();
@@ -373,6 +375,7 @@
       return;
     }
     
+    ytPlayer.loadVideoById(s.youtubeId);
     forceLowQuality();
     if (autoplay) ytPlayer.playVideo();
     else ytPlayer.pauseVideo();
