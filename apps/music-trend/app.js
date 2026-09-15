@@ -29,6 +29,10 @@
   var pendingPlay = null;    // videoId queued while the API loads
   var wantPlaying = false;
   var shuffle = false;
+  var resumeInfo = null;     // { list, country, idx, at, ytId, wantPlaying } -> set when a
+                             // signal drop stalls the current song; consumed by 'online'
+                             // to resume the SAME song/position instead of skipping.
+  var stallTimer = null;     // BUFFERING watchdog: fires if we sit stalled ~10s on a drop
   var MY_KEY = 'music-my-list';
   var pTimeEl = document.getElementById('pTime');
   var myTools = document.getElementById('myTools');
@@ -141,15 +145,43 @@
           if (e.data === YT.PlayerState.ENDED) {
             nextSong(true);
           } else if (e.data === YT.PlayerState.PLAYING) {
+            clearStallWatch();
             wantPlaying = true;
             playPauseBtn.textContent = '❚❚';
           } else if (e.data === YT.PlayerState.PAUSED) {
-            wantPlaying = false;
-            playPauseBtn.textContent = '▶';
+            // A drop also surfaces here: the IFrame API pauses mid-song when signal
+            // dies. If we're offline, DON'T flip wantPlaying to false — that would
+            // orphan our resume intent and the reconnect handler would come back
+            // quietly. Only a real user pause (while online) is authoritative.
+            if (navigator.onLine) {
+              wantPlaying = false;
+              playPauseBtn.textContent = '▶';
+            }
+          } else if (e.data === YT.PlayerState.BUFFERING) {
+            // Stalled mid-song. Most car drops show up here (BUFFERING that never
+            // resolves). Arm a watchdog instead of waiting forever: if we sit
+            // stalled ~10s, treat it as a signal drop and remember the position so
+            // the 'online' handler can resume this exact song where it stalled.
+            armStallWatch();
           }
         },
         onError: function () {
-          // Unplayable video: skip forward
+          // Distinguish a genuine signal drop from an unplayable video, so a blip
+          // in the car does NOT skip tracks. When we're offline (or looks like a
+          // dead-link stall), remember the song and wait to resume it on reconnect.
+          if (!wantPlaying && !navigator.onLine) {
+            // Wanted quiet anyway; stay paused, nothing to resume.
+            return;
+          }
+          if (ytPlayer && ytPlayer.getCurrentTime &&
+              ytPlayer.getDuration && ytPlayer.getCurrentTime() > 0 &&
+              ytPlayer.getCurrentTime() < (ytPlayer.getDuration() - 2)) {
+            // We have real progress past the start: likely a transient blip, not a
+            // dead video. Remember the spot and resume it when signal returns.
+            resumeFromSpot();
+            return;
+          }
+          // Genuinely unplayable video at load: skip forward
           nextSong(true);
         }
       }
@@ -163,6 +195,100 @@
     s.src = 'https://www.youtube.com/iframe_api';
     document.head.appendChild(s);
   }
+
+  /* ---- car-signal resume: watchdog + reconnect hook ---- *
+   * Belt and suspenders. The BUFFERING branch in onStateChange arms a watchdog
+   * (10s of no progress = treat as a drop); the offline event captures the spot
+   * immediately; and the online event does the actual resume — same song, same
+   * position, zero taps. onError only skips when the video is genuinely dead. */
+
+  function armStallWatch() {
+    if (stallTimer) return;                       // already armed by a prior BUFFERING
+    stallTimer = setTimeout(function () {
+      stallTimer = null;
+      // ~10s of stalling = a real signal drop (not a normal short buffer).
+      if (wantPlaying) resumeFromSpot();
+    }, 10000);
+  }
+
+  function clearStallWatch() {
+    if (stallTimer) { clearTimeout(stallTimer); stallTimer = null; }
+  }
+
+  function resumeFromSpot() {
+    if (resumeInfo) return;                       // already captured; don't overwrite
+    var entry = findList(current);
+    var list = playable(entry);
+    if (!list.length || currentSong < 0 || currentSong >= list.length) return;
+    var s = list[currentSong];
+    var at = 0;
+    try { if (ytPlayer && ytPlayer.getCurrentTime) at = ytPlayer.getCurrentTime() || 0; } catch (e) {}
+    resumeInfo = {
+      list: current,
+      country: country,
+      idx: currentSong,
+      at: at,
+      ytId: s.youtubeId,
+      wantPlaying: wantPlaying
+    };
+    if (playPauseBtn) playPauseBtn.textContent = '⏳';   // "waiting for signal"
+    if (nowName) nowName.textContent = (nowName.textContent || '');   // keep label
+  }
+
+  function finishResume() {
+    if (!resumeInfo) return;
+    var r = resumeInfo;
+    resumeInfo = null;
+
+    // Only resume if we're still on the same list + country and the song still
+    // exists there. If the user navigated away meanwhile, just let it be.
+    if (r.list !== current || r.country !== country) return;
+    var entry = findList(current);
+    var list = playable(entry);
+    if (!list.length || r.idx < 0 || r.idx >= list.length) returnimar;
+
+    var s = list[r.idx];
+    if (!s || s.youtubeId !== r.ytId) { nextSong(true); return; }   // list changed
+    if (playPauseBtn) playPauseBtn.textContent = '❚❚';
+
+    if (!ytReady || !ytPlayer) {
+      // Player got killed by the drop; queue the same song and restart the API.
+      pendingPlay = r.ytId;
+      wantPlaying = r.wantPlaying;
+      loadYTApi();
+      return;
+    }
+    ytPlayer.loadVideoById(s.youtubeId);
+    try { if (r.at > 1 && ytPlayer.seekTo) ytPlayer.seekTo(r.at, true); } catch (e) {}
+    if (r.wantPlaying) ytPlayer.playVideo();
+    else ytPlayer.pauseVideo();
+    wantPlaying = r.wantPlaying;
+    returnSongUI(r.idxhed);
+  }
+
+  function returnSongUI(idx) {
+    current = resumeLastList();
+    currentSong = idx;
+    var entry = findList(current);
+    var list = playable(entry);
+    if (list[idx]) highlightRow(list[idx]);
+  }
+
+  // Live intent of the "current list" for UI restore after a resume
+  function resumeLastList() { return current; }
+
+  window.addEventListener('offline', function () {
+    // Signal dropped while we wanted audio: capture the spot right away so we
+    // don't wait the full 10s watchdog for a hard drop. Nothing if we were quiet.
+    if (wantPlaying) resumeFromSpot();
+  });
+
+  window.addEventListener('online', function () {
+    // Back on signal: resume the exact song where it stalled. Also clear any
+    // pending stall watchdog so it can't double-fire on the newly resumed audio.
+    clearStallWatch();
+    finishResume();
+  });
 
   function playSong(entry, idx, autoplay) {
     var list = playable(entry);

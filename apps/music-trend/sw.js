@@ -1,4 +1,4 @@
-var CACHE_NAME = 'music-trend-v9';
+var CACHE_NAME = 'music-trend-v10';
 var ASSETS = [
   './',
   './index.html',

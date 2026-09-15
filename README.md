@@ -308,6 +308,13 @@ gate by country (`CANTO_COUNTRIES` = `{hk}` and `MANDO_COUNTRIES` = `{hk,tw,cn,s
 - **Refresh cadence** — Render/local scrapes all countries at boot then round-robins one country every 6 min. On
   Vercel, reads kick a background re-scrape when a country's cache is older than 1 h; the app re-polls the active
   list every 10 min and the refresh button forces a scrape.
+- **Instant paint from device cache** — the last successful payload per country+list is cached on the device
+  (`localStorage`), so a reopen paints the chart the moment the page script runs — no cell round-trip in the
+  critical path. The server read still refreshes it silently in the background, and a country switch refetches.
+- **Car-signal auto-resume** — a parked song during a network drop does NOT skip tracks. A stall watchdog
+  (BUFFERING > ~10 s) and the `offline` event remember the exact song + position; the moment `online` fires, the
+  player resumes the same song where it stalled — zero taps. `onError` only skips a genuinely unplayable video,
+  never a transient signal blip.
 - **In-page YouTube playback, audio-first** — no Apple Music account needed. Each song is resolved to a YouTube
   video id (`apps/music-trend/youtube.js`, search-scrape, no API key; ids cached in Supabase per country and
   reused, rolling window of ~20 new resolutions per refresh run). Tap any song with a ▶ badge and a compact player
