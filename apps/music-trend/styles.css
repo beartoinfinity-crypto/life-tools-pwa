@@ -274,12 +274,15 @@ main {
 }
 
 .song-row .s-name {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-size: 15px;
   font-weight: 700;
   color: var(--primary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
 }
 
 .song-row .s-artist {
@@ -518,4 +521,18 @@ main {
   background: var(--accent);
   border-color: var(--accent);
   color: #fff;
+}
+
+@media (max-width: 480px) {
+  .song-row { gap: 8px; padding: 9px 10px; }
+  .song-row .s-rank { flex: 0 0 24px; font-size: 13px; }
+  .song-row .s-art,
+  .song-row .s-art-none { flex: 0 0 44px; width: 44px; height: 44px; }
+  .song-row .s-genre { display: none; }
+  .song-row .s-save { padding: 2px 4px; font-size: 9px; }
+  .song-row .s-name {
+    -webkit-line-clamp: 3;
+    font-size: 14px;
+  }
+  .p-btn { width: 30px; height: 30px; }
 }
