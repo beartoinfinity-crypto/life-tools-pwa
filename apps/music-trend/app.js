@@ -40,6 +40,18 @@
   function mySongs() {
     try { return JSON.parse(localStorage.getItem(MY_KEY) || '[]'); } catch (e) { return []; }
   }
+
+  /* Device playlist cache: the last successful payload per country+list, kept in
+   * localStorage so a reopen paints the chart the moment app.js runs — no cell
+   * round-trip in the critical path. The server read still refreshes it silently
+   * in the background (see load()), and a country switch always refetches. */
+  function devKey(cc, list) { return 'music-dev:' + cc + ':' + list; }
+  function readDev(cc, list) {
+    try { return JSON.parse(localStorage.getItem(devKey(cc, list)) || 'null'); } catch (e) { return null; }
+  }
+  function saveDev(cc, list, payload) {
+    try { localStorage.setItem(devKey(cc, list), JSON.stringify(payload)); } catch (e) {}
+  }
   function saveMySongs(a) {
     try { localStorage.setItem(MY_KEY, JSON.stringify(a)); } catch (e) {}
   }
@@ -469,6 +481,17 @@
   function load(refresh) {
     var wantList = (current === 'my') ? 'trending' : current;
     refreshBtn.classList.add('spinning');
+    // Device cache: when we already fetched this exact country+list before, paint
+    // it NOW from localStorage so the chart appears instantly on cellular — the
+    // server read below refreshes it silently in the background and saves the
+    // newer copy. Guarded by country+list so switching countries never recycles
+    // yesterday's chart, and skipped on forced refresh.
+    var dev = readDev(country, wantList);
+    if (!refresh && country + ':' + wantList !== loadedKey && dev) {
+      cache = dev;
+      loadedKey = country + ':' + wantList;
+      render();
+    }
     if (refresh || country + ':' + wantList !== loadedKey) {
       listEl.innerHTML = '<div class="loading-note">Loading…</div>';
     }
@@ -483,6 +506,7 @@
         if (payload && payload.data) {
           cache = payload;
           loadedKey = country + ':' + wantList;
+          saveDev(country, wantList, payload);
         }
         render();
       })
