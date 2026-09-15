@@ -329,6 +329,29 @@ gate by country (`CANTO_COUNTRIES` = `{hk}` and `MANDO_COUNTRIES` = `{hk,tw,cn,s
   國語歌 list while KR stays empty (K-pop, correctly not Chinese) — and why the client hides the 廣東歌/國語歌 tabs
   everywhere the server returns `[]` for that country, resetting to 熱門趨勢 on country switch.
 - The UI shows rank, upscaled artwork, song/artist (artist links to Apple Music), and genre per row.
+- **Per-track data-savings badge** — every **playable** row shows a small `省 N MB` chip estimating how many MB that
+  exact song would have burned at YouTube's default 720p had we not pinned it to ~144p. It's scaled by the server
+  duration (`durationMs`, `~0.14 MB/s` saved) and only rendered when that song is actually streamable *and* has a known
+  length — no made-up numbers for unplayable or unknowable rows.
+
+---
+
+## Music Trend — working notes for other agents/LLMs
+
+A few hard-won rules before you touch `apps/music-trend/`. Ignoring these produced the exact "every song fails to
+play" regression this file dates back to.
+
+1. **`sw.js` cache-bump goes in the SAME commit as any `app.js`/`styles.css` change.** The service worker precaches
+   those two files and only refetches them when `CACHE_NAME`'s version changes (`music-trend-vN` → `vN+1`, inside
+   `sw.js`). Ship the bump in the same commit as the asset change — not a follow-up commit. Clients on a phone plan
+   self-update the SW within ~5 min; without the bump they keep serving the old cached `app.js` forever, and every fix
+   silently never arrives.
+2. **The player APIs used are `ytPlayer.loadVideoById(...)` then `forceLowQuality()` — never the reverse.** YouTube
+   errors on `playVideo()` (播放 id error, "all songs broken") whenever a video isn't already loaded. A wired
+   `loadVideoById(pendingPlay)` on `onReady`, plus `loadVideoById(s.youtubeId)` in `playSong`/`finishResume`, must stay
+   ahead of every `forceLowQuality()` and `playVideo()`.
+3. **`node --check` the actual files** (`node --check apps/music-trend/app.js` and `sw.js`) after any edit so you never
+   land invalid JS through a rewrite tool.
 
 ---
 
