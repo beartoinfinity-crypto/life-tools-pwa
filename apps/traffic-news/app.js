@@ -7,25 +7,18 @@
   var lastUpdate = document.getElementById('lastUpdate');
   var refreshBtn = document.getElementById('refreshBtn');
 
+  var renderedOnce = false;
+
   function esc(s) {
     return String(s == null ? '' : s)
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;');
   }
 
-  function fmtAgo(iso) {
-    if (!iso) return '';
-    var s = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
-    if (s < 60) return s + 's ago';
-    if (s < 3600) return Math.floor(s / 60) + 'm ago';
-    if (s < 86400) return Math.floor(s / 3600) + 'h ago';
-    return Math.floor(s / 86400) + 'd ago';
-  }
-
   function fmtTime(iso) {
+    if (!iso) return '';
     var d = new Date(iso);
     if (isNaN(d)) return '';
-    // Show in HK local time regardless of device locale
     var hk = new Date(d.toLocaleString('en-US', { timeZone: 'Asia/Hong_Kong' }));
     if (isNaN(hk)) return d.toISOString().slice(0, 16).replace('T', ' ');
     var h = hk.getHours(), min = ('0' + hk.getMinutes()).slice(-2);
@@ -35,13 +28,13 @@
     return (m < 10 ? '0' + m : m) + '-' + (day < 10 ? '0' + day : day) + ' ' + ampm + ' ' + ('0' + h12).slice(-2) + ':' + min;
   }
 
-  function fmtAgoZH(iso) {
+  function fmtAgo(iso) {
     if (!iso) return '';
-    var mins = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 60000));
-    if (mins < 60) return mins + '分鐘前';
-    var h = Math.floor(mins / 60);
-    if (h < 24) return h + '小時前';
-    return Math.floor(h / 24) + '天前';
+    var s = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
+    if (s < 60) return s + 's';
+    if (s < 3600) return Math.floor(s / 60) + 'm';
+    if (s < 86400) return Math.floor(s / 3600) + 'h';
+    return Math.floor(s / 86400) + 'd';
   }
 
   function render(payload) {
@@ -50,6 +43,14 @@
       lastUpdate.textContent = 'updated ' + fmtAgo(payload.lastRefresh) + ' (' + items.length + ' items)';
     }
 
+    // NEVER BLANK: if the last known render already has news but this fetch
+    // returned nothing (live scrape hiccup / empty window), keep showing what
+    // we have instead of wiping the page with "No traffic news".
+    if (!items.length && renderedOnce) {
+      return;
+    }
+
+    renderedOnce = true;
     if (!items.length) {
       newsList.innerHTML = '<div class="news-empty">No traffic news in the last 12 hours.</div>';
       return;
@@ -61,7 +62,7 @@
           '<div class="ni-meta">' +
             '<span class="ni-status ' + (latest ? 'latest' : 'closed') + '">' + (latest ? '最新' : '完結') + '</span>' +
             '<span>' + esc(fmtTime(n.posted_at)) + '</span>' +
-            '<span class="ni-rel">' + esc(fmtAgoZH(n.posted_at)) + '</span>' +
+            '<span class="ni-rel">' + esc(fmtAgo(n.posted_at)) + '</span>' +
           '</div>' +
           '<div class="ni-loc">' + esc(n.location || n.category || '') + '</div>' +
           '<div class="ni-cat">' + esc(n.category) + '</div>' +
@@ -74,18 +75,31 @@
     });
   }
 
-  function load(refresh) {
-    refreshBtn.classList.add('spinning');
-    fetch(refresh ? API_BASE + '/news/refresh' : API_BASE + '/news', {
+  function post(url) {
+    return fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ limit: 50 }),
       cache: 'no-store'
-    })
-      .then(function (r) { return r.json(); })
-      .then(render)
+    }).then(function (r) { return r.json(); });
+  }
+
+  function load(refresh) {
+    refreshBtn.classList.add('spinning');
+    // Live-first: opening/clicking the page triggers a real scrape so the latest
+    // news shows immediately without a manual refresh. If the live scrape yields
+    // nothing, fall back to the stored snapshot so the page is never blank/stale.
+    var p = refresh
+      ? post(API_BASE + '/news/refresh').then(function (payload) {
+          if (payload && payload.data && payload.data.length) return payload;
+          return post(API_BASE + '/news');
+        })
+      : post(API_BASE + '/news');
+
+    p.then(render)
       .catch(function () {
         newsList.innerHTML = '<div class="news-empty">Failed to load traffic news.</div>';
+        renderedOnce = true;
       })
       .finally(function () { refreshBtn.classList.remove('spinning'); });
   }
