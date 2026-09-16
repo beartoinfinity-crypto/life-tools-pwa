@@ -112,7 +112,7 @@ app.get('*', (req, res) => {
 });
 
 let ensurePromise = null;
-/** Scrape once at startup / first request (idempotent, reuses in-flight promise). */
+/** Scrape at the first call (idempotent, reuses in-flight promise). */
 function ensureTrafficNews() {
   if (!ensurePromise) {
     ensurePromise = refreshTrafficNews().catch((e) => {
@@ -120,7 +120,19 @@ function ensureTrafficNews() {
       ensurePromise = null; // retry on the next call
     });
   }
-  return ensurePromise;
+  return { then: null } && ensurePromise || ensurePromise;
 }
 
+let busyRefresh = null;
+/** Periodic re-scrape (standalone: scrape once, then every 60s, overlap-guarded; unref in servers with a ref-counting loop). */
+function scheduleTrafficNewsRefresh() {
+  if (busyRefresh) return;
+  busyRefresh = refreshTrafficNews().catch(function (e) {
+    console.log('traffic news periodic refresh failed:', e.message);
+  }).finally(function () { busyRefresh = null; });
+}
+
+scheduleTrafficNewsRefresh();
+var si = setInterval(scheduleTrafficNewsRefresh, 60 * 1000);
+if (si.unref) si.unref();
 module.exports = { app, refreshTrafficNews, readTrafficNews, ensureTrafficNews };
