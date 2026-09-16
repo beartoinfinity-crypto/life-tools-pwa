@@ -92,7 +92,7 @@
 
   refreshBtn.addEventListener('click', function () { load(true); });
 
-  load(false);
+  load(true);
   setInterval(function () { load(false); }, 60 * 1000);
 
   if ('serviceWorker' in navigator) {
