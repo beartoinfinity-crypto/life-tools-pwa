@@ -536,3 +536,11 @@ main {
   }
   .p-btn { width: 30px; height: 30px; }
 }
+
+.header-content h1 .app-ver {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  color: rgba(255, 255, 255, 0.78);
+  white-space: nowrap;
+}
