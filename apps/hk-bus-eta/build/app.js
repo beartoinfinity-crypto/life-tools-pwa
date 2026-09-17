@@ -134,19 +134,6 @@ async function idbSet(key, val) {
 }
 
 /* ---------------- DB load ---------------- */
-function patchDb(db) {
-  if (!db || !db.routeList) return;
-  const e = Object.values(db.routeList).find(x => x && String(x.route).toUpperCase() === "S1");
-  if (!e) return;
-  const cos = Object.keys(e.stops || {});
-  if (cos.includes("kmb") && cos.includes("ctb")) return;
-  if (cos.includes("ctb") && !cos.includes("kmb")) {
-    const k = JSON.parse(JSON.stringify(e));
-    k.stops = { kmb: e.stops.ctb.slice() };
-    k.co = ["kmb"];
-    db.routeList["S1-kmb"] = k;
-  }
-}
 async function loadDb() {
   const [cachedDb, cachedTs] = await Promise.all([idbGet("db"), idbGet("ts")]);
   if (cachedDb) {
@@ -163,7 +150,6 @@ async function loadDb() {
   try {
     const db = await fetchEtaDb();
     if (!db || !db.routeList) throw new Error("bad db");
-    patchDb(db);
     applyDb(db);
     await idbSet("db", db);
     await idbSet("ts", Date.now());
@@ -176,7 +162,6 @@ async function loadDb() {
 async function refreshDb() {
   const db = await fetchEtaDb();
   if (!db || !db.routeList) throw new Error("bad db");
-  patchDb(db);
   applyDb(db);
   await idbSet("db", db);
   await idbSet("ts", Date.now());
@@ -425,7 +410,7 @@ function coBadgeClass(co) {
 function routeOperators(no) {
   const entries = state.routeNoIndex.get(String(no).toUpperCase()) || [];
   const set = new Set();
-  for (const e of entries) if (e.co && e.co[0]) set.add(e.co[0]);
+  for (const e of entries) Object.keys(e.stops || {}).forEach((co) => set.add(co));
   return [...set];
 }
 function routeBadgeClass(no) {
@@ -433,14 +418,14 @@ function routeBadgeClass(no) {
   return ops.length === 1 ? coBadgeClass(ops[0]) : "co-mixed";
 }
 function groupOpsClass(g) {
-  const ops = [...new Set(g.entries.map((en) => en.co && en.co[0]).filter(Boolean))];
+  const ops = [...new Set(g.entries.flatMap((en) => Object.keys(en.stops || {})))];
   return ops.length === 1 ? coBadgeClass(ops[0]) : ops.length > 1 ? "co-mixed" : "";
 }
 function appendRouteRow(box, no, dir) {
   const group = groupByDirection(no);
   if (!group.length) return;
   const dirs = group.slice(0, 3).map((g) => pickEntry(g).dest[state.lang]).filter(Boolean);
-  const cos = [...new Set(group.map((g) => pickEntry(g).co[0]))];
+  const cos = [...new Set(group.flatMap((g) => Object.keys(pickEntry(g).stops || {})))];
   const card = document.createElement("div");
   card.className = "card tappable route-row";
   card.innerHTML = `
@@ -763,7 +748,7 @@ function appendStopRow(listEl, r) {
   const rowkey = "s" + Math.random().toString(36).slice(2, 9);
   line.dataset.rowkey = rowkey;
   line.innerHTML = `
-    <div class="route-no ${coBadgeClass(e.co[0])}" style="min-width:58px">${esc(String(e.route))}</div>
+    <div class="route-no ${coBadgeClass(Object.keys(e.stops || {})[0])}" style="min-width:58px">${esc(String(e.route))}</div>
     <div class="rl-main">
       <div style="font-size:14px;font-weight:650">${esc(e.orig[state.lang] || e.orig.en || "")}
         <small style="color:var(--ink-2)"> → ${esc(e.dest[state.lang] || e.dest.en || "")}</small></div>
