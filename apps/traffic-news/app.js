@@ -60,9 +60,11 @@
       var latest = n.status === '最新情況';
       var srcLabel = n.source === '881903' ? '881903' : n.source === 'routejam' ? 'Routejam' : '';
       var src = srcLabel ? '<span class="ni-src src-' + esc(n.source) + '">' + esc(srcLabel) + '</span>' : '';
+      var cong = /擠塞信號/.test(n.category) ? '<span class="ni-cong">擠塞</span>' : '';
       return '<div class="news-item' + (latest ? '' : ' closed-item') + '" role="button" tabindex="0">' +
           '<div class="ni-meta">' +
             '<span class="ni-status ' + (latest ? 'latest' : 'closed') + '">' + (latest ? '最新' : '完結') + '</span>' +
+            cong +
             src +
             '<span>' + esc(fmtTime(n.posted_at)) + '</span>' +
             '<span class="ni-rel">' + esc(fmtAgo(n.posted_at)) + '</span>' +
