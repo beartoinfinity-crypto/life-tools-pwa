@@ -508,9 +508,12 @@ function renderRouteStops(group) {
   const listEl = $("#detailContent .stop-list");
   listEl.innerHTML = "";
   const e = pickEntry(group);
-  const coMain = entryStopsCo(e);
-  if (!coMain) return;
+  const allCos = Object.keys(e.stops || {}).filter((c) => Array.isArray(e.stops[c]) && e.stops[c].length);
+  if (!allCos.length) return;
+  const coMain = allCos[0];
   const stops = e.stops[coMain];
+  const cosStr = allCos.join(",");
+  const coTags = allCos.map((c) => `<span class="tag ${coBadgeClass(c)}">${esc(coTag(c))}</span>`).join("");
   const STOP_BATCH = 14;
   const cards = [];
   stops.forEach((ref, seq) => {
@@ -518,13 +521,13 @@ function renderRouteStops(group) {
     if (!name) return;
     const card = document.createElement("div");
     card.className = "stop-card";
-    card.dataset.rowkey = group.gi + "\u0002" + coMain + "\u0002" + seq;
+    card.dataset.rowkey = group.gi + "\u0002" + cosStr + "\u0002" + seq;
     card.innerHTML = `
       <div class="stop-idx${seq === stops.length - 1 ? " last" : ""}">${seq + 1}</div>
       <div class="stop-name">
         <div class="zh">${esc(name)}</div>
       </div>
-      <div class="co-tag ${coBadgeClass(coMain)}">${esc(coTag(coMain))}</div>
+      <div class="co-tag">${coTags}</div>
       <div class="eta-chips"><span class="skeleton"></span><span class="skeleton"></span><span class="skeleton"></span></div>
       <div class="stop-more">›</div>`;
     card.addEventListener("click", () =>
@@ -551,15 +554,21 @@ function fetchRowEtas(cards) {
   const rows = cards.map((c) => {
     const parts = c.dataset.rowkey.split("\u0002");
     const group = state.detail.groups[Number(parts[0])];
-    return { el: c, rowkey: c.dataset.rowkey, co: parts[1], seq: Number(parts[2]), entry: pickEntry(group) };
+    const cos = parts[1].split(",");
+    return { el: c, rowkey: c.dataset.rowkey, cos, seq: Number(parts[2]), entry: pickEntry(group) };
   });
-  etaRace(rows).then((res) => {
-    rows.forEach((r, i) => {
-      state.etaRows.set(r.rowkey, { etas: res[i], entry: r.entry, co: r.co, seq: r.seq });
-      const chips = r.el.querySelector(".eta-chips");
-      if (chips) chips.innerHTML = chipsHTML(res[i]);
+  const tasks = rows.map((r) => Promise.all(r.cos.map((co) => etaFor(r.entry, co, r.seq))));
+  tasks.reduce((p, task, i) => p.then(() => task.then((results) => {
+    const merged = results.flat().sort((a, b) => {
+      const ta = a.eta ? new Date(a.eta).getTime() : Infinity;
+      const tb = b.eta ? new Date(b.eta).getTime() : Infinity;
+      return ta - tb;
     });
-  });
+    const r = rows[i];
+    state.etaRows.set(r.rowkey, { etas: merged, entry: r.entry, co: r.cos[0], seq: r.seq });
+    const chips = r.el.querySelector(".eta-chips");
+    if (chips) chips.innerHTML = chipsHTML(merged);
+  })), Promise.resolve()).catch(() => {});
 }
 
 /* ---------------- bookmark lists ---------------- */
@@ -779,7 +788,7 @@ function collectVisibleRows() {
       const parts = rowEl.dataset.rowkey.split("\u0002");
       if (parts.length === 3) {
         const g = state.detail.groups[Number(parts[0])];
-        if (g) rows.push({ rowEl, entry: pickEntry(g), co: parts[1], seq: Number(parts[2]) });
+        if (g) rows.push({ rowEl, entry: pickEntry(g), cos: parts[1].split(","), seq: Number(parts[2]) });
       }
     }
   });
@@ -792,12 +801,19 @@ function startAutoRefresh() {
     if (!rows.length) return;
     state.refreshing = true;
     try {
-      const res = await etaRace(rows);
-      rows.forEach((r, i) => {
-        state.etaRows.set(r.rowEl.dataset.rowkey, { etas: res[i], entry: r.entry, co: r.co, seq: r.seq });
+      const tasks = rows.map((r) => Promise.all((r.cos || [r.co]).map((co) => etaFor(r.entry, co, r.seq))));
+      for (let i = 0; i < tasks.length; i++) {
+        const results = await tasks[i];
+        const merged = results.flat().sort((a, b) => {
+          const ta = a.eta ? new Date(a.eta).getTime() : Infinity;
+          const tb = b.eta ? new Date(b.eta).getTime() : Infinity;
+          return ta - tb;
+        });
+        const r = rows[i];
+        state.etaRows.set(r.rowEl.dataset.rowkey, { etas: merged, entry: r.entry, co: (r.cos || [r.co])[0], seq: r.seq });
         const chips = r.rowEl.querySelector(".eta-chips");
-        if (chips) chips.innerHTML = chipsHTML(res[i]);
-      });
+        if (chips) chips.innerHTML = chipsHTML(merged);
+      }
       statusNow(T.updated[state.lang]);
     } finally {
       state.refreshing = false;
