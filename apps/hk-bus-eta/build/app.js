@@ -134,6 +134,19 @@ async function idbSet(key, val) {
 }
 
 /* ---------------- DB load ---------------- */
+function patchDb(db) {
+  if (!db || !db.routeList) return;
+  const e = Object.values(db.routeList).find(x => x && String(x.route).toUpperCase() === "S1");
+  if (!e) return;
+  const cos = Object.keys(e.stops || {});
+  if (cos.includes("kmb") && cos.includes("ctb")) return;
+  if (cos.includes("ctb") && !cos.includes("kmb")) {
+    const k = JSON.parse(JSON.stringify(e));
+    k.stops = { kmb: e.stops.ctb.slice() };
+    k.co = ["kmb"];
+    db.routeList["S1-kmb"] = k;
+  }
+}
 async function loadDb() {
   const [cachedDb, cachedTs] = await Promise.all([idbGet("db"), idbGet("ts")]);
   if (cachedDb) {
@@ -150,6 +163,7 @@ async function loadDb() {
   try {
     const db = await fetchEtaDb();
     if (!db || !db.routeList) throw new Error("bad db");
+    patchDb(db);
     applyDb(db);
     await idbSet("db", db);
     await idbSet("ts", Date.now());
@@ -162,6 +176,7 @@ async function loadDb() {
 async function refreshDb() {
   const db = await fetchEtaDb();
   if (!db || !db.routeList) throw new Error("bad db");
+  patchDb(db);
   applyDb(db);
   await idbSet("db", db);
   await idbSet("ts", Date.now());
