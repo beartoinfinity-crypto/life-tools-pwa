@@ -167,6 +167,19 @@ main {
   color: var(--text-secondary);
 }
 
+.news-item .ni-src {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.news-item .ni-src.src-881903 {
+  background: #1a3a6b;
+  color: #fff;
+}
+
 .news-item .ni-loc {
   font-size: 16px;
   font-weight: 700;
