@@ -91,10 +91,9 @@ function parseRoutejamNews(html) {
     const location = rows[2];
 
     // row 4: detail + "資料來源: X" (may be followed by a footnote line, e.g. DS- items)
-    let detail = rows[3], source = '';
+    let detail = rows[3];
     const sm = rows[3].match(/資料來源:\s*([^\n]+)/);
     if (sm) {
-      source = sm[1].trim();
       detail = rows[3].slice(0, sm.index).replace(/\n+$/, '').trim();
       const rest = rows[3].slice(sm.index + sm[0].length).trim();
       if (rest) detail += (detail ? '\n' : '') + rest;
@@ -110,7 +109,7 @@ function parseRoutejamNews(html) {
       status,
       location,
       detail,
-      source,
+      source: 'routejam',
       lat: c.lat != null ? c.lat : null,
       lng: c.lng != null ? c.lng : null
     });

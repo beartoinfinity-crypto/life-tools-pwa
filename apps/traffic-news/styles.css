@@ -180,6 +180,11 @@ main {
   color: #fff;
 }
 
+.news-item .ni-src.src-routejam {
+  background: #2e7d32;
+  color: #fff;
+}
+
 .news-item .ni-loc {
   font-size: 16px;
   font-weight: 700;
