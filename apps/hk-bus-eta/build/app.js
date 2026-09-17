@@ -297,17 +297,21 @@ function fmtEta(iso) {
 function chipsHTML(etas) {
   const list = etas.slice(0, 3);
   if (!list.length) return '<span class="eta-chip none">—</span>';
+  const multiCo = new Set(list.map((e) => e.co)).size > 1;
   return list.map((e) => {
     const f = fmtEta(e.eta);
+    const coHtml = multiCo ? `<span class="co-sm ${coBadgeClass(e.co)}">${esc(coTag(e.co))}</span>` : "";
     return `<span class="eta-chip${f.soon ? " soon" : ""}" title="${esc(e.rmk || e.dest)}">` +
-      `<span class="t">${f.sub}</span>${f.main}</span>`;
+      `<span class="t">${f.sub}</span>${f.main}${coHtml}</span>`;
   }).join("");
 }
 function expandedHTML(etas) {
   if (!etas.length) return `<div class="e-row">${esc(T.noService[state.lang])}</div>`;
+  const multiCo = new Set(etas.map((e) => e.co)).size > 1;
   return etas.map((e) => {
     const f = fmtEta(e.eta);
-    return `<div class="e-row"><span>${esc(e.dest)}${e.rmk ? ' <span class="rmk">' + esc(e.rmk) + "</span>" : ""}</span>` +
+    const coHtml = multiCo ? `<span class="co-sm ${coBadgeClass(e.co)}">${esc(coTag(e.co))}</span> ` : "";
+    return `<div class="e-row"><span>${coHtml}${esc(e.dest)}${e.rmk ? ' <span class="rmk">' + esc(e.rmk) + "</span>" : ""}</span>` +
       `<span class="et">${f.sub} · ${f.main}</span></div>`;
   }).join("");
 }
