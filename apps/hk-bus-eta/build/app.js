@@ -517,7 +517,6 @@ function renderRouteStops(group) {
   const coMain = allCos[0];
   const stops = e.stops[coMain];
   const cosStr = allCos.join(",");
-  const coTags = allCos.map((c) => `<span class="tag ${coBadgeClass(c)}">${esc(coTag(c))}</span>`).join("");
   const STOP_BATCH = 14;
   const cards = [];
   stops.forEach((ref, seq) => {
@@ -531,7 +530,6 @@ function renderRouteStops(group) {
       <div class="stop-name">
         <div class="zh">${esc(name)}</div>
       </div>
-      <div class="co-tag">${coTags}</div>
       <div class="eta-chips"><span class="skeleton"></span><span class="skeleton"></span><span class="skeleton"></span></div>
       <div class="stop-more">›</div>`;
     card.addEventListener("click", () =>
