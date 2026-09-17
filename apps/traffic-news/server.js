@@ -2,7 +2,7 @@ const express = require('express');
 const https = require('https');
 const { createClient } = require('@supabase/supabase-js');
 
-const { parseRoutejamNews, NEWS_URL } = require('./parser');
+const { parseRoutejamNews, parse881903TrafficNews, NEWS_URL, TRAFFIC_881903_URL } = require('./parser');
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
@@ -24,16 +24,30 @@ function fetchUrl(url, timeout = 20000) {
   });
 }
 
-/** Scrape routejam news and upsert into Supabase. Returns { fetched, changed } */
+/** Scrape routejam + 881903 news and upsert into Supabase. Returns { fetched } */
 async function refreshTrafficNews() {
-  const { status, data: html } = await fetchUrl(NEWS_URL);
-  if (status !== 200) throw new Error(`news.routejam.com returned ${status}`);
-  const items = parseRoutejamNews(html);
-  if (!items.length) throw new Error('no news items parsed');
+  // Scrape both sources in parallel
+  const [routejamRes, traffic881903Res] = await Promise.allSettled([
+    fetchUrl(NEWS_URL).then(({ status, data }) => {
+      if (status !== 200) throw new Error(`news.routejam.com returned ${status}`);
+      return parseRoutejamNews(data);
+    }),
+    fetchUrl(TRAFFIC_881903_URL).then(({ status, data }) => {
+      if (status !== 200) throw new Error(`881903.com returned ${status}`);
+      return parse881903TrafficNews(data);
+    })
+  ]);
 
-  // Upsert (onConflict id): changed rows are updated, new rows inserted.
-  // Keep it as a single upsert call — the full list is ~60 rows, well within limits.
-  const rows = items.map((i) => ({
+  const routejamItems = routejamRes.status === 'fulfilled' ? routejamRes.value : [];
+  const traffic881903Items = traffic881903Res.status === 'fulfilled' ? traffic881903Res.value : [];
+
+  if (routejamRes.status === 'rejected') console.log('routejam scrape failed:', routejamRes.reason.message);
+  if (traffic881903Res.status === 'rejected') console.log('881903 scrape failed:', traffic881903Res.reason.message);
+
+  const allItems = [...routejamItems, ...traffic881903Items];
+  if (!allItems.length) throw new Error('no news items parsed from any source');
+
+  const rows = allItems.map((i) => ({
     id: i.id,
     posted_at: i.postedAt,
     category: i.category,
@@ -51,7 +65,7 @@ async function refreshTrafficNews() {
     { key: 'trafficNewsLastRefresh', value: new Date().toISOString(), updated_at: new Date().toISOString() },
     { onConflict: 'key' }
   );
-  return { fetched: items.length };
+  return { fetched: allItems.length };
 }
 
 /** Latest news straight from Supabase (no scraping). Only the last 12 hours. */

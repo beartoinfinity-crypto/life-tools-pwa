@@ -15,6 +15,7 @@
  */
 
 const NEWS_URL = 'https://news.routejam.com/';
+const TRAFFIC_881903_URL = 'https://www.881903.com/news/traffic';
 
 /** "2026年9月11日 下午02:58" -> "2026-09-11T14:58:00+08:00" (HK time, UTC+8) */
 function toHKISO(raw) {
@@ -117,4 +118,70 @@ function parseRoutejamNews(html) {
   return items;
 }
 
-module.exports = { parseRoutejamNews, toHKISO, extractCoords, NEWS_URL };
+/** Parse 881903.com traffic news from Vue SPA inline JSON. */
+function parse881903TrafficNews(html) {
+  const marker = 'VueApp.main(';
+  const start = html.indexOf(marker);
+  if (start === -1) return [];
+  const jsonStart = start + marker.length;
+  let depth = 0, end = -1;
+  for (let i = jsonStart; i < html.length; i++) {
+    if (html[i] === '{') depth++;
+    else if (html[i] === '}') { depth--; if (depth === 0) { end = i + 1; break; } }
+  }
+  if (end === -1) return [];
+  let data;
+  try { data = JSON.parse(html.slice(jsonStart, end)); } catch { return []; }
+
+  const items = [];
+  const sections = [
+    ...(data.traffic_info && data.traffic_info.content ? data.traffic_info.content : []),
+    ...[].concat(
+      data.traffic_roadblock && data.traffic_roadblock.past && data.traffic_roadblock.past.content || [],
+      data.traffic_roadblock && data.traffic_roadblock.today && data.traffic_roadblock.today.content || [],
+      data.traffic_roadblock && data.traffic_roadblock.future && data.traffic_roadblock.future.content || []
+    )
+  ];
+
+  for (const item of sections) {
+    if (!item || !item.item_id) continue;
+    const title = item.title || '';
+    const preview = (item.preview_content || '').replace(/^【馬路的事交通消息】\s*/, '').trim();
+    const col = item.article_column || {};
+
+    // Parse title: "Category︰Location(HH:MMStatus)" or "Category：Location(HH:MMStatus)"
+    let category = col.name || '';
+    let location = '';
+    let status = '';
+    const tm = title.match(/[:︰：]\s*(.+?)\s*[\(（]([^)）]+)[\)）]\s*$/);
+    if (tm) {
+      location = tm[1].trim();
+      const raw = tm[2].trim();
+      if (/最新/.test(raw)) status = '最新情況';
+      else if (/清理/.test(raw)) status = '已清理';
+      else if (/預告/.test(raw)) status = '預告';
+      else status = raw;
+    } else {
+      location = title;
+    }
+
+    const postedAt = item.display_ts
+      ? new Date(item.display_ts * 1000).toISOString()
+      : '';
+
+    items.push({
+      id: '881903-' + item.item_id,
+      postedAt,
+      category,
+      status,
+      location,
+      detail: preview,
+      source: '881903',
+      lat: null,
+      lng: null
+    });
+  }
+  return items;
+}
+
+module.exports = { parseRoutejamNews, parse881903TrafficNews, toHKISO, extractCoords, NEWS_URL, TRAFFIC_881903_URL };
