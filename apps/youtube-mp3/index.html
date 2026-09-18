@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#e53935" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="YT MP3" />
+  <meta name="description" content="Convert and download best-quality MP3 from YouTube videos or playlists" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="icons/icon.svg" />
+  <title>YouTube MP3</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header>
+    <div class="header-content">
+      <svg class="logo" viewBox="0 0 36 36" width="36" height="36" aria-hidden="true">
+        <rect x="2" y="2" width="32" height="32" rx="8" fill="#e53935" />
+        <path d="M18 8a8 8 0 100 16 8 8 0 000-16zm-2.5 5.5l6 2.5-6 2.5v-5z" fill="#fff"/>
+        <path d="M9 26h18v2.5H9z" fill="#fff" opacity=".7"/>
+      </svg>
+      <h1>YouTube MP3<span class="app-ver">v1.0 build 202609181600</span></h1>
+    </div>
+  </header>
+
+  <main>
+    <div id="statusBar" class="status-bar">
+      <span id="lastUpdate">Paste a YouTube link to begin</span>
+    </div>
+
+    <div class="input-card">
+      <input id="urlInput" type="url" placeholder="https://www.youtube.com/watch?v=... or playlist URL" autocomplete="off" />
+      <button id="convertBtn" class="convert-btn" type="button">Convert</button>
+    </div>
+
+    <div class="tabs" id="sourceTabs">
+      <button class="tab active" data-tab="url">YouTube URL</button>
+      <button class="tab" data-tab="music">Music Trend Playlists</button>
+    </div>
+
+    <div id="musicPanel" class="music-panel hidden">
+      <div class="country-tabs" id="countryTabs"></div>
+      <div class="list-tabs" id="listTabs">
+        <button class="ltab active" data-list="trending">Trending</button>
+        <button class="ltab" data-list="cantonese">Cantonese</button>
+        <button class="ltab" data-list="chinese">Mandarin</button>
+        <button class="ltab" data-list="my">My Playlist</button>
+      </div>
+      <div id="musicList" class="music-list"></div>
+    </div>
+
+    <div id="resultList" class="result-list"></div>
+
+    <a class="src-link" href="/" target="_self">&#8592; Back to Life Tool</a>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

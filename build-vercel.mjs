@@ -32,4 +32,9 @@ for (const f of ['index.html', 'app.js', 'styles.css', 'manifest.json', 'sw.js',
   copyEntry(`apps/music-trend/${f}`, 'music-trend', f);
 }
 
+// YouTube MP3 static assets only (its API is served by the Express function)
+for (const f of ['index.html', 'app.js', 'styles.css', 'manifest.json', 'sw.js', 'icons']) {
+  copyEntry(`apps/youtube-mp3/${f}`, 'youtube-mp3', f);
+}
+
 console.log('vercel-out assembled');

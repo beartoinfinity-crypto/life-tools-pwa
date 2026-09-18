@@ -36,6 +36,13 @@
       desc: 'HK top 100 Apple Music charts — trending, Cantonese and Mandarin playlists.',
       href: '/music-trend/',
       icon: '樂'
+    },
+    {
+      id: 'youtube-mp3',
+      title: 'YouTube MP3',
+      desc: 'Convert and download best-quality MP3 from YouTube videos or playlists.',
+      href: '/youtube-mp3/',
+      icon: 'MP3'
     }
   ];
 

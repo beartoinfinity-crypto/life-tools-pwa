@@ -13,6 +13,7 @@ app.listen(PORT, async () => {
   console.log('  HK Bus Lite:  /bus-eta-lite/');
   console.log('  Traffic News: /traffic-news/api/news');
   console.log('  Music Trend:  /music-trend/api/playlists');
+  console.log('  YouTube MP3:  /youtube-mp3/');
   await ensureInitialData();
 
   // Traffic news: scrape now, then refresh every minute
