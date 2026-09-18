@@ -149,13 +149,8 @@ app.get('/api/download', async (req, res) => {
       child.stderr.on('data', (c) => { err += c; });
       child.on('error', reject);
       child.on('exit', (code) => {
-        if (code !== 0) return reject(new Error('yt-dlp exited ' + code + ': ' + err.slice(-500)));
-        try {
-          const parsed = JSON.parse(out);
-          // Attach stderr for debugging when no audio formats found
-          parsed._stderr = err.slice(-200);
-          resolve(parsed);
-        } catch { reject(new Error('yt-dlp bad output: ' + out.slice(0, 200))); }
+        if (code !== 0) return reject(new Error('yt-dlp exited ' + code + ': ' + err.slice(-300)));
+        try { resolve(JSON.parse(out)); } catch { reject(new Error('yt-dlp bad output')); }
       });
     });
 
@@ -180,14 +175,7 @@ app.get('/api/download', async (req, res) => {
         if (aAudioOnly !== bAudioOnly) return bAudioOnly - aAudioOnly;
         return (b.abr || b.audioBitrate || 0) - (a.abr || a.audioBitrate || 0);
       });
-    if (!audio.length) return res.status(500).json({
-      error: 'no audio formats',
-      debug: {
-        formats: allFormats.length,
-        sample: allFormats.slice(0, 5).map(f => ({ itag: f.format_id, acodec: f.acodec, vcodec: f.vcodec, abr: f.abr, url: !!f.url })),
-        stderr: info._stderr || ''
-      }
-    });
+    if (!audio.length) return res.status(500).json({ error: 'no audio formats found' });
     const best = audio[0];
 
     // Step 2: transcode to 320kbps MP3 via ffmpeg, stream to client
