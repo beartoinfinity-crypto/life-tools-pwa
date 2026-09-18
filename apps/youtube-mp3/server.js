@@ -139,9 +139,8 @@ app.get('/api/download', async (req, res) => {
       let out = '';
       let err = '';
       const child = spawn(ytdlpPath, [
-        '--dump-single-json', '--no-warnings', '--no-call-home',
+        '--dump-single-json', '--no-warnings',
         '--no-check-certificate', '--prefer-free-formats',
-        '--youtube-skip-dash-manifest',
         '--extractor-args', 'youtube:player_client=android',
         '--user-agent', 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36',
         `https://www.youtube.com/watch?v=${id}`,
@@ -161,14 +160,21 @@ app.get('/api/download', async (req, res) => {
     });
 
     const allFormats = info.formats || [];
+    // Audio-only: acodec present and not 'none'; vcodec 'none' or absent.
+    // Some formats report acodec as the actual codec string (e.g. 'opus'),
+    // others as 'none' — be lenient: accept anything with acodec !== 'none'.
     const audio = allFormats
-      .filter((f) => f.acodec && f.acodec !== 'none' && (!f.vcodec || f.vcodec === 'none'))
-      .sort((a, b) => (b.abr || 0) - (a.abr || 0));
+      .filter((f) => {
+        const ac = String(f.acodec || '');
+        const vc = String(f.vcodec || '');
+        return ac && ac !== 'none' && (!vc || vc === 'none');
+      })
+      .sort((a, b) => (b.abr || b.audioBitrate || 0) - (a.abr || a.audioBitrate || 0));
     if (!audio.length) return res.status(500).json({
       error: 'no audio formats',
       debug: {
         formats: allFormats.length,
-        sample: allFormats.slice(0, 3).map(f => ({ itag: f.format_id, acodec: f.acodec, vcodec: f.vcodec, abr: f.abr })),
+        sample: allFormats.slice(0, 5).map(f => ({ itag: f.format_id, acodec: f.acodec, vcodec: f.vcodec, abr: f.abr, url: !!f.url })),
         stderr: info._stderr || ''
       }
     });
