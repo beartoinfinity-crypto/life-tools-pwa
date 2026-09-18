@@ -84,7 +84,7 @@
     checkYtdlp().then(function (ok) {
       resultList.innerHTML = videos.map(function (v) {
         var dl = ok
-          ? '<a class="dl-btn" href="' + API_BASE + '/download?id=' + encodeURIComponent(v.id) + '&title=' + encodeURIComponent(v.title) + '" download="' + esc(safeFilename(v.title)) + '.mp3">' +
+          ? '<a class="dl-btn" href="' + API_BASE + '/download?id=' + encodeURIComponent(v.id) + '&title=' + encodeURIComponent(v.title) + '" target="_blank" rel="noopener">' +
               '<span class="dl-label">MP3</span></a>'
           : '<span class="dl-btn err" title="Server has no yt-dlp/ffmpeg — MP3 conversion unavailable">N/A</span>';
         return '<div class="result-item" data-id="' + esc(v.id) + '">' +
@@ -97,7 +97,7 @@
         '</div>';
       }).join('');
       if (!ok) {
-        status('MP3 conversion unavailable — server needs yt-dlp + ffmpeg (Render only, not Vercel)');
+        status('MP3 conversion unavailable — server needs yt-dlp + ffmpeg');
       }
     });
   }
