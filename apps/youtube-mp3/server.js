@@ -8,77 +8,45 @@ app.use(express.json());
 // Static PWA (mounted at /youtube-mp3/ by the hub)
 app.use(express.static(require('path').join(__dirname)));
 
-/** Whether yt-dlp is available, and which command to use (checked once, lazily). */
-let ytdlpInfo = null;
-function detectYtDlp() {
-  if (ytdlpInfo !== null) return Promise.resolve(ytdlpInfo);
-  // Try in order: "yt-dlp" on PATH, "python3 -m yt_dlp" (pip user install)
-  const tries = [
-    { cmd: 'yt-dlp', args: ['--version'] },
-    { cmd: 'python3', args: ['-m', 'yt_dlp', '--version'] },
-    { cmd: 'python', args: ['-m', 'yt_dlp', '--version'] },
-  ];
-  return new Promise((resolve) => {
-    let i = 0;
-    function next() {
-      if (i >= tries.length) { ytdlpInfo = null; return resolve(null); }
-      const t = tries[i++];
-      const child = spawn(t.cmd, t.args, { stdio: 'ignore' });
-      child.on('error', () => next());
-      child.on('exit', (code) => {
-        if (code === 0) { ytdlpInfo = t; return resolve(t); }
-        next();
-      });
-    }
-    next();
-  });
-}
-
-/** Locate ffmpeg: on PATH, or bundled inside Python's imageio_ffmpeg. */
-let ffmpegPath = undefined;
-function detectFfmpeg() {
-  if (ffmpegPath !== undefined) return Promise.resolve(ffmpegPath);
-  return new Promise((resolve) => {
-    const child = spawn('ffmpeg', ['-version'], { stdio: 'ignore' });
-    child.on('error', () => {
-      // Not on PATH — try Python's imageio_ffmpeg bundled binary
-      const py = spawn('python3', ['-c', 'import imageio_ffmpeg; print(imageio_ffmpeg.get_ffmpeg_exe())'], { stdio: ['ignore', 'pipe', 'ignore'] });
-      let out = '';
-      py.stdout.on('data', (d) => { out += d; });
-      py.on('exit', () => {
-        const p = out.trim();
-        ffmpegPath = p || null;
-        resolve(ffmpegPath);
-      });
-      py.on('error', () => { ffmpegPath = null; resolve(null); });
-    });
-    child.on('exit', (code) => {
-      ffmpegPath = code === 0 ? null : null; // null = already on PATH, no --ffmpeg-location needed
-      resolve(ffmpegPath);
-    });
-  });
-}
-
-/** Find the best audio stream URL from the player response (fallback path). */
-async function bestAudioUrl(videoId) {
-  const { status, body } = await get(`https://www.youtube.com/watch?v=${videoId}`);
-  if (status !== 200) throw new Error(`YouTube returned ${status}`);
-  const marker = 'var ytInitialPlayerResponse = ';
-  const start = body.indexOf(marker);
-  if (start === -1) throw new Error('no player response');
-  let depth = 0, end = -1;
-  for (let i = start + marker.length; i < body.length; i++) {
-    if (body[i] === '{') depth++;
-    else if (body[i] === '}') { depth--; if (depth === 0) { end = i + 1; break; } }
+// yt-dlp binary bundled in the youtube-dl-exec npm package (works on Vercel)
+let youtubedl = null;
+function getYoutubedl() {
+  if (youtubedl === null) {
+    try { youtubedl = require('youtube-dl-exec'); } catch { youtubedl = false; }
   }
-  if (end === -1) throw new Error('malformed player response');
-  const player = JSON.parse(body.slice(start + marker.length, end));
-  const formats = (player.streamingData && (player.streamingData.adaptiveFormats || player.streamingData.formats)) || [];
-  const audio = formats
-    .filter((f) => f.mimeType && /audio\//.test(f.mimeType))
-    .sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0));
-  if (!audio.length) throw new Error('no audio formats');
-  return audio[0].url;
+  return youtubedl || null;
+}
+
+// ffmpeg binary bundled in the ffmpeg-static npm package (works on Vercel)
+let ffmpegPath = null;
+function getFfmpeg() {
+  if (ffmpegPath === null) {
+    try { ffmpegPath = require('ffmpeg-static'); } catch { ffmpegPath = false; }
+  }
+  return ffmpegPath || null;
+}
+
+const YTDL_OPTS = {
+  dumpSingleJson: true,
+  noWarnings: true,
+  noCallHome: true,
+  noCheckCertificate: true,
+  preferFreeFormats: true,
+  youtubeSkipDashManifest: true,
+  referer: 'https://youtube.com',
+  addHeader: ['referer:youtube.com', 'user-agent:Mozilla/5.0'],
+};
+
+/** Resolve the best audio-only format URL for a video. */
+async function bestAudio(videoId) {
+  const ydl = getYoutubedl();
+  if (!ydl) throw new Error('yt-dlp not available');
+  const info = await ydl(`https://www.youtube.com/watch?v=${videoId}`, YTDL_OPTS);
+  const audio = (info.formats || [])
+    .filter((f) => f.acodec && f.acodec !== 'none' && (!f.vcodec || f.vcodec === 'none'))
+    .sort((a, b) => (b.abr || 0) - (a.abr || 0));
+  if (!audio.length) throw new Error('no audio formats found');
+  return audio[0];
 }
 
 // Resolve a YouTube URL / playlist URL into video metadata.
@@ -94,64 +62,58 @@ app.post('/api/resolve', async (req, res) => {
   }
 });
 
+// Status: reports whether MP3 conversion is available
+app.get('/api/status', async (req, res) => {
+  try {
+    const ydl = getYoutubedl();
+    const ff = getFfmpeg();
+    res.json({ ytdlp: !!ydl, ffmpeg: !!ff });
+  } catch {
+    res.json({ ytdlp: false, ffmpeg: false });
+  }
+});
+
 // Download a single video as best-quality MP3.
+// Uses youtube-dl-exec (bundled yt-dlp) to resolve the audio URL,
+// then ffmpeg-static to transcode to 320kbps MP3, streamed to client.
 app.get('/api/download', async (req, res) => {
   try {
     const id = String(req.query.id || '');
     const title = String(req.query.title || 'audio');
     if (!/^[A-Za-z0-9_-]{11}$/.test(id)) return res.status(400).json({ error: 'invalid video id' });
 
+    const ydl = getYoutubedl();
+    const ffPath = getFfmpeg();
+    if (!ydl || !ffPath) return res.status(503).json({ error: 'MP3 conversion unavailable (yt-dlp or ffmpeg missing)' });
+
     const safeTitle = title.replace(/[^\w\u4e00-\u9fff\u3040-\u30ff()-]+/g, '_').slice(0, 80);
     const filename = encodeURIComponent(safeTitle + '.mp3');
 
-    const yt = await detectYtDlp();
+    const fmt = await bestAudio(id);
 
-    if (yt) {
-      // Stream true MP3 (best quality) via yt-dlp + ffmpeg.
-      const args = yt.args.slice(0, -1).concat([ // drop '--version'
-        '-f', 'bestaudio/best',
-        '--extract-audio',
-        '--audio-format', 'mp3',
-        '--audio-quality', '0',
-        '--no-warnings',
-        '--no-playlist',
-      ]);
-      // If ffmpeg isn't on PATH but imageio_ffmpeg has one, point yt-dlp at it
-      const ff = await detectFfmpeg();
-      if (ff) args.push('--ffmpeg-location', ff);
-      args.push('-o', '-', `https://www.youtube.com/watch?v=${id}`);
-      res.setHeader('Content-Type', 'audio/mpeg');
-      res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${filename}`);
-      const child = spawn(yt.cmd, args);
-      child.stdout.pipe(res);
-      child.stderr.on('data', () => {});
-      child.on('error', () => {
-        if (!res.headersSent) res.status(500).json({ error: 'yt-dlp failed to start' });
-      });
-      child.on('exit', (code) => {
-        if (code !== 0 && !res.headersSent) {
-          res.status(500).json({ error: 'yt-dlp exited with code ' + code });
-        }
-      });
-      req.on('close', () => { child.kill(); });
-    } else {
-      // Fallback: redirect to the best audio stream YouTube serves directly
-      // (WebM/Opus or MP4/AAC — not MP3, but highest available audio quality).
-      const audioUrl = await bestAudioUrl(id);
-      res.redirect(302, audioUrl);
-    }
+    res.setHeader('Content-Type', 'audio/mpeg');
+    res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${filename}`);
+
+    const ff = spawn(ffPath, [
+      '-i', fmt.url,
+      '-f', 'mp3',
+      '-ab', '320k',
+      '-map', 'a',
+      '-movflags', 'frag_keyframe+empty_moov',
+      'pipe:1',
+    ]);
+
+    ff.stdout.pipe(res);
+    ff.stderr.on('data', () => {});
+    ff.on('error', () => {
+      if (!res.headersSent) res.status(500).json({ error: 'ffmpeg failed to start' });
+    });
+    ff.on('exit', (code) => {
+      if (code !== 0 && !res.headersSent) res.status(500).json({ error: 'ffmpeg exited with code ' + code });
+    });
+    req.on('close', () => { try { ff.kill(); } catch {} });
   } catch (e) {
     if (!res.headersSent) res.status(500).json({ error: e.message });
-  }
-});
-
-// Status: tells the client whether real MP3 conversion is available
-app.get('/api/status', async (req, res) => {
-  try {
-    const yt = await detectYtDlp();
-    res.json({ ytdlp: !!yt, cmd: yt ? yt.cmd : null });
-  } catch {
-    res.json({ ytdlp: false });
   }
 });
 
@@ -160,4 +122,4 @@ app.get('*', (req, res) => {
   res.sendFile(require('path').join(__dirname, 'index.html'));
 });
 
-module.exports = { app, detectYtDlp };
+module.exports = { app };

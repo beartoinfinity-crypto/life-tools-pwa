@@ -1,4 +1,4 @@
-var CACHE_NAME = 'youtube-mp3-v2';
+var CACHE_NAME = 'youtube-mp3-v3';
 var ASSETS = [
   './',
   './index.html',

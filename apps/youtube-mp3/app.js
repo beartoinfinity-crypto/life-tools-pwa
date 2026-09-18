@@ -36,7 +36,7 @@
     if (ytdlpReady !== null) return Promise.resolve(ytdlpReady);
     return fetch(API_BASE + '/status', { cache: 'no-store' })
       .then(function (r) { return r.json(); })
-      .then(function (s) { ytdlpReady = !!s.ytdlp; return ytdlpReady; })
+      .then(function (s) { ytdlpReady = !!(s.ytdlp && s.ffmpeg); return ytdlpReady; })
       .catch(function () { ytdlpReady = false; return false; });
   }
 
