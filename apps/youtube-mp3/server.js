@@ -142,10 +142,8 @@ app.get('/api/download', async (req, res) => {
         '--dump-single-json', '--no-warnings', '--no-call-home',
         '--no-check-certificate', '--prefer-free-formats',
         '--youtube-skip-dash-manifest',
-        '--extractor-args', 'youtube:player_client=android,web',
-        '--referer', 'https://youtube.com',
-        '--add-header', 'referer:youtube.com',
-        '--add-header', 'user-agent:Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36',
+        '--extractor-args', 'youtube:player_client=android',
+        '--user-agent', 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36',
         `https://www.youtube.com/watch?v=${id}`,
       ]);
       child.stdout.on('data', (c) => { out += c; });
