@@ -72,7 +72,15 @@ async function ensureYtdlp() {
         fs.unlinkSync(YTDLP_PATH);
         throw new Error('downloaded file is not a binary');
       }
-      console.log('yt-dlp standalone ready');
+      // Log version so we can confirm which binary is running on Vercel
+      const version = await new Promise((r) => {
+        const c = spawn(YTDLP_PATH, ['--version']);
+        let v = '';
+        c.stdout.on('data', (d) => { v += d; });
+        c.on('exit', () => r(v.trim()));
+        c.on('error', () => r('unknown'));
+      });
+      console.log('yt-dlp standalone ready, version:', version);
       return YTDLP_PATH;
     } catch (e) {
       ytdlpPromise = null; // allow retry
