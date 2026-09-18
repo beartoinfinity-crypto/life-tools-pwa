@@ -1,55 +1,103 @@
 const express = require('express');
 const { spawn } = require('child_process');
-const { resolveUrl, get } = require('./youtube');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const https = require('https');
+const { resolveUrl } = require('./youtube');
 
 const app = express();
 app.use(express.json());
 
 // Static PWA (mounted at /youtube-mp3/ by the hub)
-app.use(express.static(require('path').join(__dirname)));
+app.use(express.static(path.join(__dirname)));
 
-// yt-dlp binary bundled in the youtube-dl-exec npm package (works on Vercel)
-let youtubedl = null;
-function getYoutubedl() {
-  if (youtubedl === null) {
-    try { youtubedl = require('youtube-dl-exec'); } catch { youtubedl = false; }
-  }
-  return youtubedl || null;
-}
+// --- runtime yt-dlp standalone binary management ---
+// Vercel serverless has no python3, so the yt-dlp Python script that
+// youtube-dl-exec downloads won't run. Instead we download the standalone
+// single-file binary into the OS temp dir at first use and cache it.
+// On Linux we get yt-dlp_linux (ELF, no interpreter needed);
+// on Windows we get yt-dlp.exe for local dev.
+const YTDLP_DIR = path.join(os.tmpdir(), 'ytdlp-bin');
+const IS_WIN = process.platform === 'win32';
+const YTDLP_FILE = IS_WIN ? 'yt-dlp.exe' : 'yt-dlp';
+const YTDLP_PATH = path.join(YTDLP_DIR, YTDLP_FILE);
+const YTDLP_URL = IS_WIN
+  ? 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe'
+  : 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux';
 
-// ffmpeg binary bundled in the ffmpeg-static npm package (works on Vercel)
-let ffmpegPath = null;
+let ffmpegCached = null;
 function getFfmpeg() {
-  if (ffmpegPath === null) {
-    try { ffmpegPath = require('ffmpeg-static'); } catch { ffmpegPath = false; }
+  if (ffmpegCached === null) {
+    try { ffmpegCached = require('ffmpeg-static'); } catch { ffmpegCached = false; }
   }
-  return ffmpegPath || null;
+  return ffmpegCached || null;
 }
 
-const YTDL_OPTS = {
-  dumpSingleJson: true,
-  noWarnings: true,
-  noCallHome: true,
-  noCheckCertificate: true,
-  preferFreeFormats: true,
-  youtubeSkipDashManifest: true,
-  referer: 'https://youtube.com',
-  addHeader: ['referer:youtube.com', 'user-agent:Mozilla/5.0'],
-};
-
-/** Resolve the best audio-only format URL for a video. */
-async function bestAudio(videoId) {
-  const ydl = getYoutubedl();
-  if (!ydl) throw new Error('yt-dlp not available');
-  const info = await ydl(`https://www.youtube.com/watch?v=${videoId}`, YTDL_OPTS);
-  const audio = (info.formats || [])
-    .filter((f) => f.acodec && f.acodec !== 'none' && (!f.vcodec || f.vcodec === 'none'))
-    .sort((a, b) => (b.abr || 0) - (a.abr || 0));
-  if (!audio.length) throw new Error('no audio formats found');
-  return audio[0];
+function download(url, dest, redirects = 5) {
+  return new Promise((resolve, reject) => {
+    const req = https.get(url, { headers: { 'User-Agent': 'Mozilla/5.0' } }, (res) => {
+      if ([301, 302, 307, 308].includes(res.statusCode) && res.headers.location && redirects > 0) {
+        res.resume();
+        return resolve(download(res.headers.location, dest, redirects - 1));
+      }
+      if (res.statusCode !== 200) return reject(new Error(`HTTP ${res.statusCode}`));
+      const file = fs.createWriteStream(dest);
+      res.pipe(file);
+      file.on('finish', () => { file.close(); resolve(dest); });
+      file.on('error', reject);
+    });
+    req.on('error', reject);
+    req.setTimeout(60000, () => { req.destroy(); reject(new Error('download timeout')); });
+  });
 }
 
-// Resolve a YouTube URL / playlist URL into video metadata.
+let ytdlpPromise = null;
+async function ensureYtdlp() {
+  // Already downloaded and executable
+  if (fs.existsSync(YTDLP_PATH)) return YTDLP_PATH;
+  if (ytdlpPromise) return ytdlpPromise;
+
+  ytdlpPromise = (async () => {
+    try {
+      if (!fs.existsSync(YTDLP_DIR)) fs.mkdirSync(YTDLP_DIR, { recursive: true });
+      console.log('downloading standalone yt-dlp to', YTDLP_PATH);
+      await download(YTDLP_URL, YTDLP_PATH);
+      fs.chmodSync(YTDLP_PATH, 0o755);
+      // Verify it's a real binary (ELF on Linux, MZ/PE on Windows)
+      const buf = fs.readFileSync(YTDLP_PATH);
+      const magic = buf.slice(0, 4).toString('hex');
+      const isValid = magic === '7f454c46' || buf.slice(0, 2).toString() === 'MZ';
+      if (!isValid) {
+        fs.unlinkSync(YTDLP_PATH);
+        throw new Error('downloaded file is not a binary');
+      }
+      console.log('yt-dlp standalone ready');
+      return YTDLP_PATH;
+    } catch (e) {
+      ytdlpPromise = null; // allow retry
+      throw e;
+    }
+  })();
+  return ytdlpPromise;
+}
+
+// --- status ---
+app.get('/api/status', async (req, res) => {
+  try {
+    const ff = getFfmpeg();
+    let ytdlpOk = false;
+    try {
+      const ytdlpPath = await ensureYtdlp();
+      ytdlpOk = !!ytdlpPath;
+    } catch {}
+    res.json({ ytdlp: ytdlpOk, ffmpeg: !!ff });
+  } catch {
+    res.json({ ytdlp: false, ffmpeg: false });
+  }
+});
+
+// --- resolve ---
 app.post('/api/resolve', async (req, res) => {
   try {
     const { url } = req.body || {};
@@ -62,54 +110,68 @@ app.post('/api/resolve', async (req, res) => {
   }
 });
 
-// Status: reports whether MP3 conversion is available
-app.get('/api/status', async (req, res) => {
-  try {
-    const ydl = getYoutubedl();
-    const ff = getFfmpeg();
-    res.json({ ytdlp: !!ydl, ffmpeg: !!ff });
-  } catch {
-    res.json({ ytdlp: false, ffmpeg: false });
-  }
-});
-
-// Download a single video as best-quality MP3.
-// Uses youtube-dl-exec (bundled yt-dlp) to resolve the audio URL,
-// then ffmpeg-static to transcode to 320kbps MP3, streamed to client.
+// --- download MP3 ---
 app.get('/api/download', async (req, res) => {
   try {
     const id = String(req.query.id || '');
     const title = String(req.query.title || 'audio');
     if (!/^[A-Za-z0-9_-]{11}$/.test(id)) return res.status(400).json({ error: 'invalid video id' });
 
-    const ydl = getYoutubedl();
     const ffPath = getFfmpeg();
-    if (!ydl || !ffPath) return res.status(503).json({ error: 'MP3 conversion unavailable (yt-dlp or ffmpeg missing)' });
+    if (!ffPath) return res.status(503).json({ error: 'ffmpeg not available' });
+
+    const ytdlpPath = await ensureYtdlp();
+    if (!ytdlpPath) return res.status(503).json({ error: 'yt-dlp not available' });
 
     const safeTitle = title.replace(/[^\w\u4e00-\u9fff\u3040-\u30ff()-]+/g, '_').slice(0, 80);
     const filename = encodeURIComponent(safeTitle + '.mp3');
 
-    const fmt = await bestAudio(id);
+    // Step 1: use yt-dlp to get the best audio format URL
+    const info = await new Promise((resolve, reject) => {
+      let out = '';
+      const child = spawn(ytdlpPath, [
+        '--dump-single-json', '--no-warnings', '--no-call-home',
+        '--no-check-certificate', '--prefer-free-formats',
+        '--youtube-skip-dash-manifest',
+        '--referer', 'https://youtube.com',
+        '--add-header', 'referer:youtube.com',
+        '--add-header', 'user-agent:Mozilla/5.0',
+        `https://www.youtube.com/watch?v=${id}`,
+      ]);
+      child.stdout.on('data', (c) => { out += c; });
+      child.stderr.on('data', () => {});
+      child.on('error', reject);
+      child.on('exit', (code) => {
+        if (code !== 0) return reject(new Error('yt-dlp exited ' + code));
+        try { resolve(JSON.parse(out)); } catch { reject(new Error('yt-dlp bad output')); }
+      });
+    });
 
+    const audio = (info.formats || [])
+      .filter((f) => f.acodec && f.acodec !== 'none' && (!f.vcodec || f.vcodec === 'none'))
+      .sort((a, b) => (b.abr || 0) - (a.abr || 0));
+    if (!audio.length) return res.status(500).json({ error: 'no audio formats' });
+    const best = audio[0];
+
+    // Step 2: transcode to 320kbps MP3 via ffmpeg, stream to client
     res.setHeader('Content-Type', 'audio/mpeg');
     res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${filename}`);
 
     const ff = spawn(ffPath, [
-      '-i', fmt.url,
+      '-i', best.url,
       '-f', 'mp3',
       '-ab', '320k',
       '-map', 'a',
       '-movflags', 'frag_keyframe+empty_moov',
       'pipe:1',
     ]);
-
     ff.stdout.pipe(res);
     ff.stderr.on('data', () => {});
     ff.on('error', () => {
-      if (!res.headersSent) res.status(500).json({ error: 'ffmpeg failed to start' });
+      if (!res.headersSent) res.status(500).json({ error: 'ffmpeg failed' });
     });
     ff.on('exit', (code) => {
-      if (code !== 0 && !res.headersSent) res.status(500).json({ error: 'ffmpeg exited with code ' + code });
+      if (code !== 0 && !res.headersSent) res.status(500).json({ error: 'ffmpeg exit ' + code });
     });
     req.on('close', () => { try { ff.kill(); } catch {} });
   } catch (e) {
@@ -119,7 +181,7 @@ app.get('/api/download', async (req, res) => {
 
 // SPA fallback
 app.get('*', (req, res) => {
-  res.sendFile(require('path').join(__dirname, 'index.html'));
+  res.sendFile(path.join(__dirname, 'index.html'));
 });
 
 module.exports = { app };
