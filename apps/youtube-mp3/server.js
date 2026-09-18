@@ -160,10 +160,18 @@ app.get('/api/download', async (req, res) => {
       });
     });
 
-    const audio = (info.formats || [])
+    const allFormats = info.formats || [];
+    const audio = allFormats
       .filter((f) => f.acodec && f.acodec !== 'none' && (!f.vcodec || f.vcodec === 'none'))
       .sort((a, b) => (b.abr || 0) - (a.abr || 0));
-    if (!audio.length) return res.status(500).json({ error: 'no audio formats', debug: { formats: (info.formats || []).length, stderr: info._stderr || '' } });
+    if (!audio.length) return res.status(500).json({
+      error: 'no audio formats',
+      debug: {
+        formats: allFormats.length,
+        sample: allFormats.slice(0, 3).map(f => ({ itag: f.format_id, acodec: f.acodec, vcodec: f.vcodec, abr: f.abr })),
+        stderr: info._stderr || ''
+      }
+    });
     const best = audio[0];
 
     // Step 2: transcode to 320kbps MP3 via ffmpeg, stream to client
