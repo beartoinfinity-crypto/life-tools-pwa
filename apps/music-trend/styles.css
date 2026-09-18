@@ -218,6 +218,35 @@ main {
 
 .my-pick:active { background: rgba(123, 31, 162, 0.08); }
 
+.my-pick-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.my-pick-row .my-pick { flex: 1; }
+
+.my-pick-edit,
+.my-pick-del {
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-secondary);
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.my-pick-edit:active { background: rgba(123, 31, 162, 0.15); }
+.my-pick-del { color: #c62828; }
+.my-pick-del:active { background: rgba(198, 40, 40, 0.1); }
+
 /* Song list */
 .song-list {
   display: flex;

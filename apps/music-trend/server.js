@@ -257,6 +257,108 @@ app.get('/api/myplaylists/:name', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Rename a playlist (name is PK, so create new + delete old)
+app.patch('/api/myplaylists/:name', async (req, res) => {
+  try {
+    const oldName = decodeURIComponent(req.params.name);
+    const newName = String((req.body || {}).newName || '').trim().slice(0, 100);
+    if (!newName) throw new Error('newName required');
+
+    const { data: existing, error: fetchErr } = await supabase
+      .from('music_user_playlists')
+      .select('name, songs')
+      .eq('name', oldName)
+      .maybeSingle();
+    if (fetchErr) throw fetchErr;
+    if (!existing) return res.status(404).json({ error: 'not found' });
+
+    // If new name differs and already exists, block overwrite
+    if (newName !== oldName) {
+      const { data: dup } = await supabase
+        .from('music_user_playlists')
+        .select('name')
+        .eq('name', newName)
+        .maybeSingle();
+      if (dup) throw new Error('A playlist named "' + newName + '" already exists');
+    }
+
+    const now = new Date().toISOString();
+    const { error: insErr } = await supabase
+      .from('music_user_playlists')
+      .upsert({ name: newName, songs: existing.songs, updated_at: now }, { onConflict: 'name' });
+    if (insErr) throw insErr;
+
+    if (newName !== oldName) {
+      await supabase.from('music_user_playlists').delete().eq('name', oldName);
+    }
+    res.json({ ok: true, name: newName });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Delete a playlist
+app.delete('/api/myplaylists/:name', async (req, res) => {
+  try {
+    const name = decodeURIComponent(req.params.name);
+    const { error } = await supabase.from('music_user_playlists').delete().eq('name', name);
+    if (error) throw error;
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Add a song to a playlist
+app.post('/api/myplaylists/:name/songs', async (req, res) => {
+  try {
+    const name = decodeURIComponent(req.params.name);
+    const song = (req.body || {}).song;
+    if (!song || !song.id) throw new Error('song with id required');
+
+    const { data: existing, error: fetchErr } = await supabase
+      .from('music_user_playlists')
+      .select('name, songs')
+      .eq('name', name)
+      .maybeSingle();
+    if (fetchErr) throw fetchErr;
+    if (!existing) return res.status(404).json({ error: 'not found' });
+
+    const songs = JSON.parse(existing.songs || '[]');
+    if (songs.some(function (s) { return String(s.id) === String(song.id); })) {
+      return res.json({ ok: true, name: name, count: songs.length, duplicate: true });
+    }
+    songs.push(song);
+    const { error: updErr } = await supabase
+      .from('music_user_playlists')
+      .update({ songs: JSON.stringify(songs), updated_at: new Date().toISOString() })
+      .eq('name', name);
+    if (updErr) throw updErr;
+    res.json({ ok: true, name: name, count: songs.length });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Remove a song from a playlist
+app.delete('/api/myplaylists/:name/songs/:songId', async (req, res) => {
+  try {
+    const name = decodeURIComponent(req.params.name);
+    const songId = decodeURIComponent(req.params.songId);
+
+    const { data: existing, error: fetchErr } = await supabase
+      .from('music_user_playlists')
+      .select('name, songs')
+      .eq('name', name)
+      .maybeSingle();
+    if (fetchErr) throw fetchErr;
+    if (!existing) return res.status(404).json({ error: 'not found' });
+
+    const songs = JSON.parse(existing.songs || '[]');
+    const filtered = songs.filter(function (s) { return String(s.id) !== String(songId); });
+    const { error: updErr } = await supabase
+      .from('music_user_playlists')
+      .update({ songs: JSON.stringify(filtered), updated_at: new Date().toISOString() })
+      .eq('name', name);
+    if (updErr) throw updErr;
+    res.json({ ok: true, name: name, count: filtered.length });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // SPA fallback
 app.get('*', (req, res) => {
   res.sendFile(require('path').join(__dirname, 'index.html'));

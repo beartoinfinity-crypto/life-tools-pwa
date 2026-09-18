@@ -611,14 +611,29 @@
     if (!name) return;
     name = name.trim().slice(0, 100);
     if (!name) { statusFlash('名稱不能是空的'); return; }
-    fetch(API_BASE + '/myplaylists', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: name, songs: songs }),
-      cache: 'no-store'
-    })
-      .then(function (r) { return r.json(); })
+    // Check if a playlist with this name already exists
+    fetch(API_BASE + '/myplaylists/' + encodeURIComponent(name), { cache: 'no-store' })
+      .then(function (r) {
+        if (r.status === 404) return null;
+        return r.json();
+      })
+      .then(function (existing) {
+        if (existing && existing.name) {
+          if (!window.confirm('Overwrite existing playlist「' + name + '」(' + existing.songs.length + ' songs)?')) return null;
+        }
+        return fetch(API_BASE + '/myplaylists', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: name, songs: songs }),
+          cache: 'no-store'
+        });
+      })
+      .then(function (r) {
+        if (!r) return;
+        return r.json();
+      })
       .then(function (payload) {
+        if (!payload) return;
         if (payload && payload.error) throw new Error(payload.error);
         statusFlash('已上傳歌單「' + name + '」(' + songs.length + ' 首)');
       })
@@ -639,8 +654,12 @@
         }
         var html = '<div class="my-picker-title">已上傳歌單（點擊載入）</div>';
         payload.data.forEach(function (p) {
-          html += '<button class="my-pick" data-name="' + esc(p.name) + '">' + esc(p.name) +
-            ' · ' + p.count + ' 首 · ' + fmtAgo(p.updated_at) + '</button>';
+          html += '<div class="my-pick-row">' +
+            '<button class="my-pick" data-name="' + esc(p.name) + '">' + esc(p.name) +
+            ' · ' + p.count + ' 首 · ' + fmtAgo(p.updated_at) + '</button>' +
+            '<button class="my-pick-edit" data-name="' + esc(p.name) + '" title="Rename">&#9998;</button>' +
+            '<button class="my-pick-del" data-name="' + esc(p.name) + '" title="Delete">&#128465;</button>' +
+            '</div>';
         });
         myPicker.innerHTML = html;
       })
@@ -648,6 +667,45 @@
   });
 
   myPicker.addEventListener('click', function (e) {
+    var renameBtn = e.target.closest ? e.target.closest('.my-pick-edit') : null;
+    if (renameBtn) {
+      var oldName = renameBtn.dataset.name;
+      var newName = window.prompt('Rename playlist', oldName);
+      if (!newName || newName.trim() === oldName) return;
+      fetch(API_BASE + '/myplaylists/' + encodeURIComponent(oldName), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ newName: newName.trim() }),
+        cache: 'no-store'
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (payload) {
+          if (payload && payload.error) throw new Error(payload.error);
+          statusFlash('已改名為「' + payload.name + '」');
+          myPickerBtn.click();
+          myPickerBtn.click();
+        })
+        .catch(function (e) { statusFlash('改名失敗: ' + e.message); });
+      return;
+    }
+    var delBtn = e.target.closest ? e.target.closest('.my-pick-del') : null;
+    if (delBtn) {
+      var delName = delBtn.dataset.name;
+      if (!window.confirm('Delete playlist「' + delName + '」?')) return;
+      fetch(API_BASE + '/myplaylists/' + encodeURIComponent(delName), {
+        method: 'DELETE',
+        cache: 'no-store'
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (payload) {
+          if (payload && payload.error) throw new Error(payload.error);
+          statusFlash('已刪除歌單「' + delName + '」');
+          myPickerBtn.click();
+          myPickerBtn.click();
+        })
+        .catch(function (e) { statusFlash('刪除失敗: ' + e.message); });
+      return;
+    }
     var btn = e.target.closest ? e.target.closest('.my-pick') : null;
     if (!btn) return;
     var name = btn.dataset.name;
