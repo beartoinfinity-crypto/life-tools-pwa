@@ -142,7 +142,7 @@ app.get('/api/download', async (req, res) => {
         '--dump-single-json', '--no-warnings',
         '--no-check-certificate', '--prefer-free-formats',
         '--extractor-args', 'youtube:player_client=android',
-        '--user-agent', 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36',
+        '--add-header', 'Cookie:SOCS=CAISFQgDEitub3RpZmljYXRpb24=; CONSENT=YES+cb',
         `https://www.youtube.com/watch?v=${id}`,
       ]);
       child.stdout.on('data', (c) => { out += c; });
