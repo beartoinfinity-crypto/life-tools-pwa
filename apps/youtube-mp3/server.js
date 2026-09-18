@@ -143,9 +143,22 @@ app.get('/api/download', async (req, res) => {
     const safeTitle = title.replace(/[^\w\u4e00-\u9fff\u3040-\u30ff()-]+/g, '_').slice(0, 80);
     const filename = encodeURIComponent(safeTitle + '.mp3');
 
+    // YouTube consent-walls Vercel datacenter IPs for certain videos.
+    // Write a Netscape cookie file so yt-dlp sends the consent cookie as
+    // a real cookie (not an overridden header).
+    const cookieFile = path.join(os.tmpdir(), 'yt-cookies.txt');
+    if (!fs.existsSync(cookieFile)) {
+      fs.writeFileSync(cookieFile, [
+        '# Netscape HTTP Cookie File',
+        '.youtube.com\tTRUE\t/\tTRUE\t0\tSOCS\tCAISFQgDEitub3RpZmljYXRpb24',
+        '.youtube.com\tTRUE\t/\tTRUE\t0\tCONSENT\tYES+cb',
+        '.youtube.com\tTRUE\t/\tFALSE\t0\tGPS\t1',
+        '.youtube.com\tTRUE\t/\tFALSE\t0\tVISITOR_INFO1_LIVE\tKmomx7SmHKs',
+      ].join('\n'));
+    }
+
     // Try multiple player clients in order — Vercel IPs get consent-walled
-    // on some clients for certain videos. android usually works; web_safari
-    // is the fallback.
+    // on some clients for certain videos.
     const clients = [
       'youtube:player_client=android',
       'youtube:player_client=android,web_safari',
@@ -162,7 +175,7 @@ app.get('/api/download', async (req, res) => {
             '--dump-single-json', '--no-warnings',
             '--no-check-certificate', '--prefer-free-formats',
             '--extractor-args', clientArg,
-            '--add-header', 'Cookie:SOCS=CAISFQgDEitub3RpZmljYXRpb24=; CONSENT=YES+cb',
+            '--cookies', cookieFile,
             `https://www.youtube.com/watch?v=${id}`,
           ]);
           child.stdout.on('data', (c) => { out += c; });
