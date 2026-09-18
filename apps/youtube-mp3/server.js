@@ -131,6 +131,15 @@ app.get('/api/download', async (req, res) => {
     const ytdlpPath = await ensureYtdlp();
     if (!ytdlpPath) return res.status(503).json({ error: 'yt-dlp not available' });
 
+    // Log the yt-dlp version for debugging
+    const ytdlpVersion = await new Promise((r) => {
+      const c = spawn(ytdlpPath, ['--version']);
+      let v = '';
+      c.stdout.on('data', (d) => { v += d; });
+      c.on('exit', () => r(v.trim()));
+      c.on('error', () => r('unknown'));
+    });
+
     const safeTitle = title.replace(/[^\w\u4e00-\u9fff\u3040-\u30ff()-]+/g, '_').slice(0, 80);
     const filename = encodeURIComponent(safeTitle + '.mp3');
 
@@ -149,7 +158,7 @@ app.get('/api/download', async (req, res) => {
       child.stderr.on('data', (c) => { err += c; });
       child.on('error', reject);
       child.on('exit', (code) => {
-        if (code !== 0) return reject(new Error('yt-dlp exited ' + code + ': ' + err.slice(-300)));
+        if (code !== 0) return reject(new Error('yt-dlp v' + ytdlpVersion + ' exited ' + code + ': ' + err.slice(-300)));
         try { resolve(JSON.parse(out)); } catch { reject(new Error('yt-dlp bad output')); }
       });
     });
