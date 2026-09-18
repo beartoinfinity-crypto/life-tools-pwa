@@ -93,18 +93,31 @@ function fmtDuration(iso) {
   return h > 0 ? `${h}:${pad(min)}:${pad(s)}` : `${min}:${pad(s)}`;
 }
 
+/** Raw seconds (number or string) -> "h:mm:ss" or "m:ss" */
+function fmtSeconds(sec) {
+  const total = parseInt(sec, 10);
+  if (isNaN(total)) return '';
+  const h = Math.floor(total / 3600);
+  const min = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  const pad = (n) => String(n).padStart(2, '0');
+  return h > 0 ? `${h}:${pad(min)}:${pad(s)}` : `${min}:${pad(s)}`;
+}
+
 /** Fetch a single video's metadata from its watch page. */
 async function resolveVideo(videoId) {
   const { status, body } = await get(`https://www.youtube.com/watch?v=${videoId}`);
   if (status !== 200) throw new Error(`YouTube returned ${status}`);
-  const player = extractJSON(body, '"ytInitialPlayerResponse"');
+  // The watch page embeds: var ytInitialPlayerResponse = {...};
+  const player = extractJSON(body, 'var ytInitialPlayerResponse = ')
+    || extractJSON(body, '"ytInitialPlayerResponse":');
   if (!player) throw new Error('could not parse player response');
 
   const details = (player.videoDetails && player.videoDetails) || {};
   return {
     id: videoId,
     title: details.title || '',
-    duration: fmtDuration(details.lengthSeconds ? `PT${details.lengthSeconds}S` : ''),
+    duration: fmtSeconds(details.lengthSeconds),
     thumbnail: `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`,
     channel: details.author || ''
   };
@@ -114,7 +127,8 @@ async function resolveVideo(videoId) {
 async function resolvePlaylist(playlistId) {
   const { status, body } = await get(`https://www.youtube.com/playlist?list=${playlistId}`);
   if (status !== 200) throw new Error(`YouTube returned ${status}`);
-  const data = extractJSON(body, '"ytInitialData"');
+  const data = extractJSON(body, 'var ytInitialData = ')
+    || extractJSON(body, '"ytInitialData":');
   if (!data) throw new Error('could not parse playlist data');
 
   const items = [];
@@ -128,7 +142,7 @@ async function resolvePlaylist(playlistId) {
       if (id && !seen.has(id)) {
         seen.add(id);
         const title = (v.title && v.title.runs && v.title.runs[0] && v.title.runs[0].text) || '';
-        const dur = v.lengthSeconds ? fmtDuration(`PT${v.lengthSeconds}S`) : '';
+        const dur = fmtSeconds(v.lengthSeconds);
         items.push({
           id,
           title,

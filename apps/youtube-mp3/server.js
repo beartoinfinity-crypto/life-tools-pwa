@@ -8,14 +8,54 @@ app.use(express.json());
 // Static PWA (mounted at /youtube-mp3/ by the hub)
 app.use(express.static(require('path').join(__dirname)));
 
-/** Whether yt-dlp + ffmpeg are installed (checked once, lazily). */
-let ytdlpAvailable = null;
-function hasYtDlp() {
-  if (ytdlpAvailable !== null) return Promise.resolve(ytdlpAvailable);
+/** Whether yt-dlp is available, and which command to use (checked once, lazily). */
+let ytdlpInfo = null;
+function detectYtDlp() {
+  if (ytdlpInfo !== null) return Promise.resolve(ytdlpInfo);
+  // Try in order: "yt-dlp" on PATH, "python3 -m yt_dlp" (pip user install)
+  const tries = [
+    { cmd: 'yt-dlp', args: ['--version'] },
+    { cmd: 'python3', args: ['-m', 'yt_dlp', '--version'] },
+    { cmd: 'python', args: ['-m', 'yt_dlp', '--version'] },
+  ];
   return new Promise((resolve) => {
-    const child = spawn('yt-dlp', ['--version'], { stdio: 'ignore' });
-    child.on('error', () => { ytdlpAvailable = false; resolve(false); });
-    child.on('exit', (code) => { ytdlpAvailable = code === 0; resolve(code === 0); });
+    let i = 0;
+    function next() {
+      if (i >= tries.length) { ytdlpInfo = null; return resolve(null); }
+      const t = tries[i++];
+      const child = spawn(t.cmd, t.args, { stdio: 'ignore' });
+      child.on('error', () => next());
+      child.on('exit', (code) => {
+        if (code === 0) { ytdlpInfo = t; return resolve(t); }
+        next();
+      });
+    }
+    next();
+  });
+}
+
+/** Locate ffmpeg: on PATH, or bundled inside Python's imageio_ffmpeg. */
+let ffmpegPath = undefined;
+function detectFfmpeg() {
+  if (ffmpegPath !== undefined) return Promise.resolve(ffmpegPath);
+  return new Promise((resolve) => {
+    const child = spawn('ffmpeg', ['-version'], { stdio: 'ignore' });
+    child.on('error', () => {
+      // Not on PATH — try Python's imageio_ffmpeg bundled binary
+      const py = spawn('python3', ['-c', 'import imageio_ffmpeg; print(imageio_ffmpeg.get_ffmpeg_exe())'], { stdio: ['ignore', 'pipe', 'ignore'] });
+      let out = '';
+      py.stdout.on('data', (d) => { out += d; });
+      py.on('exit', () => {
+        const p = out.trim();
+        ffmpegPath = p || null;
+        resolve(ffmpegPath);
+      });
+      py.on('error', () => { ffmpegPath = null; resolve(null); });
+    });
+    child.on('exit', (code) => {
+      ffmpegPath = code === 0 ? null : null; // null = already on PATH, no --ffmpeg-location needed
+      resolve(ffmpegPath);
+    });
   });
 }
 
@@ -23,7 +63,7 @@ function hasYtDlp() {
 async function bestAudioUrl(videoId) {
   const { status, body } = await get(`https://www.youtube.com/watch?v=${videoId}`);
   if (status !== 200) throw new Error(`YouTube returned ${status}`);
-  const marker = '"ytInitialPlayerResponse"';
+  const marker = 'var ytInitialPlayerResponse = ';
   const start = body.indexOf(marker);
   if (start === -1) throw new Error('no player response');
   let depth = 0, end = -1;
@@ -64,20 +104,25 @@ app.get('/api/download', async (req, res) => {
     const safeTitle = title.replace(/[^\w\u4e00-\u9fff\u3040-\u30ff()-]+/g, '_').slice(0, 80);
     const filename = encodeURIComponent(safeTitle + '.mp3');
 
-    if (await hasYtDlp()) {
+    const yt = await detectYtDlp();
+
+    if (yt) {
       // Stream true MP3 (best quality) via yt-dlp + ffmpeg.
-      res.setHeader('Content-Type', 'audio/mpeg');
-      res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${filename}`);
-      const child = spawn('yt-dlp', [
+      const args = yt.args.slice(0, -1).concat([ // drop '--version'
         '-f', 'bestaudio/best',
         '--extract-audio',
         '--audio-format', 'mp3',
         '--audio-quality', '0',
         '--no-warnings',
         '--no-playlist',
-        '-o', '-',
-        `https://www.youtube.com/watch?v=${id}`
       ]);
+      // If ffmpeg isn't on PATH but imageio_ffmpeg has one, point yt-dlp at it
+      const ff = await detectFfmpeg();
+      if (ff) args.push('--ffmpeg-location', ff);
+      args.push('-o', '-', `https://www.youtube.com/watch?v=${id}`);
+      res.setHeader('Content-Type', 'audio/mpeg');
+      res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${filename}`);
+      const child = spawn(yt.cmd, args);
       child.stdout.pipe(res);
       child.stderr.on('data', () => {});
       child.on('error', () => {
@@ -105,4 +150,4 @@ app.get('*', (req, res) => {
   res.sendFile(require('path').join(__dirname, 'index.html'));
 });
 
-module.exports = { app, hasYtDlp };
+module.exports = { app, detectYtDlp };
