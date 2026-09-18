@@ -145,6 +145,16 @@ app.get('/api/download', async (req, res) => {
   }
 });
 
+// Status: tells the client whether real MP3 conversion is available
+app.get('/api/status', async (req, res) => {
+  try {
+    const yt = await detectYtDlp();
+    res.json({ ytdlp: !!yt, cmd: yt ? yt.cmd : null });
+  } catch {
+    res.json({ ytdlp: false });
+  }
+});
+
 // SPA fallback
 app.get('*', (req, res) => {
   res.sendFile(require('path').join(__dirname, 'index.html'));

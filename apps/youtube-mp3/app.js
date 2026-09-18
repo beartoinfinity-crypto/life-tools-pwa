@@ -19,6 +19,7 @@
   var currentList = 'trending';
   var musicData = null;
   var myPlaylists = [];
+  var ytdlpReady = null; // null = unknown, true/false after check
 
   function esc(s) {
     return String(s == null ? '' : s)
@@ -28,6 +29,15 @@
 
   function status(msg) {
     lastUpdate.textContent = msg;
+  }
+
+  // Check if the server can convert to real MP3 (needs yt-dlp + ffmpeg)
+  function checkYtdlp() {
+    if (ytdlpReady !== null) return Promise.resolve(ytdlpReady);
+    return fetch(API_BASE + '/status', { cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(function (s) { ytdlpReady = !!s.ytdlp; return ytdlpReady; })
+      .catch(function () { ytdlpReady = false; return false; });
   }
 
   /* --- resolve URL --- */
@@ -71,18 +81,25 @@
       resultList.innerHTML = '<div class="loading-note">No videos found.</div>';
       return;
     }
-    resultList.innerHTML = videos.map(function (v) {
-      return '<div class="result-item" data-id="' + esc(v.id) + '">' +
-        '<img class="thumb" src="' + esc(v.thumbnail) + '" alt="" onerror="this.style.visibility=\'hidden\'" />' +
-        '<div class="ri-info">' +
-          '<div class="ri-title">' + esc(v.title) + '</div>' +
-          '<div class="ri-meta">' + esc(v.duration || '') + (v.channel ? ' &middot; ' + esc(v.channel) : '') + '</div>' +
-        '</div>' +
-        '<a class="dl-btn" href="' + API_BASE + '/download?id=' + encodeURIComponent(v.id) + '&title=' + encodeURIComponent(v.title) + '" download="' + esc(safeFilename(v.title)) + '.mp3">' +
-          '<span class="dl-label">MP3</span>' +
-        '</a>' +
-      '</div>';
-    }).join('');
+    checkYtdlp().then(function (ok) {
+      resultList.innerHTML = videos.map(function (v) {
+        var dl = ok
+          ? '<a class="dl-btn" href="' + API_BASE + '/download?id=' + encodeURIComponent(v.id) + '&title=' + encodeURIComponent(v.title) + '" download="' + esc(safeFilename(v.title)) + '.mp3">' +
+              '<span class="dl-label">MP3</span></a>'
+          : '<span class="dl-btn err" title="Server has no yt-dlp/ffmpeg — MP3 conversion unavailable">N/A</span>';
+        return '<div class="result-item" data-id="' + esc(v.id) + '">' +
+          '<img class="thumb" src="' + esc(v.thumbnail) + '" alt="" onerror="this.style.visibility=\'hidden\'" />' +
+          '<div class="ri-info">' +
+            '<div class="ri-title">' + esc(v.title) + '</div>' +
+            '<div class="ri-meta">' + esc(v.duration || '') + (v.channel ? ' &middot; ' + esc(v.channel) : '') + '</div>' +
+          '</div>' +
+          dl +
+        '</div>';
+      }).join('');
+      if (!ok) {
+        status('MP3 conversion unavailable — server needs yt-dlp + ffmpeg (Render only, not Vercel)');
+      }
+    });
   }
 
   function safeFilename(title) {
