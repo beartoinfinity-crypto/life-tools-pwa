@@ -43,15 +43,6 @@ app.use('/music-trend', (req, res, next) => {
 const { app: musicTrendApp } = require('./apps/music-trend/server');
 app.use('/music-trend', musicTrendApp);
 
-// YouTube MP3 converter PWA + API (resolves URLs, streams best-quality MP3)
-app.use('/youtube-mp3', (req, res, next) => {
-  const p = req.originalUrl.split('?')[0];
-  if (p === '/youtube-mp3') return res.redirect('/youtube-mp3/');
-  next();
-});
-const { app: youtubeMp3App } = require('./apps/youtube-mp3/server');
-app.use('/youtube-mp3', youtubeMp3App);
-
 // Mount a static subpath app at /<name> with an exact-match redirect and an SPA fallback
 function mountStatic(name, buildDir) {
   app.use(`/${name}`, (req, res, next) => {
