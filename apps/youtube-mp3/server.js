@@ -129,6 +129,7 @@ app.get('/api/download', async (req, res) => {
     // Step 1: use yt-dlp to get the best audio format URL
     const info = await new Promise((resolve, reject) => {
       let out = '';
+      let err = '';
       const child = spawn(ytdlpPath, [
         '--dump-single-json', '--no-warnings', '--no-call-home',
         '--no-check-certificate', '--prefer-free-formats',
@@ -139,11 +140,11 @@ app.get('/api/download', async (req, res) => {
         `https://www.youtube.com/watch?v=${id}`,
       ]);
       child.stdout.on('data', (c) => { out += c; });
-      child.stderr.on('data', () => {});
+      child.stderr.on('data', (c) => { err += c; });
       child.on('error', reject);
       child.on('exit', (code) => {
-        if (code !== 0) return reject(new Error('yt-dlp exited ' + code));
-        try { resolve(JSON.parse(out)); } catch { reject(new Error('yt-dlp bad output')); }
+        if (code !== 0) return reject(new Error('yt-dlp exited ' + code + ': ' + err.slice(-300)));
+        try { resolve(JSON.parse(out)); } catch { reject(new Error('yt-dlp bad output: ' + out.slice(0, 200))); }
       });
     });
 
