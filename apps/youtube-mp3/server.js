@@ -155,12 +155,14 @@ app.get('/api/download', async (req, res) => {
       ].join('\n'));
     }
 
-    // Try multiple player clients in order — Vercel IPs get consent-walled
-    // on some clients for certain videos. --impersonate uses curl_cffi to
-    // make TLS fingerprint look like a real browser, bypassing bot detection.
+    // YouTube bot-detects Vercel datacenter IPs. Strategy:
+    // 1. Skip webpage download (most likely to trigger consent wall)
+    // 2. Try android player client via innertube API directly
+    // 3. Use --impersonate for TLS fingerprint + cookies for consent
     const clients = [
+      'youtube:player_client=android,player_skip=webpage,configs',
+      'youtube:player_client=android,player_skip=webpage',
       'youtube:player_client=android',
-      'youtube:player_client=android,web_safari',
     ];
     let info = null;
     let lastErr = '';
