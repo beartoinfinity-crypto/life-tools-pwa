@@ -143,25 +143,42 @@ app.get('/api/download', async (req, res) => {
     const safeTitle = title.replace(/[^\w\u4e00-\u9fff\u3040-\u30ff()-]+/g, '_').slice(0, 80);
     const filename = encodeURIComponent(safeTitle + '.mp3');
 
-    // Step 1: use yt-dlp to get the best audio format URL
-    const info = await new Promise((resolve, reject) => {
-      let out = '';
-      let err = '';
-      const child = spawn(ytdlpPath, [
-        '--dump-single-json', '--no-warnings',
-        '--no-check-certificate', '--prefer-free-formats',
-        '--extractor-args', 'youtube:player_client=android',
-        '--add-header', 'Cookie:SOCS=CAISFQgDEitub3RpZmljYXRpb24=; CONSENT=YES+cb',
-        `https://www.youtube.com/watch?v=${id}`,
-      ]);
-      child.stdout.on('data', (c) => { out += c; });
-      child.stderr.on('data', (c) => { err += c; });
-      child.on('error', reject);
-      child.on('exit', (code) => {
-        if (code !== 0) return reject(new Error('yt-dlp v' + ytdlpVersion + ' exited ' + code + ': ' + err.slice(-300)));
-        try { resolve(JSON.parse(out)); } catch { reject(new Error('yt-dlp bad output')); }
-      });
-    });
+    // Try multiple player clients in order — Vercel IPs get consent-walled
+    // on some clients for certain videos. android usually works; web_safari
+    // is the fallback.
+    const clients = [
+      'youtube:player_client=android',
+      'youtube:player_client=android,web_safari',
+      'youtube:player_client=android,web_embedded',
+    ];
+    let info = null;
+    let lastErr = '';
+    for (const clientArg of clients) {
+      try {
+        info = await new Promise((resolve, reject) => {
+          let out = '';
+          let err = '';
+          const child = spawn(ytdlpPath, [
+            '--dump-single-json', '--no-warnings',
+            '--no-check-certificate', '--prefer-free-formats',
+            '--extractor-args', clientArg,
+            '--add-header', 'Cookie:SOCS=CAISFQgDEitub3RpZmljYXRpb24=; CONSENT=YES+cb',
+            `https://www.youtube.com/watch?v=${id}`,
+          ]);
+          child.stdout.on('data', (c) => { out += c; });
+          child.stderr.on('data', (c) => { err += c; });
+          child.on('error', reject);
+          child.on('exit', (code) => {
+            if (code !== 0) return reject(new Error(err.slice(-200)));
+            try { resolve(JSON.parse(out)); } catch { reject(new Error('bad output')); }
+          });
+        });
+        break; // success
+      } catch (e) {
+        lastErr = e.message;
+      }
+    }
+    if (!info) throw new Error('yt-dlp v' + ytdlpVersion + ' failed all clients: ' + lastErr.slice(-200));
 
     const allFormats = info.formats || [];
     // Audio-only formats from the android client come as 'sb0'..'sb3' with
