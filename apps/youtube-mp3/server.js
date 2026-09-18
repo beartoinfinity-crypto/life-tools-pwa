@@ -160,16 +160,26 @@ app.get('/api/download', async (req, res) => {
     });
 
     const allFormats = info.formats || [];
-    // Audio-only: acodec present and not 'none'; vcodec 'none' or absent.
-    // Some formats report acodec as the actual codec string (e.g. 'opus'),
-    // others as 'none' — be lenient: accept anything with acodec !== 'none'.
+    // Audio-only formats from the android client come as 'sb0'..'sb3' with
+    // acodec='none' (storyboard thumbnails) plus one muxed '18'. Fall back to
+    // any format that has a real audio codec.
     const audio = allFormats
       .filter((f) => {
         const ac = String(f.acodec || '');
         const vc = String(f.vcodec || '');
-        return ac && ac !== 'none' && (!vc || vc === 'none');
+        // Primary: audio-only (acodec set, no video)
+        if (ac && ac !== 'none' && (!vc || vc === 'none')) return true;
+        // Fallback: muxed with audio (e.g. itag 18)
+        if (ac && ac !== 'none') return true;
+        return false;
       })
-      .sort((a, b) => (b.abr || b.audioBitrate || 0) - (a.abr || a.audioBitrate || 0));
+      .sort((a, b) => {
+        // Prefer audio-only (no video) then highest bitrate
+        const aAudioOnly = (!a.vcodec || a.vcodec === 'none') ? 1 : 0;
+        const bAudioOnly = (!b.vcodec || b.vcodec === 'none') ? 1 : 0;
+        if (aAudioOnly !== bAudioOnly) return bAudioOnly - aAudioOnly;
+        return (b.abr || b.audioBitrate || 0) - (a.abr || a.audioBitrate || 0);
+      });
     if (!audio.length) return res.status(500).json({
       error: 'no audio formats',
       debug: {
