@@ -143,9 +143,7 @@ app.get('/api/download', async (req, res) => {
     const safeTitle = title.replace(/[^\w\u4e00-\u9fff\u3040-\u30ff()-]+/g, '_').slice(0, 80);
     const filename = encodeURIComponent(safeTitle + '.mp3');
 
-    // YouTube consent-walls Vercel datacenter IPs for certain videos.
-    // Write a Netscape cookie file so yt-dlp sends the consent cookie as
-    // a real cookie (not an overridden header).
+    // Write a Netscape cookie file so yt-dlp sends consent cookies properly.
     const cookieFile = path.join(os.tmpdir(), 'yt-cookies.txt');
     if (!fs.existsSync(cookieFile)) {
       fs.writeFileSync(cookieFile, [
@@ -158,11 +156,11 @@ app.get('/api/download', async (req, res) => {
     }
 
     // Try multiple player clients in order — Vercel IPs get consent-walled
-    // on some clients for certain videos.
+    // on some clients for certain videos. --impersonate uses curl_cffi to
+    // make TLS fingerprint look like a real browser, bypassing bot detection.
     const clients = [
       'youtube:player_client=android',
       'youtube:player_client=android,web_safari',
-      'youtube:player_client=android,web_embedded',
     ];
     let info = null;
     let lastErr = '';
@@ -176,6 +174,7 @@ app.get('/api/download', async (req, res) => {
             '--no-check-certificate', '--prefer-free-formats',
             '--extractor-args', clientArg,
             '--cookies', cookieFile,
+            '--impersonate', 'Chrome-136:Macos-15',
             `https://www.youtube.com/watch?v=${id}`,
           ]);
           child.stdout.on('data', (c) => { out += c; });
