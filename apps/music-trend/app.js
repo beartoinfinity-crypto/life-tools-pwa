@@ -922,19 +922,24 @@
 
   function resolveYouTubeForPlaylist(name, force) {
     statusFlash(force ? '重新搜尋 YouTube 影片… 0/0' : '正在搜尋 YouTube 影片… 0/0');
+    var retries = 0;
     function doBatch() {
+      var controller = new AbortController();
+      var timer = setTimeout(function () { controller.abort(); }, 15000);
       fetch(API_BASE + '/myplaylists/' + encodeURIComponent(name) + '/resolve-youtube', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: force ? JSON.stringify({ force: true }) : '{}',
-        cache: 'no-store'
+        cache: 'no-store',
+        signal: controller.signal
       })
-        .then(function (r) { return r.json(); })
+        .then(function (r) { clearTimeout(timer); return r.json(); })
         .then(function (payload) {
           if (payload && payload.error) throw new Error(payload.error);
+          retries = 0;
           statusFlash('正在搜尋 YouTube 影片… ' + payload.resolved + '/' + payload.total);
           if (payload.remaining > 0) {
-            setTimeout(doBatch, 200);
+            setTimeout(doBatch, 300);
           } else {
             // All resolved — remove songs without YouTube ID
             statusFlash('正在清理無法播放的歌曲…');
@@ -953,8 +958,18 @@
               });
           }
         })
-        .catch(function (e) { statusFlash('YouTube 搜尋失敗: ' + e.message); });
+        .catch(function (e) {
+          clearTimeout(timer);
+          retries++;
+          if (retries < 3) {
+            statusFlash('搜尋超時，重試中… (' + retries + '/3)');
+            setTimeout(doBatch, 1000);
+          } else {
+            statusFlash('YouTube 搜尋失敗: ' + e.message);
+          }
+        });
     }
+    force = false; // only force on first batch
     doBatch();
   }
   videoBtn.addEventListener('click', function () {

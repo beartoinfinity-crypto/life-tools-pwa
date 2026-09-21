@@ -442,10 +442,10 @@ app.post('/api/myplaylists/:name/resolve-youtube', async (req, res) => {
     const need = songs.filter((s) => !s.youtubeId);
     if (!need.length) return res.json({ ok: true, resolved: 0, total: songs.length, remaining: 0 });
 
-    // Resolve one batch of 10, save, return progress
-    const BATCH = 10;
+    // Resolve one batch of 5, save, return progress (keeps under Vercel 10s timeout)
+    const BATCH = 5;
     const batch = need.slice(0, BATCH);
-    await mapLimit(batch, 6, async (s) => {
+    await mapLimit(batch, 4, async (s) => {
       const hit = await searchYouTube(s);
       if (hit) {
         s.youtubeId = hit.videoId;
