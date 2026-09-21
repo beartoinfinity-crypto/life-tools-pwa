@@ -932,13 +932,20 @@
           if (payload && payload.error) throw new Error(payload.error);
           statusFlash('正在搜尋 YouTube 影片… ' + payload.resolved + '/' + payload.total);
           if (payload.remaining > 0) {
-            // Auto-retry next batch
             setTimeout(doBatch, 200);
           } else {
-            statusFlash('已找到所有 ' + payload.total + ' 首歌曲的 YouTube 影片');
-            // Reload playlist into local state
-            fetch(API_BASE + '/myplaylists/' + encodeURIComponent(name), { cache: 'no-store' })
+            // All resolved — remove songs without YouTube ID
+            statusFlash('正在清理無法播放的歌曲…');
+            fetch(API_BASE + '/myplaylists/' + encodeURIComponent(name) + '/cleanup', {
+              method: 'POST', cache: 'no-store'
+            })
               .then(function (r) { return r.json(); })
+              .then(function (c) {
+                if (c && c.error) throw new Error(c.error);
+                statusFlash('已找到 ' + payload.resolved + ' 首，移除 ' + c.removed + ' 首無法播放的歌曲，保留 ' + c.remaining + ' 首');
+                return fetch(API_BASE + '/myplaylists/' + encodeURIComponent(name), { cache: 'no-store' });
+              })
+              .then(function (r) { return r ? r.json() : null; })
               .then(function (data) {
                 if (data && data.songs) { saveMySongs(data.songs); currentSong = -1; render(); }
               });
