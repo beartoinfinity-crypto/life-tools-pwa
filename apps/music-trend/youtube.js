@@ -65,12 +65,12 @@ function extractFirstVideo(html) {
 /**
  * Pick the best "official MV" candidate from a list of videos.
  * Scoring:
+ *   +20  title contains the song name
  *   +10  title contains "official" and "mv" or "music video"
  *   +5   title contains "official"
  *   +5   channel name contains "vevo"
  *   +3   title contains "mv"
- *   +2   title contains song name
- * Returns the best match or null if nothing looks like an official MV.
+ * Returns the best match or null if nothing looks like a correct match.
  */
 function pickOfficialMV(videos, songName) {
   if (!videos.length) return null;
@@ -81,14 +81,16 @@ function pickOfficialMV(videos, songName) {
     const t = v.title.toLowerCase();
     const ch = (v.channel || '').toLowerCase();
     let score = 0;
+    // Song name match is the most important signal
+    if (lowerName && t.includes(lowerName)) score += 20;
     if (t.includes('official') && (t.includes('mv') || t.includes('music video'))) score += 10;
     else if (t.includes('official')) score += 5;
     if (ch.includes('vevo')) score += 5;
     if (t.includes(' mv')) score += 3;
-    if (lowerName && t.includes(lowerName)) score += 2;
     if (score > bestScore) { bestScore = score; best = v; }
   }
-  return bestScore >= 5 ? best : null;
+  // Require at least the song name to match (score >= 20)
+  return bestScore >= 20 ? best : null;
 }
 
 /**
@@ -112,14 +114,20 @@ async function searchYouTube(song) {
     }
   } catch { /* fall through */ }
 
-  // Pass 2: plain search (original behaviour)
+  // Pass 2: plain search — prefer results containing the song name
   try {
     const { status, body } = await get(
       `https://www.youtube.com/results?search_query=${encodeURIComponent(plain)}`,
       10000
     );
     if (status !== 200) return null;
-    return extractFirstVideo(body);
+    const videos = extractVideos(body);
+    if (!videos.length) return null;
+    // Prefer a video whose title contains the song name
+    const lowerName = song.name.toLowerCase();
+    const nameMatch = videos.find((v) => v.title.toLowerCase().includes(lowerName));
+    const best = nameMatch || videos[0];
+    return { videoId: best.videoId, title: best.title };
   } catch {
     return null;
   }
