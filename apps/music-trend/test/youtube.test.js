@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { extractFirstVideo, mapLimit } from '../youtube.js';
+import { extractFirstVideo, extractVideos, pickOfficialMV, mapLimit } from '../youtube.js';
 
 describe('extractFirstVideo', () => {
   it('extracts the first videoRenderer id and title', () => {
@@ -22,6 +22,57 @@ describe('extractFirstVideo', () => {
   it('returns an id with empty title when the title block is missing', () => {
     const html = '{"videoRenderer":{"videoId":"abcdEFGH123"}}';
     expect(extractFirstVideo(html)).toEqual({ videoId: 'abcdEFGH123', title: '' });
+  });
+});
+
+describe('extractVideos', () => {
+  it('extracts multiple videoRenderer blocks', () => {
+    const html =
+      '{"videoRenderer":{"videoId":"aaa11111111","title":{"runs":[{"text":"Song A official MV"}]},"longBylineText":{"runs":[{"text":"Artist VEVO"}]}}}' +
+      '{"videoRenderer":{"videoId":"bbb22222222","title":{"runs":[{"text":"Song A live performance"}]},"longBylineText":{"runs":[{"text":"Fan Channel"}]}}}';
+    const videos = extractVideos(html);
+    expect(videos).toHaveLength(2);
+    expect(videos[0].videoId).toBe('aaa11111111');
+    expect(videos[0].channel).toBe('Artist VEVO');
+    expect(videos[1].videoId).toBe('bbb22222222');
+  });
+
+  it('returns empty array when no results', () => {
+    expect(extractVideos('<html>nothing</html>')).toEqual([]);
+  });
+});
+
+describe('pickOfficialMV', () => {
+  const videos = [
+    { videoId: 'v1', title: 'Song A (Official Music Video)', channel: 'Artist VEVO' },
+    { videoId: 'v2', title: 'Song A live performance', channel: 'Fan Channel' },
+    { videoId: 'v3', title: 'Song A cover', channel: 'Cover Artist' },
+  ];
+
+  it('picks the official MV when present', () => {
+    const best = pickOfficialMV(videos, 'Song A');
+    expect(best).not.toBeNull();
+    expect(best.videoId).toBe('v1');
+  });
+
+  it('returns null when no video scores >= 5', () => {
+    const low = [
+      { videoId: 'x1', title: 'random video', channel: 'some channel' },
+    ];
+    expect(pickOfficialMV(low, 'Song A')).toBeNull();
+  });
+
+  it('prefers vevo channel even without "official" in title', () => {
+    const vevoOnly = [
+      { videoId: 'v4', title: 'Song B mv', channel: 'Artist VEVO' },
+      { videoId: 'v5', title: 'Song B official video', channel: 'Random Channel' },
+    ];
+    const best = pickOfficialMV(vevoOnly, 'Song B');
+    expect(best.videoId).toBe('v4');
+  });
+
+  it('returns null for empty input', () => {
+    expect(pickOfficialMV([], 'Song A')).toBeNull();
   });
 });
 
