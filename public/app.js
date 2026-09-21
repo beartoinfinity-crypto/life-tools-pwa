@@ -116,11 +116,14 @@
     grid.addEventListener('touchmove', onTouchMove, { passive: false });
     grid.addEventListener('touchend', onTouchEnd);
     grid.addEventListener('touchcancel', onTouchEnd);
+    // Prevent browser context menu on long-press
+    grid.addEventListener('contextmenu', function (e) { e.preventDefault(); });
   }
 
   function onTouchStart(e) {
     var card = e.target.closest ? e.target.closest('.app-card') : null;
     if (!card) return;
+    e.preventDefault(); // block browser context menu & text selection
     var touch = e.touches[0];
     touchOrigin = {
       x: touch.clientX,
