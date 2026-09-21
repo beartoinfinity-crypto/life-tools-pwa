@@ -292,15 +292,27 @@ gate by country (`CANTO_COUNTRIES` = `{hk}` and `MANDO_COUNTRIES` = `{hk,tw,cn,s
 |--------|----------|--------------|-------------|
 | POST | `/music-trend/api/playlists` | `{ "country"?: "hk", "list"?: "trending" }` | Cached playlists from Supabase |
 | POST | `/music-trend/api/playlists/refresh` | `{ "country"?, "list"? }` | Scrape the Apple feed for a country, upsert, return playlists |
+| POST | `/music-trend/api/playlists/:listKey/songs/:songId` | `{ "youtubeId" }` | Manually replace a chart song's YouTube ID |
 | GET | `/music-trend/api/myplaylists` | — | List saved playlists (name + song count + updated) |
 | POST | `/music-trend/api/myplaylists` | `{ "name", "songs" }` | Save/overwrite a named playlist |
 | GET | `/music-trend/api/myplaylists/:name` | — | Fetch a saved playlist's songs |
+| DELETE | `/music-trend/api/myplaylists/:name` | — | Delete a named playlist |
+| PATCH | `/music-trend/api/myplaylists/:name` | `{ "newName" }` | Rename a playlist |
+| POST | `/music-trend/api/myplaylists/:name/songs` | `{ "song" }` | Add a song to a playlist |
+| DELETE | `/music-trend/api/myplaylists/:name/songs/:songId` | — | Remove a song from a playlist |
+| POST | `/music-trend/api/myplaylists/:name/resolve-youtube` | `{ "force"?: true }` | Resolve YouTube IDs for songs missing them (batches of 5, frontend auto-retries) |
+| POST | `/music-trend/api/myplaylists/:name/cleanup` | — | Remove songs without a youtubeId |
+| POST | `/music-trend/api/playlist/parse` | `{ "url" }` | Parse an Apple Music URL (playlist, room, album, or artist) into a song list |
 
 - **我的歌單 (my playlist)** — tap ＋ on any song to keep it in a personal playlist (4th tab), stored in
   `localStorage` on the device; ✕ removes it there. Plays like any other list (auto-advance, shuffle).
   **Cross-device sync** — ⇧ 上傳歌單 saves the current list to Supabase under a name you type (that name *is* the
   key), and ⇩ 下載歌單 lists saved playlists and loads one onto any device. Requires the `music_user_playlists`
   table (see schema SQL).
+- **Import from Apple Music** — ＋ 匯入歌單 on the 我的 tab lets you paste an Apple Music URL (playlist `pl.xxx`,
+  room `/room/xxx`, album `/album/x/xxx`, or artist `/artist/x/xxx`). Songs are fetched via iTunes Lookup API
+  and saved as a new playlist. After save, the app offers to resolve YouTube IDs for playback. Artist imports
+  use the iTunes Search API (up to 200 songs). Resolution processes in batches of 5 with live progress updates.
 - **Player time** — the compact player bar shows the current playback position and song duration
   (e.g. `1:12 / 4:11`), refreshed every 500 ms from the YouTube player.
 - **Load-on-demand** — only the currently selected playlist+country is fetched (default 熱門趨勢), so opening the
@@ -317,7 +329,10 @@ gate by country (`CANTO_COUNTRIES` = `{hk}` and `MANDO_COUNTRIES` = `{hk,tw,cn,s
   never a transient signal blip.
 - **In-page YouTube playback, audio-first** — no Apple Music account needed. Each song is resolved to a YouTube
   video id (`apps/music-trend/youtube.js`, search-scrape, no API key; ids cached in Supabase per country and
-  reused, rolling window of ~20 new resolutions per refresh run). Tap any song with a ▶ badge and a compact player
+  reused, rolling window of ~20 new resolutions per refresh run). Two-pass official MV search: first tries
+  `"song name" + "artist name" official music video`, then plain `"song name" + "artist name"`. Scores results
+  by song name match (+20), artist name in title/channel (+15), official/MV/VEVO keywords, and penalizes
+  short videos (<60s). Tap any song with a ▶ badge and a compact player
   bar plays it in-page via the YouTube IFrame API — a 96×54 thumbnail-sized player keeps the stream at its lowest
   bitrate (~144p, minimal data), with one-by-one auto-advance, prev/next/pause, shuffle, unplayable videos
   skipped, and a ▶▶ toggle to expand the full 16:9 video only when wanted.

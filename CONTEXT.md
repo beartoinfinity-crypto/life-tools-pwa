@@ -23,8 +23,8 @@ Each app is an authored PWA with its own `index.html`, `styles.css`,
 | App dir            | SW cache         | In-page badge (v1.0 build) |
 |--------------------|------------------|----------------------------|
 | apps/traffic-news  | traffic-news-v5  | v1.0 build 202609160643    |
-| apps/mark-six      | mark-six-v7      | v1.0 build 202609160744    |
-| apps/music-trend   | music-trend-v17  | v1.0 build 202609160749    |
+| apps/mark-six      | mark-six-v8      | v1.0 build 202609210150    |
+| apps/music-trend   | music-trend-v21  | v1.0 build 202609210850    |
 
 > `apps/hk-bus-eta/` is **not** an authored app in this repo. It holds
 > `LICENSE`, `README.md`, `build-upstream/` and `build/` — vendored
