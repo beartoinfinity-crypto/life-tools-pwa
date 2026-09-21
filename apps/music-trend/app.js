@@ -929,7 +929,10 @@
       .then(function (r) { return r.json(); })
       .then(function (payload) {
         if (payload && payload.error) throw new Error(payload.error);
-        statusFlash('已找到 ' + payload.resolved + '/' + payload.total + ' 首歌曲的 YouTube 影片');
+        var msg = '已找到 ' + payload.resolved + '/' + payload.total + ' 首歌曲的 YouTube 影片';
+        var remaining = payload.total - payload.resolved;
+        if (remaining > 0) msg += '（還剩 ' + remaining + ' 首，可再次點擊 ▶ 繼續搜尋）';
+        statusFlash(msg);
         // Reload the playlist into local state
         return fetch(API_BASE + '/myplaylists/' + encodeURIComponent(name), { cache: 'no-store' });
       })
