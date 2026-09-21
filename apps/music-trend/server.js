@@ -495,7 +495,8 @@ app.post('/api/playlist/parse', async (req, res) => {
 
     const isPlaylist = /pl\.[a-zA-Z0-9]+/.test(url);
     const isRoom = /\/room\/\d+/.test(url);
-    if (!isPlaylist && !isRoom) return res.status(400).json({ error: 'Invalid Apple Music URL (need playlist or room link)' });
+    const isAlbum = /\/album\/[^/]+\/\d+/.test(url);
+    if (!isPlaylist && !isRoom && !isAlbum) return res.status(400).json({ error: 'Invalid Apple Music URL (need playlist, room, or album link)' });
 
     const pageUrl = url.startsWith('http') ? url : `https://music.apple.com${url}`;
     const pageRes = await fetch(pageUrl, {
