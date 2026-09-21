@@ -519,10 +519,10 @@ app.post('/api/playlist/parse', async (req, res) => {
       while ((m = songMetaRe.exec(html)) !== null) { trackIds.push(m[1]); }
     } else if (isArtist) {
       // Artist: use iTunes Search API to get all songs by artist name
-      const titleTag = html.match(/<title>\s*([^<]+?)\s*-\s*Apple\s*Music/i);
+      const titleTag = html.match(/<title>\s*([\s\S]*?)\s*-\s*Apple\s*Music/i);
       playlistTitle = (titleTag && titleTag[1].trim()) || 'Imported Artist';
-      // Extract artist name from the title (before the dash)
-      const artistName = playlistTitle;
+      // Strip leading/trailing non-printable chars (e.g. U+200E left-to-right mark)
+      const artistName = playlistTitle.replace(/^[\s\u200B\u200E\u200F\uFEFF]+/, '').replace(/[\s\u200B\u200E\u200F\uFEFF]+$/, '');
       // Search iTunes for all songs by this artist (up to 200)
       const searchUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(artistName)}&entity=song&limit=200&country=hk`;
       const searchRes = await fetch(searchUrl);
