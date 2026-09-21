@@ -423,6 +423,68 @@ app.patch('/api/myplaylists/:name/songs/:songId', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Parse Apple Music playlist URL → songs ──────────────────────────
+app.post('/api/playlist/parse', async (req, res) => {
+  try {
+    const { url } = req.body;
+    if (!url) return res.status(400).json({ error: 'url required' });
+
+    // Extract playlist ID from URL (pl.XXXXXXXXXXXX)
+    const plMatch = url.match(/pl\.([a-zA-Z0-9]+)/);
+    if (!plMatch) return res.status(400).json({ error: 'Invalid Apple Music playlist URL' });
+    const plId = plMatch[1];
+
+    // Fetch the playlist page
+    const pageUrl = url.startsWith('http') ? url : `https://music.apple.com${url}`;
+    const pageRes = await fetch(pageUrl, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36' }
+    });
+    if (!pageRes.ok) return res.status(502).json({ error: 'Failed to fetch playlist page' });
+    const html = await pageRes.text();
+
+    // Extract playlist title
+    const titleMatch = html.match(/<meta\s+name="apple:title"\s+content="([^"]+)"/);
+    const ogTitleMatch = html.match(/<meta\s+property="og:title"\s+content="([^"]+)"/);
+    const playlistTitle = (titleMatch && titleMatch[1]) || (ogTitleMatch && ogTitleMatch[1]) || 'Imported Playlist';
+
+    // Extract track IDs from <meta property="music:song" content="...">
+    const trackIds = [];
+    const songMetaRe = /<meta\s+property="music:song"\s+content="[^"]*?\/(\d+)"/g;
+    let m;
+    while ((m = songMetaRe.exec(html)) !== null) {
+      trackIds.push(m[1]);
+    }
+    if (!trackIds.length) return res.status(404).json({ error: 'No tracks found in playlist' });
+
+    // Fetch full track details from iTunes API (batch up to 200)
+    const songs = [];
+    for (let i = 0; i < trackIds.length; i += 200) {
+      const batch = trackIds.slice(i, i + 200);
+      const itunesUrl = `https://itunes.apple.com/lookup?id=${batch.join(',')}&entity=song&country=hk`;
+      const itunesRes = await fetch(itunesUrl);
+      const data = await itunesRes.json();
+      if (data.results) {
+        data.results.forEach((r, idx) => {
+          if (r.wrapperType === 'track') {
+            songs.push({
+              rank: songs.length + 1,
+              id: String(r.trackId),
+              name: r.trackName,
+              artist: r.artistName,
+              artistUrl: r.artistViewUrl || '',
+              artwork: (r.artworkUrl100 || '').replace('100x100', '300x300'),
+              releaseDate: r.releaseDate || '',
+              genre: r.primaryGenreName || ''
+            });
+          }
+        });
+      }
+    }
+
+    res.json({ title: playlistTitle, plId, songs });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // SPA fallback
 app.get('*', (req, res) => {
   res.sendFile(require('path').join(__dirname, 'index.html'));

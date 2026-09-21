@@ -42,6 +42,8 @@
   var myPicker = document.getElementById('myPicker');
   var myUploadBtn = document.getElementById('myUploadBtn');
   var myPickerBtn = document.getElementById('myPickerBtn');
+  var myImportBtn = document.getElementById('myImportBtn');
+  var myImport = document.getElementById('myImport');
 
   /* ---- my playlist (localStorage, per device) ---- */
   function mySongs() {
@@ -463,6 +465,7 @@
     renderCountries();
     myTools.classList.toggle('hidden', current !== 'my');
     if (current !== 'my') myPicker.classList.add('hidden');
+    if (current !== 'my') myImport.classList.add('hidden');
     // Mirror the server's CANTO_COUNTRIES / MANDO_COUNTRIES (parser.js): 廣東歌
     // only exists in 香港, 國語歌 only in 香港/台灣/中國/新加坡. Hide the tab
     // everywhere the server returns [] for that country so we never show an
@@ -796,6 +799,116 @@
       })
       .catch(function (e) { statusFlash('載入失敗: ' + e.message); });
   });
+
+  /* ---- import from Apple Music URL ---- */
+  myImportBtn.addEventListener('click', function () {
+    if (!myImport.classList.contains('hidden')) { myImport.classList.add('hidden'); return; }
+    myImport.classList.remove('hidden');
+    myPicker.classList.add('hidden');
+    myImport.innerHTML =
+      '<div class="my-picker-title">貼上 Apple Music 歌單連結</div>' +
+      '<div class="import-row">' +
+        '<input id="importUrl" type="url" placeholder="https://music.apple.com/hk/playlist/..." class="import-input" />' +
+        '<button id="importFetchBtn" class="my-tool-btn">匯入</button>' +
+      '</div>';
+    document.getElementById('importFetchBtn').addEventListener('click', doImport);
+    document.getElementById('importUrl').addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') doImport();
+    });
+  });
+
+  function doImport() {
+    var urlInput = document.getElementById('importUrl');
+    var url = urlInput ? urlInput.value.trim() : '';
+    if (!url) { statusFlash('請貼上歌單連結'); return; }
+    if (!url.includes('music.apple.com') || !url.includes('pl.')) {
+      statusFlash('請輸入有效的 Apple Music 歌單連結');
+      return;
+    }
+    var fetchBtn = document.getElementById('importFetchBtn');
+    if (fetchBtn) { fetchBtn.disabled = true; fetchBtn.textContent = '解析中…'; }
+    myImport.innerHTML += '<div class="loading-note" id="importStatus">正在解析歌單…</div>';
+
+    fetch(API_BASE + '/playlist/parse', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: url }),
+      cache: 'no-store'
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data.error) throw new Error(data.error);
+        var st = document.getElementById('importStatus');
+        if (st) st.remove();
+        var html = '<div class="my-picker-title">' + esc(data.title) + '（' + data.songs.length + ' 首）</div>' +
+          '<div class="import-row">' +
+            '<input id="importName" type="text" placeholder="歌單名稱" class="import-input" value="' + esc(data.title) + '" />' +
+            '<button id="importSaveBtn" class="my-tool-btn">儲存</button>' +
+            '<button id="importCancelBtn" class="my-tool-btn">取消</button>' +
+          '</div>' +
+          '<div class="import-preview">';
+        data.songs.forEach(function (s, i) {
+          html += '<div class="import-song">' +
+            '<span class="import-rank">#' + (i + 1) + '</span>' +
+            '<span class="import-sname">' + esc(s.name) + '</span>' +
+            '<span class="import-artist">' + esc(s.artist) + '</span>' +
+          '</div>';
+        });
+        html += '</div>';
+        myImport.innerHTML = html;
+
+        document.getElementById('importSaveBtn').addEventListener('click', function () {
+          var nameInput = document.getElementById('importName');
+          var name = nameInput ? nameInput.value.trim() : '';
+          if (!name) { statusFlash('請輸入歌單名稱'); return; }
+          saveImportedPlaylist(name, data.songs);
+        });
+        document.getElementById('importCancelBtn').addEventListener('click', function () {
+          myImport.classList.add('hidden');
+        });
+      })
+      .catch(function (e) {
+        var st = document.getElementById('importStatus');
+        if (st) st.remove();
+        statusFlash('解析失敗: ' + e.message);
+        if (fetchBtn) { fetchBtn.disabled = false; fetchBtn.textContent = '匯入'; }
+      });
+  }
+
+  function saveImportedPlaylist(name, songs) {
+    // Check if exists
+    fetch(API_BASE + '/myplaylists/' + encodeURIComponent(name), { cache: 'no-store' })
+      .then(function (r) {
+        if (r.status === 404) return null;
+        return r.json();
+      })
+      .then(function (existing) {
+        if (existing && existing.name) {
+          if (!window.confirm('已存在歌單「' + name + '」(' + existing.songs.length + ' 首)，是否覆蓋？')) return null;
+        }
+        return fetch(API_BASE + '/myplaylists', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: name, songs: songs }),
+          cache: 'no-store'
+        });
+      })
+      .then(function (r) {
+        if (!r) return;
+        return r.json();
+      })
+      .then(function (payload) {
+        if (!payload) return;
+        if (payload && payload.error) throw new Error(payload.error);
+        // Also load into local state
+        saveMySongs(songs);
+        currentSong = -1;
+        render();
+        statusFlash('已匯入歌單「' + name + '」(' + songs.length + ' 首)');
+        myImport.classList.add('hidden');
+      })
+      .catch(function (e) { statusFlash('儲存失敗: ' + e.message); });
+  }
   videoBtn.addEventListener('click', function () {
     var bar = document.getElementById('playerBar');
     var on = bar.classList.toggle('video-mode');
