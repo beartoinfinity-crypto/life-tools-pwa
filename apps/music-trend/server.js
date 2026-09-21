@@ -423,6 +423,42 @@ app.patch('/api/myplaylists/:name/songs/:songId', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Resolve YouTube IDs for a user playlist ────────────────────────
+app.post('/api/myplaylists/:name/resolve-youtube', async (req, res) => {
+  try {
+    const name = decodeURIComponent(req.params.name);
+    const { data, error: fetchErr } = await supabase
+      .from('music_user_playlists')
+      .select('songs')
+      .eq('name', name)
+      .single();
+    if (fetchErr || !data) return res.status(404).json({ error: 'Playlist not found' });
+
+    const songs = typeof data.songs === 'string' ? JSON.parse(data.songs) : data.songs;
+    const need = songs.filter((s) => !s.youtubeId);
+    if (!need.length) return res.json({ ok: true, resolved: 0, total: songs.length });
+
+    const deadline = Date.now() + 50 * 1000;
+    let resolved = 0;
+    await mapLimit(need, 4, async (s) => {
+      if (Date.now() > deadline) return;
+      const hit = await searchYouTube(s);
+      if (hit) {
+        s.youtubeId = hit.videoId;
+        s.youtubeTitle = hit.title;
+        resolved++;
+      }
+    });
+
+    const { error: updErr } = await supabase
+      .from('music_user_playlists')
+      .update({ songs: JSON.stringify(songs), updated_at: new Date().toISOString() })
+      .eq('name', name);
+    if (updErr) throw updErr;
+    res.json({ ok: true, resolved, total: songs.length });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── Parse Apple Music playlist URL → songs ──────────────────────────
 app.post('/api/playlist/parse', async (req, res) => {
   try {

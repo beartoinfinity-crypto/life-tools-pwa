@@ -227,7 +227,8 @@ main {
 .my-pick-row .my-pick { flex: 1; }
 
 .my-pick-edit,
-.my-pick-del {
+.my-pick-del,
+.my-pick-ytr {
   flex: 0 0 auto;
   width: 36px;
   height: 36px;
@@ -244,6 +245,8 @@ main {
 }
 
 .my-pick-edit:active { background: rgba(123, 31, 162, 0.15); }
+.my-pick-ytr { color: #c62828; }
+.my-pick-ytr:active { background: rgba(198, 40, 40, 0.1); }
 .my-pick-del { color: #c62828; }
 .my-pick-del:active { background: rgba(198, 40, 40, 0.1); }
 

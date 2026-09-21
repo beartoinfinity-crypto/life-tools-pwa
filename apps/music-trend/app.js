@@ -737,6 +737,7 @@
             '<button class="my-pick" data-name="' + esc(p.name) + '">' + esc(p.name) +
             ' · ' + p.count + ' 首 · ' + fmtAgo(p.updated_at) + '</button>' +
             '<button class="my-pick-edit" data-name="' + esc(p.name) + '" title="Rename">&#9998;</button>' +
+            '<button class="my-pick-ytr" data-name="' + esc(p.name) + '" title="Resolve YouTube">&#9654;</button>' +
             '<button class="my-pick-del" data-name="' + esc(p.name) + '" title="Delete">&#128465;</button>' +
             '</div>';
         });
@@ -783,6 +784,11 @@
           myPickerBtn.click();
         })
         .catch(function (e) { statusFlash('刪除失敗: ' + e.message); });
+      return;
+    }
+    var ytrBtn = e.target.closest ? e.target.closest('.my-pick-ytr') : null;
+    if (ytrBtn) {
+      resolveYouTubeForPlaylist(ytrBtn.dataset.name);
       return;
     }
     var btn = e.target.closest ? e.target.closest('.my-pick') : null;
@@ -906,8 +912,36 @@
         render();
         statusFlash('已匯入歌單「' + name + '」(' + songs.length + ' 首)');
         myImport.classList.add('hidden');
+        // Ask user if they want to resolve YouTube IDs
+        if (window.confirm('歌單已儲存。是否搜尋 YouTube 影片以便播放？')) {
+          resolveYouTubeForPlaylist(name);
+        }
       })
       .catch(function (e) { statusFlash('儲存失敗: ' + e.message); });
+  }
+
+  function resolveYouTubeForPlaylist(name) {
+    statusFlash('正在搜尋 YouTube 影片…');
+    fetch(API_BASE + '/myplaylists/' + encodeURIComponent(name) + '/resolve-youtube', {
+      method: 'POST',
+      cache: 'no-store'
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (payload) {
+        if (payload && payload.error) throw new Error(payload.error);
+        statusFlash('已找到 ' + payload.resolved + '/' + payload.total + ' 首歌曲的 YouTube 影片');
+        // Reload the playlist into local state
+        return fetch(API_BASE + '/myplaylists/' + encodeURIComponent(name), { cache: 'no-store' });
+      })
+      .then(function (r) { return r ? r.json() : null; })
+      .then(function (data) {
+        if (data && data.songs) {
+          saveMySongs(data.songs);
+          currentSong = -1;
+          render();
+        }
+      })
+      .catch(function (e) { statusFlash('YouTube 搜尋失敗: ' + e.message); });
   }
   videoBtn.addEventListener('click', function () {
     var bar = document.getElementById('playerBar');
