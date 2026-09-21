@@ -37,7 +37,7 @@ function get(url, timeout = 15000) {
 
 /**
  * Extract ALL videoRenderer blocks from search results.
- * Returns [{ videoId, title, channel }] sorted by appearance order.
+ * Returns [{ videoId, title, channel, duration }] sorted by appearance order.
  */
 function extractVideos(html) {
   const results = [];
@@ -51,9 +51,30 @@ function extractVideos(html) {
     let channel = '';
     const c = after.match(/"longBylineText":\{"runs":\[\{"text":"((?:[^"\\]|\\.)*)"/);
     if (c) { try { channel = JSON.parse('"' + c[1] + '"'); } catch { channel = c[1]; } }
-    results.push({ videoId: m[1], title, channel });
+    let duration = 0;
+    const d = after.match(/"lengthText":\{"accessibility":\{"accessibilityData":\{"label":"([^"]+)"\}\}/);
+    if (d) { duration = parseDuration(d[1]); }
+    results.push({ videoId: m[1], title, channel, duration });
   }
   return results;
+}
+
+/** Parse YouTube duration label like "3:45" or "1:23:45" or "3 分 45 秒" to seconds. */
+function parseDuration(label) {
+  if (!label) return 0;
+  // Try HH:MM:SS or MM:SS
+  const colons = label.match(/(\d+):(\d+)(?::(\d+))?/);
+  if (colons) {
+    if (colons[3]) return parseInt(colons[1]) * 3600 + parseInt(colons[2]) * 60 + parseInt(colons[3]);
+    return parseInt(colons[1]) * 60 + parseInt(colons[2]);
+  }
+  // Try "X 分 Y 秒" or "X minutes Y seconds"
+  let total = 0;
+  const hm = label.match(/(\d+)\s*(?:分|minutes?|mins?)/i);
+  if (hm) total += parseInt(hm[1]) * 60;
+  const hs = label.match(/(\d+)\s*(?:秒|seconds?|secs?)/i);
+  if (hs) total += parseInt(hs[1]);
+  return total;
 }
 
 /** Extract the top videoRenderer {videoId,title} from a search results page. */
@@ -70,6 +91,7 @@ function extractFirstVideo(html) {
  *   +5   title contains "official"
  *   +5   channel name contains "vevo"
  *   +3   title contains "mv"
+ *   -50  video too short (< 60s, likely a teaser/clip)
  * Returns the best match or null if nothing looks like a correct match.
  */
 function pickOfficialMV(videos, songName) {
@@ -81,15 +103,14 @@ function pickOfficialMV(videos, songName) {
     const t = v.title.toLowerCase();
     const ch = (v.channel || '').toLowerCase();
     let score = 0;
-    // Song name match is the most important signal
     if (lowerName && t.includes(lowerName)) score += 20;
     if (t.includes('official') && (t.includes('mv') || t.includes('music video'))) score += 10;
     else if (t.includes('official')) score += 5;
     if (ch.includes('vevo')) score += 5;
     if (t.includes(' mv')) score += 3;
+    if (v.duration > 0 && v.duration < 60) score -= 50;
     if (score > bestScore) { bestScore = score; best = v; }
   }
-  // Require at least the song name to match (score >= 20)
   return bestScore >= 20 ? best : null;
 }
 
@@ -114,7 +135,7 @@ async function searchYouTube(song) {
     }
   } catch { /* fall through */ }
 
-  // Pass 2: plain search — prefer results containing the song name
+  // Pass 2: plain search — prefer results containing the song name, skip short videos
   try {
     const { status, body } = await get(
       `https://www.youtube.com/results?search_query=${encodeURIComponent(plain)}`,
@@ -123,10 +144,11 @@ async function searchYouTube(song) {
     if (status !== 200) return null;
     const videos = extractVideos(body);
     if (!videos.length) return null;
-    // Prefer a video whose title contains the song name
+    // Prefer videos with song name in title, duration >= 60s
     const lowerName = song.name.toLowerCase();
-    const nameMatch = videos.find((v) => v.title.toLowerCase().includes(lowerName));
-    const best = nameMatch || videos[0];
+    const good = videos.filter((v) => v.duration >= 60 && v.title.toLowerCase().includes(lowerName));
+    const anyLong = videos.filter((v) => v.duration >= 60);
+    const best = good[0] || anyLong[0] || videos[0];
     return { videoId: best.videoId, title: best.title };
   } catch {
     return null;
