@@ -109,6 +109,8 @@ main {
 .app-grid.draggable .app-card { cursor: grab; }
 .app-grid.draggable .app-card:active { cursor: grabbing; }
 .app-card.dragging { opacity: 0.45; transform: scale(0.98); }
+.app-card.drag-over { border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary); }
+.touch-drag-clone { border-radius: var(--radius); background: var(--card-bg); }
 
 .app-card {
   background: var(--card-bg);

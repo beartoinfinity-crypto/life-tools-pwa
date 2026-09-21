@@ -72,16 +72,22 @@
         '</a>';
     }).join('');
     grid.innerHTML = html;
-    if (window.matchMedia && window.matchMedia('(pointer: fine)').matches) wireDnD();
+    wireDnD();
   }
 
-  /* --- drag to reorder (desktop / fine pointers only) --- */
+  /* --- drag to reorder (desktop drag API + mobile touch) --- */
   var draggedId = null;
+  var touchDragEl = null;   // floating clone during mobile drag
+  var touchOrigin = null;   // { x, y, card, id, timer }
+  var LONG_PRESS_MS = 400;
+
   function wireDnD() {
     grid.classList.add('draggable');
+    var cards = grid.querySelectorAll('.app-card');
+
+    /* --- desktop: HTML5 drag API --- */
     grid.addEventListener('dragover', function (e) { e.preventDefault(); });
     grid.addEventListener('drop', function (e) { e.preventDefault(); });
-    var cards = grid.querySelectorAll('.app-card');
     cards.forEach(function (card) {
       card.setAttribute('draggable', 'true');
       card.addEventListener('dragstart', function (e) {
@@ -104,6 +110,100 @@
         draggedId = null;
       });
     });
+
+    /* --- mobile: touch long-press + drag --- */
+    grid.addEventListener('touchstart', onTouchStart, { passive: false });
+    grid.addEventListener('touchmove', onTouchMove, { passive: false });
+    grid.addEventListener('touchend', onTouchEnd);
+    grid.addEventListener('touchcancel', onTouchEnd);
+  }
+
+  function onTouchStart(e) {
+    var card = e.target.closest ? e.target.closest('.app-card') : null;
+    if (!card) return;
+    var touch = e.touches[0];
+    touchOrigin = {
+      x: touch.clientX,
+      y: touch.clientY,
+      card: card,
+      id: card.dataset.id,
+      timer: setTimeout(function () {
+        // Long-press confirmed: start drag
+        draggedId = card.dataset.id;
+        card.classList.add('dragging');
+        // Create floating clone
+        var rect = card.getBoundingClientRect();
+        touchDragEl = card.cloneNode(true);
+        touchDragEl.classList.add('touch-drag-clone');
+        touchDragEl.style.width = rect.width + 'px';
+        touchDragEl.style.position = 'fixed';
+        touchDragEl.style.left = rect.left + 'px';
+        touchDragEl.style.top = rect.top + 'px';
+        touchDragEl.style.zIndex = '9999';
+        touchDragEl.style.pointerEvents = 'none';
+        touchDragEl.style.opacity = '0.9';
+        touchDragEl.style.transform = 'scale(1.05)';
+        touchDragEl.style.boxShadow = '0 8px 24px rgba(0,0,0,0.25)';
+        document.body.appendChild(touchDragEl);
+        // Haptic feedback if available
+        if (navigator.vibrate) navigator.vibrate(30);
+      }, LONG_PRESS_MS)
+    };
+  }
+
+  function onTouchMove(e) {
+    if (!touchOrigin) return;
+    var touch = e.touches[0];
+    var dx = touch.clientX - touchOrigin.x;
+    var dy = touch.clientY - touchOrigin.y;
+
+    // If not dragging yet, check if moved too far (cancel long-press)
+    if (!touchDragEl) {
+      if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
+        clearTimeout(touchOrigin.timer);
+        touchOrigin = null;
+      }
+      return;
+    }
+
+    e.preventDefault();
+    // Move the clone
+    var rect = touchOrigin.card.getBoundingClientRect();
+    touchDragEl.style.left = (rect.left + dx) + 'px';
+    touchDragEl.style.top = (rect.top + dy) + 'px';
+
+    // Highlight the card we're hovering over
+    var hoverCard = document.elementFromPoint(touch.clientX, touch.clientY);
+    if (hoverCard) {
+      var target = hoverCard.closest ? hoverCard.closest('.app-card') : null;
+      var cards = grid.querySelectorAll('.app-card');
+      Array.prototype.forEach.call(cards, function (c) { c.classList.remove('drag-over'); });
+      if (target && target !== touchOrigin.card) target.classList.add('drag-over');
+    }
+  }
+
+  function onTouchEnd(e) {
+    if (!touchOrigin) return;
+    clearTimeout(touchOrigin.timer);
+
+    if (touchDragEl) {
+      // Find the drop target
+      var touch = e.changedTouches[0];
+      var hoverCard = document.elementFromPoint(touch.clientX, touch.clientY);
+      var target = hoverCard ? (hoverCard.closest ? hoverCard.closest('.app-card') : null) : null;
+      if (target && target !== touchOrigin.card) {
+        reorder(touchOrigin.id, target.dataset.id);
+      }
+      // Clean up
+      touchDragEl.remove();
+      touchDragEl = null;
+    }
+
+    touchOrigin.card.classList.remove('dragging');
+    var cards = grid.querySelectorAll('.app-card');
+    Array.prototype.forEach.call(cards, function (c) { c.classList.remove('drag-over'); });
+    draggedId = null;
+    touchOrigin = null;
   }
   function reorder(fromId, toId) {
     var list = orderedApps();
