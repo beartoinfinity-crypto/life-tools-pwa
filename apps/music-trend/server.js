@@ -211,6 +211,37 @@ app.post('/api/playlists/refresh', async (req, res) => {
   }
 });
 
+// Manually replace a song's YouTube ID in a chart playlist
+app.patch('/api/playlists/:listKey/songs/:songId', async (req, res) => {
+  try {
+    const listKey = decodeURIComponent(req.params.listKey);
+    const songId = decodeURIComponent(req.params.songId);
+    const youtubeId = String((req.body || {}).youtubeId || '').trim();
+    if (!/^[A-Za-z0-9_-]{11}$/.test(youtubeId)) throw new Error('Invalid YouTube video ID');
+
+    const { data: row, error: fetchErr } = await supabase
+      .from('music_trend')
+      .select('songs')
+      .eq('list', listKey)
+      .maybeSingle();
+    if (fetchErr) throw fetchErr;
+    if (!row) return res.status(404).json({ error: 'playlist not found' });
+
+    const songs = JSON.parse(row.songs || '[]');
+    const song = songs.find(function (s) { return String(s.id) === String(songId); });
+    if (!song) return res.status(404).json({ error: 'song not found' });
+    song.youtubeId = youtubeId;
+    song.youtubeTitle = (req.body || {}).youtubeTitle || song.youtubeTitle || '';
+
+    const { error: updErr } = await supabase
+      .from('music_trend')
+      .update({ songs: JSON.stringify(songs) })
+      .eq('list', listKey);
+    if (updErr) throw updErr;
+    res.json({ ok: true, youtubeId: youtubeId });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // Cross-device my-playlist store (table music_user_playlists). The name the
 // user types IS the key, so the same name on another device reloads the songs.
 app.get('/api/myplaylists', async (req, res) => {
@@ -358,6 +389,37 @@ app.delete('/api/myplaylists/:name/songs/:songId', async (req, res) => {
       .eq('name', name);
     if (updErr) throw updErr;
     res.json({ ok: true, name: name, count: filtered.length });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Replace a song's YouTube ID in a user playlist
+app.patch('/api/myplaylists/:name/songs/:songId', async (req, res) => {
+  try {
+    const name = decodeURIComponent(req.params.name);
+    const songId = decodeURIComponent(req.params.songId);
+    const youtubeId = String((req.body || {}).youtubeId || '').trim();
+    if (!/^[A-Za-z0-9_-]{11}$/.test(youtubeId)) throw new Error('Invalid YouTube video ID');
+
+    const { data: existing, error: fetchErr } = await supabase
+      .from('music_user_playlists')
+      .select('name, songs')
+      .eq('name', name)
+      .maybeSingle();
+    if (fetchErr) throw fetchErr;
+    if (!existing) return res.status(404).json({ error: 'not found' });
+
+    const songs = JSON.parse(existing.songs || '[]');
+    const song = songs.find(function (s) { return String(s.id) === String(songId); });
+    if (!song) return res.status(404).json({ error: 'song not found' });
+    song.youtubeId = youtubeId;
+    song.youtubeTitle = (req.body || {}).youtubeTitle || song.youtubeTitle || '';
+
+    const { error: updErr } = await supabase
+      .from('music_user_playlists')
+      .update({ songs: JSON.stringify(songs), updated_at: new Date().toISOString() })
+      .eq('name', name);
+    if (updErr) throw updErr;
+    res.json({ ok: true, youtubeId: youtubeId });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

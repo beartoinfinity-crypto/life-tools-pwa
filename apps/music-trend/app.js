@@ -441,8 +441,9 @@
       ? '<button class="s-add' + (inMyList(s.id) ? ' on' : '') + '" data-addid="' + esc(s.id) + '" title="My playlist">' +
           (opts.removeMode ? '✕' : inMyList(s.id) ? '✓' : '＋') + '</button>'
       : '';
+    var ytEditBtn = '<button class="s-yt-edit" data-songid="' + esc(s.id) + '" title="Replace YouTube video">&#9998;</button>';
     return '<div class="song-row' + (playableRow ? ' tappable' : '') + '"' +
-        (playableRow ? ' data-videoid="' + esc(s.youtubeId) + '"' : '') + '>' +
+        (playableRow ? ' data-videoid="' + esc(s.youtubeId) + '"' : '') + ' data-songid="' + esc(s.id) + '">' +
         '<div class="s-rank">' + (i + 1) + '</div>' +
         art +
         '<div class="s-main">' +
@@ -452,6 +453,7 @@
         '<div class="s-genre">' + esc(s.genre) + '</div>' +
         playBadge +
         saveBadge +
+        ytEditBtn +
         addBtn +
       '</div>';
   }
@@ -509,7 +511,81 @@
 
   /* ---------------- events ---------------- */
 
+  /* ---- YouTube ID replacement ---- */
+  function extractYtId(input) {
+    var s = String(input || '').trim();
+    // Already a bare video ID
+    if (/^[A-Za-z0-9_-]{11}$/.test(s)) return s;
+    // Try URL parsing
+    try {
+      var u = new URL(s);
+      // youtu.be/VIDEO_ID
+      if (u.hostname === 'youtu.be' && u.pathname.length > 1) return u.pathname.slice(1).split('/')[0].split('?')[0];
+      // youtube.com/watch?v=VIDEO_ID
+      if (u.searchParams.has('v')) return u.searchParams.get('v');
+      // youtube.com/embed/VIDEO_ID or /v/VIDEO_ID
+      var m = u.pathname.match(/\/(embed|v)\/([A-Za-z0-9_-]{11})/);
+      if (m) return m[2];
+    } catch {}
+    return null;
+  }
+
+  function replaceYtId(songId, newId) {
+    var entry = findList(current);
+    if (!entry) return;
+    // Update the song object in memory
+    var songs = entry.songs || [];
+    for (var i = 0; i < songs.length; i++) {
+      if (String(songs[i].id) === String(songId)) {
+        songs[i].youtubeId = newId;
+        songs[i].youtubeTitle = songs[i].youtubeTitle || '';
+        break;
+      }
+    }
+    // Persist to backend or localStorage
+    if (current === 'my') {
+      saveMySongs(songs);
+      render();
+      return;
+    }
+    // Chart playlist: PATCH the server
+    var listKey = country + ':' + current;
+    fetch(API_BASE + '/playlists/' + encodeURIComponent(listKey) + '/songs/' + encodeURIComponent(songId), {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ youtubeId: newId }),
+      cache: 'no-store'
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (payload) {
+        if (payload && payload.error) throw new Error(payload.error);
+        // Update device cache too
+        saveDev(country, current, cache);
+        render();
+        statusFlash('YouTube video replaced');
+      })
+      .catch(function (e) { statusFlash('Replace failed: ' + e.message); });
+  }
+
   listEl.addEventListener('click', function (e) {
+    var ytBtn = e.target.closest ? e.target.closest('.s-yt-edit') : null;
+    if (ytBtn) {
+      var songId = ytBtn.dataset.songid;
+      var entry = findList(current);
+      var song = null;
+      var songs = (entry && entry.songs) || [];
+      for (var j = 0; j < songs.length; j++) {
+        if (String(songs[j].id) === String(songId)) { song = songs[j]; break; }
+      }
+      if (!song) return;
+      var currentId = song.youtubeId || '';
+      var input = window.prompt('Enter YouTube URL or video ID:', currentId);
+      if (input === null) return; // cancelled
+      var newId = extractYtId(input);
+      if (!newId) { statusFlash('Invalid YouTube URL or video ID'); return; }
+      replaceYtId(songId, newId);
+      return;
+    }
     var add = e.target.closest ? e.target.closest('.s-add') : null;
     if (add) {
       var entry = findList(current);

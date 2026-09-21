@@ -408,6 +408,28 @@ main {
   color: var(--accent);
 }
 
+/* YouTube replace button */
+.song-row .s-yt-edit {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--card-bg);
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  -webkit-tap-highlight-color: transparent;
+  opacity: 0.5;
+}
+
+.song-row:hover .s-yt-edit,
+.song-row .s-yt-edit:focus { opacity: 1; }
+.song-row .s-yt-edit:active { background: rgba(123, 31, 162, 0.12); opacity: 1; }
+
 .status-bar.flash {
   color: var(--accent);
   font-weight: 700;
