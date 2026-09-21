@@ -436,28 +436,26 @@ app.post('/api/myplaylists/:name/resolve-youtube', async (req, res) => {
 
     const songs = typeof data.songs === 'string' ? JSON.parse(data.songs) : data.songs;
     const need = songs.filter((s) => !s.youtubeId);
-    if (!need.length) return res.json({ ok: true, resolved: 0, total: songs.length });
+    if (!need.length) return res.json({ ok: true, resolved: 0, total: songs.length, remaining: 0 });
 
-    // Resolve in batches of 10, saving after each batch (handles Vercel timeout)
+    // Resolve one batch of 10, save, return progress
     const BATCH = 10;
-    let resolved = 0;
-    for (let i = 0; i < need.length; i += BATCH) {
-      const batch = need.slice(i, i + BATCH);
-      await mapLimit(batch, 6, async (s) => {
-        const hit = await searchYouTube(s);
-        if (hit) {
-          s.youtubeId = hit.videoId;
-          s.youtubeTitle = hit.title;
-          resolved++;
-        }
-      });
-      // Save intermediate progress
-      await supabase
-        .from('music_user_playlists')
-        .update({ songs: JSON.stringify(songs), updated_at: new Date().toISOString() })
-        .eq('name', name);
-    }
-    res.json({ ok: true, resolved, total: songs.length });
+    const batch = need.slice(0, BATCH);
+    await mapLimit(batch, 6, async (s) => {
+      const hit = await searchYouTube(s);
+      if (hit) {
+        s.youtubeId = hit.videoId;
+        s.youtubeTitle = hit.title;
+      }
+    });
+    await supabase
+      .from('music_user_playlists')
+      .update({ songs: JSON.stringify(songs), updated_at: new Date().toISOString() })
+      .eq('name', name);
+
+    const remaining = songs.filter((s) => !s.youtubeId).length;
+    const resolved = songs.length - remaining;
+    res.json({ ok: true, resolved, total: songs.length, remaining });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
