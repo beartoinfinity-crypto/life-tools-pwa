@@ -56,22 +56,24 @@ const YT_DEADLINE_MS = 50 * 1000;
  * (matched by song id, country-scoped) so only new/missing songs hit
  * youtube — a rolling window per run keeps scrapes bounded. Never rejects.
  */
-async function resolveYouTube(country, songs) {
-  // Reuse previously cached ids
+async function resolveYouTube(country, songs, skipCache) {
+  // Reuse previously cached ids (unless skipCache forces a full re-resolve)
   let cached = new Map();
-  try {
-    const { data } = await supabase.from('music_trend').select('songs').eq('list', `${country}:trending`).single();
-    for (const s of JSON.parse(data.songs || '[]')) {
-      if (s.youtubeId) cached.set(String(s.id), { youtubeId: s.youtubeId, youtubeTitle: s.youtubeTitle });
-    }
-  } catch { /* first run / no cache */ }
+  if (!skipCache) {
+    try {
+      const { data } = await supabase.from('music_trend').select('songs').eq('list', `${country}:trending`).single();
+      for (const s of JSON.parse(data.songs || '[]')) {
+        if (s.youtubeId) cached.set(String(s.id), { youtubeId: s.youtubeId, youtubeTitle: s.youtubeTitle });
+      }
+    } catch { /* first run / no cache */ }
+  }
 
   for (const s of songs) {
     const c = cached.get(String(s.id));
     if (c) { s.youtubeId = c.youtubeId; s.youtubeTitle = c.youtubeTitle; }
   }
 
-  const need = songs.filter((s) => !s.youtubeId).slice(0, YT_RESOLVE_PER_RUN);
+  const need = skipCache ? songs.filter((s) => !s.youtubeId) : songs.filter((s) => !s.youtubeId).slice(0, YT_RESOLVE_PER_RUN);
   if (!need.length) return;
 
   const deadline = Date.now() + YT_DEADLINE_MS;
@@ -90,7 +92,7 @@ async function resolveYouTube(country, songs) {
  * playlists, resolve YouTube ids (rolling window), and cache each playlist
  * as one JSON row in Supabase keyed "<cc>:<list>".
  */
-async function refreshMusicTrend(country) {
+async function refreshMusicTrend(country, { clearCache } = {}) {
   const cc = String(country || 'hk').toLowerCase();
   if (!COUNTRIES[cc]) throw new Error(`unknown country: ${cc}`);
   const { status, data } = await fetchUrl(feedUrl(cc));
@@ -98,7 +100,7 @@ async function refreshMusicTrend(country) {
   const lists = buildPlaylists(JSON.parse(data), cc);
   if (!lists.trending.length) throw new Error('feed had no songs');
 
-  await resolveYouTube(cc, lists.trending);
+  await resolveYouTube(cc, lists.trending, clearCache);
 
   // resolveYouTube mutates only the trending copies of each song; propagate the
   // resolved ids to the cantonese/chinese playlists (same songs, new objects).
@@ -200,8 +202,8 @@ app.post('/api/playlists', async (req, res) => {
 // Scrape + upsert, then return the cached playlists
 app.post('/api/playlists/refresh', async (req, res) => {
   try {
-    const { country, list } = req.body || {};
-    const r = await refreshMusicTrend(country);
+    const { country, list, clearCache } = req.body || {};
+    const r = await refreshMusicTrend(country, { clearCache: !!clearCache });
     const out = await readMusicTrend({ country: r.country, list });
     res.json({ ...out, fetched: r.fetched, resolved: r.resolved });
   } catch (e) {

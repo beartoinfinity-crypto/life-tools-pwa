@@ -738,9 +738,13 @@
     Array.prototype.forEach.call(rows, function (r) { r.classList.remove('playing'); });
   });
 
-  refreshBtn.addEventListener('click', function () { load(true); });
+  refreshBtn.addEventListener('click', function (e) {
+    // Shift+click: force re-resolve all YouTube IDs (clears cache)
+    var clearCache = !!(e && e.shiftKey);
+    load(true, clearCache);
+  });
 
-  function load(refresh) {
+  function load(refresh, clearCache) {
     var wantList = (current === 'my') ? 'trending' : current;
     refreshBtn.classList.add('spinning');
     // Device cache: when we already fetched this exact country+list before, paint
@@ -757,10 +761,12 @@
     if (refresh || country + ':' + wantList !== loadedKey) {
       listEl.innerHTML = '<div class="loading-note">Loading…</div>';
     }
+    var body = { country: country, list: wantList };
+    if (clearCache) body.clearCache = true;
     fetch(refresh ? API_BASE + '/playlists/refresh' : API_BASE + '/playlists', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ country: country, list: wantList }),
+      body: JSON.stringify(body),
       cache: 'no-store'
     })
       .then(function (r) { return r.json(); })
