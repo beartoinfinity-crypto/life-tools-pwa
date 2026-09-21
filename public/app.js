@@ -26,7 +26,7 @@
     {
       id: 'traffic-news',
       title: 'Traffic News',
-      desc: 'Latest HK traffic incidents from Routejam (路暢) — updated every minute.',
+      desc: 'Latest HK traffic incidents from Routejam — updated every minute.',
       href: '/traffic-news/',
       icon: '交'
     },
@@ -44,6 +44,8 @@
 
   var grid = document.getElementById('appGrid');
   var themeBtn = document.getElementById('themeBtn');
+  var sortBtn = document.getElementById('sortBtn');
+  var sortMode = false;
 
   function orderedApps() {
     var custom;
@@ -61,169 +63,59 @@
     try { localStorage.setItem(ORDER_KEY, JSON.stringify(list.map(function (a) { return a.id; }))); } catch (e) {}
   }
 
-  function render() {
+  function moveCard(id, dir) {
     var list = orderedApps();
-    var html = list.map(function (a) {
-      return '<a class="app-card" data-id="' + a.id + '" href="' + a.href + '">' +
-          '<div class="app-icon ' + a.id + '" aria-hidden="true">' + a.icon + '</div>' +
-          '<div class="app-title">' + a.title + '</div>' +
-          '<div class="app-desc">' + a.desc + '</div>' +
-          '<div class="app-link">Open &rarr;</div>' +
-        '</a>';
-    }).join('');
-    grid.innerHTML = html;
-    wireDnD();
-  }
-
-  /* --- drag to reorder (desktop drag API + mobile touch) --- */
-  var draggedId = null;
-  var touchDragEl = null;   // floating clone during mobile drag
-  var touchOrigin = null;   // { x, y, card, id, timer }
-  var LONG_PRESS_MS = 400;
-
-  function wireDnD() {
-    grid.classList.add('draggable');
-    var cards = grid.querySelectorAll('.app-card');
-
-    /* --- desktop: HTML5 drag API --- */
-    grid.addEventListener('dragover', function (e) { e.preventDefault(); });
-    grid.addEventListener('drop', function (e) { e.preventDefault(); });
-    cards.forEach(function (card) {
-      card.setAttribute('draggable', 'true');
-      card.addEventListener('dragstart', function (e) {
-        draggedId = card.dataset.id;
-        card.classList.add('dragging');
-        try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', card.dataset.id); } catch (err) {}
-      });
-      card.addEventListener('dragend', function () {
-        card.classList.remove('dragging');
-        draggedId = null;
-      });
-      card.addEventListener('dragover', function (e) {
-        e.preventDefault();
-        try { e.dataTransfer.dropEffect = 'move'; } catch (err) {}
-      });
-      card.addEventListener('drop', function (e) {
-        e.preventDefault();
-        var toId = card.dataset.id;
-        if (draggedId && toId && draggedId !== toId) reorder(draggedId, toId);
-        draggedId = null;
-      });
-    });
-
-    /* --- mobile: touch long-press + drag --- */
-    grid.addEventListener('touchstart', onTouchStart, { passive: true });
-    grid.addEventListener('touchmove', onTouchMove, { passive: false });
-    grid.addEventListener('touchend', onTouchEnd);
-    grid.addEventListener('touchcancel', onTouchEnd);
-    // Suppress context menu only when a drag is active
-    grid.addEventListener('contextmenu', function (e) {
-      if (touchDragEl) e.preventDefault();
-    });
-  }
-
-  function onTouchStart(e) {
-    var card = e.target.closest ? e.target.closest('.app-card') : null;
-    if (!card) return;
-    // Don't prevent default here — allow normal scrolling
-    var touch = e.touches[0];
-    touchOrigin = {
-      x: touch.clientX,
-      y: touch.clientY,
-      card: card,
-      id: card.dataset.id,
-      timer: setTimeout(function () {
-        // Long-press confirmed: start drag — NOW block scrolling
-        draggedId = card.dataset.id;
-        card.classList.add('dragging');
-        // Create floating clone
-        var rect = card.getBoundingClientRect();
-        touchDragEl = card.cloneNode(true);
-        touchDragEl.classList.add('touch-drag-clone');
-        touchDragEl.style.width = rect.width + 'px';
-        touchDragEl.style.position = 'fixed';
-        touchDragEl.style.left = rect.left + 'px';
-        touchDragEl.style.top = rect.top + 'px';
-        touchDragEl.style.zIndex = '9999';
-        touchDragEl.style.pointerEvents = 'none';
-        touchDragEl.style.opacity = '0.9';
-        touchDragEl.style.transform = 'scale(1.05)';
-        touchDragEl.style.boxShadow = '0 8px 24px rgba(0,0,0,0.25)';
-        document.body.appendChild(touchDragEl);
-        if (navigator.vibrate) navigator.vibrate(30);
-      }, LONG_PRESS_MS)
-    };
-  }
-
-  function onTouchMove(e) {
-    if (!touchOrigin) return;
-    var touch = e.touches[0];
-    var dx = touch.clientX - touchOrigin.x;
-    var dy = touch.clientY - touchOrigin.y;
-
-    // If not dragging yet, check if moved too far (cancel long-press)
-    if (!touchDragEl) {
-      if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
-        clearTimeout(touchOrigin.timer);
-        touchOrigin = null;
-      }
-      return;
-    }
-
-    e.preventDefault();
-    // Move the clone
-    var rect = touchOrigin.card.getBoundingClientRect();
-    touchDragEl.style.left = (rect.left + dx) + 'px';
-    touchDragEl.style.top = (rect.top + dy) + 'px';
-
-    // Highlight the card we're hovering over
-    var hoverCard = document.elementFromPoint(touch.clientX, touch.clientY);
-    if (hoverCard) {
-      var target = hoverCard.closest ? hoverCard.closest('.app-card') : null;
-      var cards = grid.querySelectorAll('.app-card');
-      Array.prototype.forEach.call(cards, function (c) { c.classList.remove('drag-over'); });
-      if (target && target !== touchOrigin.card) target.classList.add('drag-over');
-    }
-  }
-
-  function onTouchEnd(e) {
-    if (!touchOrigin) return;
-    clearTimeout(touchOrigin.timer);
-
-    if (touchDragEl) {
-      // Find the drop target
-      var touch = e.changedTouches[0];
-      var hoverCard = document.elementFromPoint(touch.clientX, touch.clientY);
-      var target = hoverCard ? (hoverCard.closest ? hoverCard.closest('.app-card') : null) : null;
-      if (target && target !== touchOrigin.card) {
-        reorder(touchOrigin.id, target.dataset.id);
-      }
-      // Clean up
-      touchDragEl.remove();
-      touchDragEl = null;
-    }
-
-    touchOrigin.card.classList.remove('dragging');
-    var cards = grid.querySelectorAll('.app-card');
-    Array.prototype.forEach.call(cards, function (c) { c.classList.remove('drag-over'); });
-    draggedId = null;
-    touchOrigin = null;
-  }
-  function reorder(fromId, toId) {
-    var list = orderedApps();
-    var src;
+    var idx = -1;
     for (var i = 0; i < list.length; i++) {
-      if (list[i].id === fromId) { src = list.splice(i, 1)[0]; break; }
+      if (list[i].id === id) { idx = i; break; }
     }
-    if (!src) return;
-    var to = 0;
-    for (var j = 0; j < list.length; j++) {
-      if (list[j].id === toId) { to = j; break; }
-    }
-    list.splice(to, 0, src);
+    if (idx < 0) return;
+    var swap = idx + dir;
+    if (swap < 0 || swap >= list.length) return;
+    var tmp = list[idx];
+    list[idx] = list[swap];
+    list[swap] = tmp;
     saveOrder(list);
     render();
   }
+
+  function render() {
+    var list = orderedApps();
+    var html = list.map(function (a, i) {
+      var sortBtns = sortMode
+        ? '<div class="sort-btns">' +
+            (i > 0 ? '<button class="sort-up" data-id="' + a.id + '" title="Move up">&#9650;</button>' : '') +
+            (i < list.length - 1 ? '<button class="sort-down" data-id="' + a.id + '" title="Move down">&#9660;</button>' : '') +
+          '</div>'
+        : '';
+      return '<a class="app-card' + (sortMode ? ' sort-active' : '') + '" data-id="' + a.id + '" href="' + (sortMode ? '#' : a.href) + '">' +
+          '<div class="app-icon ' + a.id + '" aria-hidden="true">' + a.icon + '</div>' +
+          '<div class="app-title">' + a.title + '</div>' +
+          '<div class="app-desc">' + a.desc + '</div>' +
+          (sortMode ? '' : '<div class="app-link">Open &rarr;</div>') +
+          sortBtns +
+        '</a>';
+    }).join('');
+    grid.innerHTML = html;
+  }
+
+  grid.addEventListener('click', function (e) {
+    if (!sortMode) return;
+    var up = e.target.closest ? e.target.closest('.sort-up') : null;
+    if (up) { e.preventDefault(); moveCard(up.dataset.id, -1); return; }
+    var down = e.target.closest ? e.target.closest('.sort-down') : null;
+    if (down) { e.preventDefault(); moveCard(down.dataset.id, 1); return; }
+    // Block navigation in sort mode
+    var card = e.target.closest ? e.target.closest('.app-card') : null;
+    if (card) e.preventDefault();
+  });
+
+  sortBtn.addEventListener('click', function () {
+    sortMode = !sortMode;
+    sortBtn.textContent = sortMode ? 'Done' : 'Sort';
+    sortBtn.title = sortMode ? 'Finish reordering' : 'Reorder apps';
+    render();
+  });
 
   /* --- day / night theme --- */
   function systemTheme() {
