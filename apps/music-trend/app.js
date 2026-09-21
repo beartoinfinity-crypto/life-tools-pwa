@@ -737,7 +737,7 @@
             '<button class="my-pick" data-name="' + esc(p.name) + '">' + esc(p.name) +
             ' · ' + p.count + ' 首 · ' + fmtAgo(p.updated_at) + '</button>' +
             '<button class="my-pick-edit" data-name="' + esc(p.name) + '" title="Rename">&#9998;</button>' +
-            '<button class="my-pick-ytr" data-name="' + esc(p.name) + '" title="Resolve YouTube">&#9654;</button>' +
+            '<button class="my-pick-ytr" data-name="' + esc(p.name) + '" title="Resolve YouTube (Shift+click = force re-resolve)">&#9654;</button>' +
             '<button class="my-pick-del" data-name="' + esc(p.name) + '" title="Delete">&#128465;</button>' +
             '</div>';
         });
@@ -788,7 +788,7 @@
     }
     var ytrBtn = e.target.closest ? e.target.closest('.my-pick-ytr') : null;
     if (ytrBtn) {
-      resolveYouTubeForPlaylist(ytrBtn.dataset.name);
+      resolveYouTubeForPlaylist(ytrBtn.dataset.name, e.shiftKey);
       return;
     }
     var btn = e.target.closest ? e.target.closest('.my-pick') : null;
@@ -920,11 +920,13 @@
       .catch(function (e) { statusFlash('儲存失敗: ' + e.message); });
   }
 
-  function resolveYouTubeForPlaylist(name) {
-    statusFlash('正在搜尋 YouTube 影片… 0/0');
+  function resolveYouTubeForPlaylist(name, force) {
+    statusFlash(force ? '重新搜尋 YouTube 影片… 0/0' : '正在搜尋 YouTube 影片… 0/0');
     function doBatch() {
       fetch(API_BASE + '/myplaylists/' + encodeURIComponent(name) + '/resolve-youtube', {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: force ? JSON.stringify({ force: true }) : '{}',
         cache: 'no-store'
       })
         .then(function (r) { return r.json(); })

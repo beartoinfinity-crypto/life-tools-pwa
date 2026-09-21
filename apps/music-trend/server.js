@@ -435,6 +435,10 @@ app.post('/api/myplaylists/:name/resolve-youtube', async (req, res) => {
     if (fetchErr || !data) return res.status(404).json({ error: 'Playlist not found' });
 
     const songs = typeof data.songs === 'string' ? JSON.parse(data.songs) : data.songs;
+    // If force=true, clear all existing youtubeIds
+    if (req.body && req.body.force) {
+      songs.forEach(function (s) { delete s.youtubeId; delete s.youtubeTitle; });
+    }
     const need = songs.filter((s) => !s.youtubeId);
     if (!need.length) return res.json({ ok: true, resolved: 0, total: songs.length, remaining: 0 });
 
