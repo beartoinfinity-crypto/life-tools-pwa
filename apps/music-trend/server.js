@@ -487,38 +487,52 @@ app.post('/api/myplaylists/:name/cleanup', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// ── Parse Apple Music playlist URL → songs ──────────────────────────
+// ── Parse Apple Music playlist/room URL → songs ────────────────────
 app.post('/api/playlist/parse', async (req, res) => {
   try {
     const { url } = req.body;
     if (!url) return res.status(400).json({ error: 'url required' });
 
-    // Extract playlist ID from URL (pl.XXXXXXXXXXXX)
-    const plMatch = url.match(/pl\.([a-zA-Z0-9]+)/);
-    if (!plMatch) return res.status(400).json({ error: 'Invalid Apple Music playlist URL' });
-    const plId = plMatch[1];
+    const isPlaylist = /pl\.[a-zA-Z0-9]+/.test(url);
+    const isRoom = /\/room\/\d+/.test(url);
+    if (!isPlaylist && !isRoom) return res.status(400).json({ error: 'Invalid Apple Music URL (need playlist or room link)' });
 
-    // Fetch the playlist page
     const pageUrl = url.startsWith('http') ? url : `https://music.apple.com${url}`;
     const pageRes = await fetch(pageUrl, {
       headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36' }
     });
-    if (!pageRes.ok) return res.status(502).json({ error: 'Failed to fetch playlist page' });
+    if (!pageRes.ok) return res.status(502).json({ error: 'Failed to fetch page' });
     const html = await pageRes.text();
 
-    // Extract playlist title
-    const titleMatch = html.match(/<meta\s+name="apple:title"\s+content="([^"]+)"/);
-    const ogTitleMatch = html.match(/<meta\s+property="og:title"\s+content="([^"]+)"/);
-    const playlistTitle = (titleMatch && titleMatch[1]) || (ogTitleMatch && ogTitleMatch[1]) || 'Imported Playlist';
+    let trackIds = [];
+    let playlistTitle = 'Imported Playlist';
 
-    // Extract track IDs from <meta property="music:song" content="...">
-    const trackIds = [];
-    const songMetaRe = /<meta\s+property="music:song"\s+content="[^"]*?\/(\d+)"/g;
-    let m;
-    while ((m = songMetaRe.exec(html)) !== null) {
-      trackIds.push(m[1]);
+    if (isPlaylist) {
+      // Playlist: extract from <meta property="music:song"> tags
+      const titleMatch = html.match(/<meta\s+name="apple:title"\s+content="([^"]+)"/);
+      const ogTitleMatch = html.match(/<meta\s+property="og:title"\s+content="([^"]+)"/);
+      playlistTitle = (titleMatch && titleMatch[1]) || (ogTitleMatch && ogTitleMatch[1]) || 'Imported Playlist';
+      const songMetaRe = /<meta\s+property="music:song"\s+content="[^"]*?\/(\d+)"/g;
+      let m;
+      while ((m = songMetaRe.exec(html)) !== null) { trackIds.push(m[1]); }
+    } else {
+      // Room: extract from <script id="serialized-server-data"> JSON
+      const jsonMatch = html.match(/<script[^>]*id="serialized-server-data"[^>]*>([\s\S]*?)<\/script>/);
+      if (!jsonMatch) return res.status(404).json({ error: 'No data found in room page' });
+      const pageData = JSON.parse(jsonMatch[1]);
+      // Extract title from page title tag
+      const titleTag = html.match(/<title>[^<]*?([^\-]+)\s*-\s*Apple\s*Music/i);
+      playlistTitle = (titleTag && titleTag[1].trim()) || 'Imported Playlist';
+      // Find all songs: look for storeAdamID in contentDescriptor
+      const jsonStr = JSON.stringify(pageData);
+      const idRe = /"contentDescriptor":\{"kind":"song","identifiers":\{"storeAdamID":"(\d+)"/g;
+      let m;
+      while ((m = idRe.exec(jsonStr)) !== null) {
+        if (!trackIds.includes(m[1])) trackIds.push(m[1]);
+      }
     }
-    if (!trackIds.length) return res.status(404).json({ error: 'No tracks found in playlist' });
+
+    if (!trackIds.length) return res.status(404).json({ error: 'No tracks found' });
 
     // Fetch full track details from iTunes API (batch up to 200)
     const songs = [];
@@ -528,7 +542,7 @@ app.post('/api/playlist/parse', async (req, res) => {
       const itunesRes = await fetch(itunesUrl);
       const data = await itunesRes.json();
       if (data.results) {
-        data.results.forEach((r, idx) => {
+        data.results.forEach((r) => {
           if (r.wrapperType === 'track') {
             songs.push({
               rank: songs.length + 1,
@@ -545,7 +559,7 @@ app.post('/api/playlist/parse', async (req, res) => {
       }
     }
 
-    res.json({ title: playlistTitle, plId, songs });
+    res.json({ title: playlistTitle, songs });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

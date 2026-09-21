@@ -812,9 +812,9 @@
     myImport.classList.remove('hidden');
     myPicker.classList.add('hidden');
     myImport.innerHTML =
-      '<div class="my-picker-title">貼上 Apple Music 歌單連結</div>' +
+      '<div class="my-picker-title">貼上 Apple Music 歌單或房間連結</div>' +
       '<div class="import-row">' +
-        '<input id="importUrl" type="url" placeholder="https://music.apple.com/hk/playlist/..." class="import-input" />' +
+        '<input id="importUrl" type="url" placeholder="https://music.apple.com/hk/playlist/... 或 /room/..." class="import-input" />' +
         '<button id="importFetchBtn" class="my-tool-btn">匯入</button>' +
       '</div>';
     document.getElementById('importFetchBtn').addEventListener('click', doImport);
@@ -827,8 +827,8 @@
     var urlInput = document.getElementById('importUrl');
     var url = urlInput ? urlInput.value.trim() : '';
     if (!url) { statusFlash('請貼上歌單連結'); return; }
-    if (!url.includes('music.apple.com') || !url.includes('pl.')) {
-      statusFlash('請輸入有效的 Apple Music 歌單連結');
+    if (!url.includes('music.apple.com') || (!url.includes('pl.') && !url.includes('/room/'))) {
+      statusFlash('請輸入有效的 Apple Music 歌單或房間連結');
       return;
     }
     var fetchBtn = document.getElementById('importFetchBtn');
