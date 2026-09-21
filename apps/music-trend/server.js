@@ -496,7 +496,8 @@ app.post('/api/playlist/parse', async (req, res) => {
     const isPlaylist = /pl\.[a-zA-Z0-9]+/.test(url);
     const isRoom = /\/room\/\d+/.test(url);
     const isAlbum = /\/album\/[^/]+\/\d+/.test(url);
-    if (!isPlaylist && !isRoom && !isAlbum) return res.status(400).json({ error: 'Invalid Apple Music URL (need playlist, room, or album link)' });
+    const isArtist = /\/artist\/[^/]+\/\d+/.test(url);
+    if (!isPlaylist && !isRoom && !isAlbum && !isArtist) return res.status(400).json({ error: 'Invalid Apple Music URL (need playlist, room, album, or artist link)' });
 
     const pageUrl = url.startsWith('http') ? url : `https://music.apple.com${url}`;
     const pageRes = await fetch(pageUrl, {
@@ -516,6 +517,15 @@ app.post('/api/playlist/parse', async (req, res) => {
       const songMetaRe = /<meta\s+property="music:song"\s+content="[^"]*?\/(\d+)"/g;
       let m;
       while ((m = songMetaRe.exec(html)) !== null) { trackIds.push(m[1]); }
+    } else if (isArtist) {
+      // Artist: extract from <a href="...album...?i={songId}"> links
+      const titleTag = html.match(/<title>\s*([^<]+?)\s*-\s*Apple\s*Music/i);
+      playlistTitle = (titleTag && titleTag[1].trim()) || 'Imported Artist';
+      const linkRe = /href="[^"]*\/album\/[^"]*\?i=(\d+)"/g;
+      let m;
+      while ((m = linkRe.exec(html)) !== null) {
+        if (!trackIds.includes(m[1])) trackIds.push(m[1]);
+      }
     } else {
       // Room: extract from <script id="serialized-server-data"> JSON
       const jsonMatch = html.match(/<script[^>]*id="serialized-server-data"[^>]*>([\s\S]*?)<\/script>/);
