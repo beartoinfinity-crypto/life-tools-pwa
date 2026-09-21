@@ -520,17 +520,17 @@ app.post('/api/playlist/parse', async (req, res) => {
     } else if (isArtist) {
       // Artist: use iTunes Search API to get all songs by artist name
       const titleTag = html.match(/<title>\s*([\s\S]*?)\s*-\s*Apple\s*Music/i);
-      playlistTitle = (titleTag && titleTag[1].trim()) || 'Imported Artist';
+      const rawTitle = (titleTag && titleTag[1].trim()) || 'Imported Artist';
       // Strip leading/trailing non-printable chars (e.g. U+200E left-to-right mark)
-      const artistName = playlistTitle.replace(/^[\s\u200B\u200E\u200F\uFEFF]+/, '').replace(/[\s\u200B\u200E\u200F\uFEFF]+$/, '');
+      playlistTitle = rawTitle.replace(/^[\s\u200B\u200E\u200F\uFEFF]+/, '').replace(/[\s\u200B\u200E\u200F\uFEFF]+$/, '');
       // Search iTunes for all songs by this artist (up to 200)
-      const searchUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(artistName)}&entity=song&limit=200&country=hk`;
+      const searchUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(playlistTitle)}&entity=song&limit=200&country=hk`;
       const searchRes = await fetch(searchUrl);
       const searchData = await searchRes.json();
       // Filter to only songs by this exact artist
       if (searchData.results) {
         searchData.results.forEach((r) => {
-          if (r.wrapperType === 'track' && r.artistName === artistName) {
+          if (r.wrapperType === 'track' && r.artistName === playlistTitle) {
             trackIds.push(String(r.trackId));
           }
         });
