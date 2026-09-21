@@ -87,6 +87,7 @@ function extractFirstVideo(html) {
  * Pick the best "official MV" candidate from a list of videos.
  * Scoring:
  *   +20  title contains the song name
+ *   +15  title or channel contains the artist name
  *   +10  title contains "official" and "mv" or "music video"
  *   +5   title contains "official"
  *   +5   channel name contains "vevo"
@@ -94,9 +95,10 @@ function extractFirstVideo(html) {
  *   -50  video too short (< 60s, likely a teaser/clip)
  * Returns the best match or null if nothing looks like a correct match.
  */
-function pickOfficialMV(videos, songName) {
+function pickOfficialMV(videos, songName, artistName) {
   if (!videos.length) return null;
   const lowerName = (songName || '').toLowerCase();
+  const lowerArtist = (artistName || '').toLowerCase();
   let best = null;
   let bestScore = 0;
   for (const v of videos) {
@@ -104,6 +106,7 @@ function pickOfficialMV(videos, songName) {
     const ch = (v.channel || '').toLowerCase();
     let score = 0;
     if (lowerName && t.includes(lowerName)) score += 20;
+    if (lowerArtist && (t.includes(lowerArtist) || ch.includes(lowerArtist))) score += 15;
     if (t.includes('official') && (t.includes('mv') || t.includes('music video'))) score += 10;
     else if (t.includes('official')) score += 5;
     if (ch.includes('vevo')) score += 5;
@@ -130,12 +133,12 @@ async function searchYouTube(song) {
     );
     if (status === 200) {
       const videos = extractVideos(body);
-      const best = pickOfficialMV(videos, song.name);
+      const best = pickOfficialMV(videos, song.name, song.artist);
       if (best) return { videoId: best.videoId, title: best.title };
     }
   } catch { /* fall through */ }
 
-  // Pass 2: plain search — prefer results containing the song name, skip short videos
+  // Pass 2: plain search — prefer results containing song name + artist, skip short videos
   try {
     const { status, body } = await get(
       `https://www.youtube.com/results?search_query=${encodeURIComponent(plain)}`,
@@ -144,11 +147,13 @@ async function searchYouTube(song) {
     if (status !== 200) return null;
     const videos = extractVideos(body);
     if (!videos.length) return null;
-    // Prefer videos with song name in title, duration >= 60s
     const lowerName = song.name.toLowerCase();
-    const good = videos.filter((v) => v.duration >= 60 && v.title.toLowerCase().includes(lowerName));
+    const lowerArtist = (song.artist || '').toLowerCase();
+    // Prefer: song name + artist + long, then song name + long, then any long, then first
+    const both = videos.filter((v) => v.duration >= 60 && v.title.toLowerCase().includes(lowerName) && (v.title.toLowerCase().includes(lowerArtist) || v.channel.toLowerCase().includes(lowerArtist)));
+    const nameMatch = videos.filter((v) => v.duration >= 60 && v.title.toLowerCase().includes(lowerName));
     const anyLong = videos.filter((v) => v.duration >= 60);
-    const best = good[0] || anyLong[0] || videos[0];
+    const best = both[0] || nameMatch[0] || anyLong[0] || videos[0];
     return { videoId: best.videoId, title: best.title };
   } catch {
     return null;
