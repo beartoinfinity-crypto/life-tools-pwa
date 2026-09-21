@@ -112,18 +112,20 @@
     });
 
     /* --- mobile: touch long-press + drag --- */
-    grid.addEventListener('touchstart', onTouchStart, { passive: false });
+    grid.addEventListener('touchstart', onTouchStart, { passive: true });
     grid.addEventListener('touchmove', onTouchMove, { passive: false });
     grid.addEventListener('touchend', onTouchEnd);
     grid.addEventListener('touchcancel', onTouchEnd);
-    // Prevent browser context menu on long-press
-    grid.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+    // Suppress context menu only when a drag is active
+    grid.addEventListener('contextmenu', function (e) {
+      if (touchDragEl) e.preventDefault();
+    });
   }
 
   function onTouchStart(e) {
     var card = e.target.closest ? e.target.closest('.app-card') : null;
     if (!card) return;
-    e.preventDefault(); // block browser context menu & text selection
+    // Don't prevent default here — allow normal scrolling
     var touch = e.touches[0];
     touchOrigin = {
       x: touch.clientX,
@@ -131,7 +133,7 @@
       card: card,
       id: card.dataset.id,
       timer: setTimeout(function () {
-        // Long-press confirmed: start drag
+        // Long-press confirmed: start drag — NOW block scrolling
         draggedId = card.dataset.id;
         card.classList.add('dragging');
         // Create floating clone
@@ -148,7 +150,6 @@
         touchDragEl.style.transform = 'scale(1.05)';
         touchDragEl.style.boxShadow = '0 8px 24px rgba(0,0,0,0.25)';
         document.body.appendChild(touchDragEl);
-        // Haptic feedback if available
         if (navigator.vibrate) navigator.vibrate(30);
       }, LONG_PRESS_MS)
     };
