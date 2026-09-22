@@ -80,11 +80,14 @@ function installMockYT(dom) {
 
     cueVideoById(id) {
       this.videoId = id;
+      this.cuedOnly = true;
       this.setState(5); // CUED
     }
 
     loadVideoById(id) {
       this.videoId = id;
+      this.cuedOnly = false;
+      this.loaded = true;
       this.setState(3); // BUFFERING
       queueMicrotask(() => {
         if (!this.destroyed && this.videoId === id) this.setState(1); // PLAYING
@@ -93,11 +96,17 @@ function installMockYT(dom) {
 
     playVideo() {
       if (this.destroyed) return;
+      this.playCalls = (this.playCalls || 0) + 1;
       this.setState(1);
     }
 
     pauseVideo() {
+      this.pauseCalls = (this.pauseCalls || 0) + 1;
       this.setState(2);
+    }
+
+    getPlayerState() {
+      return this.destroyed ? -1 : this.state;
     }
 
     stopVideo() {
@@ -135,7 +144,7 @@ async function flush() {
   await new Promise((r) => setTimeout(r, 0));
 }
 
-function createHarness({ shuffle = false } = {}) {
+function createHarness({ shuffle = false, hidden = false } = {}) {
   const dom = new JSDOM(indexHtml, {
     url: 'https://example.test/music-trend/',
     runScripts: 'outside-only',
@@ -164,13 +173,46 @@ function createHarness({ shuffle = false } = {}) {
     value: { register: () => Promise.resolve({}) },
     configurable: true,
   });
+  // Screen Wake Lock (optional in real browsers)
+  const wakeLock = {
+    released: false,
+    release: vi.fn(() => {
+      wakeLock.released = true;
+      return Promise.resolve();
+    }),
+    addEventListener: vi.fn(),
+  };
+  Object.defineProperty(window.navigator, 'wakeLock', {
+    value: { request: vi.fn(() => Promise.resolve(wakeLock)) },
+    configurable: true,
+  });
+
+  let visibilityState = hidden ? 'hidden' : 'visible';
+  Object.defineProperty(window.document, 'visibilityState', {
+    get: () => visibilityState,
+    configurable: true,
+  });
+  Object.defineProperty(window.document, 'hidden', {
+    get: () => visibilityState === 'hidden',
+    configurable: true,
+  });
 
   const { players, YT } = installMockYT(dom);
 
   // app.js is an IIFE that talks to globals on window
   window.eval(appJs);
 
-  return { dom, window, players, YT };
+  return {
+    dom,
+    window,
+    players,
+    YT,
+    wakeLock,
+    setHidden(next) {
+      visibilityState = next ? 'hidden' : 'visible';
+      window.document.dispatchEvent(new window.Event('visibilitychange'));
+    },
+  };
 }
 
 function livePlayers(players) {
@@ -193,8 +235,8 @@ describe('music-trend playback transitions', () => {
     }
   });
 
-  async function startAndSettle({ shuffle } = {}) {
-    harness = createHarness({ shuffle });
+  async function startAndSettle({ shuffle, hidden } = {}) {
+    harness = createHarness({ shuffle, hidden });
     const { window, players } = harness;
 
     window.onYouTubeIframeAPIReady();
@@ -330,5 +372,82 @@ describe('music-trend playback transitions', () => {
 
     const playing = playingVideoIds(players);
     expect(playing.length).toBeGreaterThan(0);
+  });
+
+  it('prebuffers the next track with loadVideoById (not cue-only)', async () => {
+    const { window, players, main } = await startAndSettle({ shuffle: false });
+    await flush();
+    await flush();
+
+    const preload = players.find((p) => p !== main && !p.destroyed && p.videoId === 'vid00000002');
+    expect(preload).toBeTruthy();
+    expect(preload.loaded).toBe(true);
+    expect(preload.cuedOnly).not.toBe(true);
+  });
+
+  it('keeps wantPlaying when the player pauses while the display is hidden', async () => {
+    const { window, players, main } = await startAndSettle({ shuffle: false });
+    harness.setHidden(true);
+    await flush();
+
+    main.setState(2); // PAUSED while monitor off (YouTube does this)
+    await flush();
+
+    // User still wants audio — button must stay in "playing" state
+    const btn = window.document.getElementById('playPauseBtn');
+    expect(btn.textContent).toBe('❚❚');
+  });
+
+  it('advances past ENDED while hidden so the next track is loaded', async () => {
+    const { window, players, main } = await startAndSettle({ shuffle: false });
+    await flush();
+    await flush();
+    harness.setHidden(true);
+    await flush();
+
+    main.setState(0); // ENDED while monitor off
+    await flush();
+    await flush();
+
+    const live = livePlayers(players);
+    const nextLoaded = live.some((p) => p.videoId === 'vid00000002' && p.loaded !== false && p.videoId);
+    expect(nextLoaded).toBe(true);
+    // Some live player must be on song 2 (promoted or main load)
+    expect(live.some((p) => p.videoId === 'vid00000002')).toBe(true);
+  });
+
+  it('resumes playback when the display becomes visible again', async () => {
+    const { window, players, main } = await startAndSettle({ shuffle: false });
+    await flush();
+    await flush();
+
+    harness.setHidden(true);
+    await flush();
+
+    // While hidden: song ends, next is loaded but not actually playing
+    main.setState(0);
+    await flush();
+    await flush();
+    // Simulate browser freezing playback while display is off
+    livePlayers(players).forEach((p) => {
+      if (p.videoId === 'vid00000002') p.setState(3); // BUFFERING / stuck
+    });
+    await flush();
+
+    harness.setHidden(false); // monitor on
+    await flush();
+    await flush();
+
+    const playing = playingVideoIds(players);
+    expect(playing).toContain('vid00000002');
+    const next = livePlayers(players).find((p) => p.videoId === 'vid00000002');
+    expect(next.playCalls || 0).toBeGreaterThan(0);
+  });
+
+  it('requests a screen wake lock while playing', async () => {
+    const { window } = await startAndSettle({ shuffle: false });
+    await flush();
+    expect(harness.window.navigator.wakeLock.request).toHaveBeenCalledWith('screen');
+    expect(harness.wakeLock.released).toBe(false);
   });
 });

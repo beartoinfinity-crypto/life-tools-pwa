@@ -43,6 +43,8 @@
   var preloadReady = false;   // true when preloadPlayer has finished cueing
   var preloadDiv = null;      // container for the preload iframe (sibling of #ytFrame)
   var bufferSkipTimer = null; // auto-skip if BUFFERING persists >15s
+  var wakeLock = null;        // Screen Wake Lock held while audio is meant to play
+  var wakeLockPending = false;
   var MY_KEY = 'music-my-list';
   var pTimeEl = document.getElementById('pTime');
   var myTools = document.getElementById('myTools');
@@ -199,6 +201,7 @@
       clearBufferSkip();
       wantPlaying = true;
       playPauseBtn.textContent = '❚❚';
+      requestWakeLock();
       // Warm the next track (shuffle-aware). After a preload promotion this
       // uses the updated currentSong so we do not re-cue the song on air.
       var entry = findList(current);
@@ -206,13 +209,17 @@
       if (list.length) schedulePreload(list, currentSong);
     } else if (e.data === YT.PlayerState.PAUSED) {
       // A drop also surfaces here: the IFrame API pauses mid-song when signal
-      // dies. If we're offline, or a stall watchdog / resume is already
+      // dies — and again when the display turns off (monitor sleep / lock).
+      // If we're offline, hidden, or a stall watchdog / resume is already
       // pending, DON'T flip wantPlaying to false — that would orphan our
-      // resume intent and the reconnect handler would come back quietly.
-      var dropPaused = !navigator.onLine || stallTimer || resumeInfo;
+      // resume intent and the reconnect / visibility handler would come back
+      // quietly. Only a real user pause — online, visible, nothing pending —
+      // is authoritative.
+      var dropPaused = !navigator.onLine || stallTimer || resumeInfo || document.hidden;
       if (!dropPaused) {
         wantPlaying = false;
         playPauseBtn.textContent = '▶';
+        releaseWakeLock();
       }
     } else if (e.data === YT.PlayerState.BUFFERING) {
       armStallWatch();
@@ -332,7 +339,6 @@
       loadYTApi();
       return;
     }
-    
     ytPlayer.loadVideoById(s.youtubeId);
     forceLowQuality();
     try { if (r.at > 1 && ytPlayer.seekTo) ytPlayer.seekTo(r.at, true); } catch (e) {}
@@ -461,12 +467,25 @@
       events: {
         onReady: function () {
           if (preloadPlayer && preloadVideoId === wantId) {
-            preloadPlayer.cueVideoById(wantId);
+            // cueVideoById only fetches metadata — with the monitor off the
+            // next track then has nothing buffered and "starts to buffer"
+            // when the display comes back. loadVideoById + pause actually
+            // downloads the stream while the current song is still on air.
+            try {
+              preloadPlayer.loadVideoById(wantId);
+              preloadPlayer.pauseVideo();
+            } catch (e) {}
           }
         },
         onStateChange: function (e) {
-          if (preloadVideoId === wantId &&
-              (e.data === YT.PlayerState.CUED || e.data === YT.PlayerState.PLAYING)) {
+          if (preloadVideoId !== wantId) return;
+          if (e.data === YT.PlayerState.PLAYING) {
+            // loadVideoById auto-plays; keep the warmer silent.
+            try { preloadPlayer.pauseVideo(); } catch (err) {}
+            preloadReady = true;
+          } else if (e.data === YT.PlayerState.PAUSED ||
+                     e.data === YT.PlayerState.CUED ||
+                     e.data === YT.PlayerState.BUFFERING) {
             preloadReady = true;
           }
         }
@@ -536,8 +555,60 @@
 
     ytPlayer.playVideo();
     forceLowQuality();
+    requestWakeLock();
     return true;
   }
+
+  /* ---- Screen Wake Lock: keep the display/system awake while we play ----
+   * Without this, monitor sleep pauses the YT iframe after the first track;
+   * on wake the player sits in BUFFERING for the next song. */
+  function requestWakeLock() {
+    if (!wantPlaying || !navigator.wakeLock || wakeLock || wakeLockPending) return;
+    wakeLockPending = true;
+    navigator.wakeLock.request('screen').then(function (lock) {
+      wakeLockPending = false;
+      wakeLock = lock;
+      if (lock.addEventListener) {
+        lock.addEventListener('release', function () {
+          if (wakeLock === lock) wakeLock = null;
+        });
+      }
+    }).catch(function () {
+      wakeLockPending = false; // unsupported / denied — retry on next PLAYING
+    });
+  }
+
+  function releaseWakeLock() {
+    wakeLockPending = false;
+    if (!wakeLock) return;
+    var lock = wakeLock;
+    wakeLock = null;
+    try { lock.release(); } catch (e) {}
+  }
+
+  /* Display came back (or tab focused): if we still want audio but the player
+   * is stuck BUFFERING/PAUSED from monitor sleep, kick it again. */
+  function resumeIfVisible() {
+    if (document.visibilityState && document.visibilityState !== 'visible') return;
+    if (!wantPlaying || !ytReady || !ytPlayer) return;
+    var st = -1;
+    try { if (ytPlayer.getPlayerState) st = ytPlayer.getPlayerState(); } catch (e) {}
+    if (st === YT.PlayerState.PLAYING) {
+      requestWakeLock();
+      return;
+    }
+    // Stuck after wake: ENDED while hidden already advanced the index, or the
+    // iframe is mid-buffer. playVideo() restarts the pipeline.
+    try { ytPlayer.playVideo(); } catch (e) {}
+    forceLowQuality();
+    requestWakeLock();
+  }
+
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible') {
+      resumeIfVisible();
+    }
+  });
 
   function randomOtherIdx(list) {
     return nextIndexFor(list, currentSong);
@@ -1138,7 +1209,9 @@
     if (ytReady && ytPlayer.stopVideo) ytPlayer.stopVideo();
     playerBar.classList.add('hidden');
     currentSong = -1;
+    wantPlaying = false;
     clearBufferSkip();
+    releaseWakeLock();
     // Clean up preload player + slot
     if (preloadPlayer) { try { preloadPlayer.destroy(); } catch (e) {} preloadPlayer = null; }
     if (preloadDiv && preloadDiv.parentNode) preloadDiv.parentNode.removeChild(preloadDiv);
