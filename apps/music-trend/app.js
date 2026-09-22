@@ -34,8 +34,13 @@
                              // to resume the SAME song/position instead of skipping.
   var stallTimer = null;     // BUFFERING watchdog: fires if we sit stalled ~10s on a drop
   var resumeRetryTimer = null;   // second-opinion loop: if the browser never fires
-                                 // 'online' on a weak signal, poll a resume try every
-                                 // ~15s for up to ~2 min, then go quiet.
+                                  // 'online' on a weak signal, poll a resume try every
+                                  // ~15s for up to ~2 min, then go quiet.
+  var preloadPlayer = null;   // hidden YT.Player pre-buffering the next song
+  var preloadVideoId = null;  // videoId currently preloaded
+  var preloadReady = false;   // true when preloadPlayer has finished cueing
+  var preloadDiv = null;      // hidden container div for the preload iframe
+  var bufferSkipTimer = null; // auto-skip if BUFFERING persists >15s
   var MY_KEY = 'music-my-list';
   var pTimeEl = document.getElementById('pTime');
   var myTools = document.getElementById('myTools');
@@ -150,10 +155,11 @@
         },
         onStateChange: function (e) {
           if (e.data === YT.PlayerState.ENDED) {
-            nextSong(true);
+            if (!advanceFromPreload()) nextSong(true);
           } else if (e.data === YT.PlayerState.PLAYING) {
             forceLowQuality();
             clearStallWatch();
+            clearBufferSkip();
             wantPlaying = true;
             playPauseBtn.textContent = '❚❚';
           } else if (e.data === YT.PlayerState.PAUSED) {
@@ -175,6 +181,7 @@
             // stalled ~10s, treat it as a signal drop and remember the position so
             // the 'online' handler can resume this exact song where it stalled.
             armStallWatch();
+            armBufferSkip();
           }
         },
         onError: function () {
@@ -381,6 +388,121 @@
     forceLowQuality();
     if (autoplay) ytPlayer.playVideo();
     else ytPlayer.pauseVideo();
+
+    // Pre-buffer the next song so switching is instant
+    schedulePreload(list, idx);
+  }
+
+  /* ---- pre-buffer next song in a hidden player ---- */
+  function schedulePreload(list, idx) {
+    clearBufferSkip();
+    var nextIdx = ((idx + 1) % list.length + list.length) % list.length;
+    var next = list[nextIdx];
+    if (!next || !next.youtubeId) return;
+    // Already preloaded this video?
+    if (preloadReady && preloadVideoId === next.youtubeId) return;
+    preloadVideoId = next.youtubeId;
+    preloadReady = false;
+    // Create hidden container if needed
+    if (!preloadDiv) {
+      preloadDiv = document.createElement('div');
+      preloadDiv.style.cssText = 'position:fixed;width:1px;height:1px;opacity:0;pointer-events:none;top:-9999px;left:-9999px;z-index:-1;';
+      document.body.appendChild(preloadDiv);
+    }
+    // Destroy old preload player
+    if (preloadPlayer) {
+      try { preloadPlayer.destroy(); } catch (e) {}
+      preloadPlayer = null;
+    }
+    // Create a new hidden player to preload the next video
+    var preloadFrameId = 'ytPreload_' + Date.now();
+    var frameDiv = document.createElement('div');
+    frameDiv.id = preloadFrameId;
+    preloadDiv.appendChild(frameDiv);
+    preloadPlayer = new YT.Player(preloadFrameId, {
+      height: '1', width: '1', videoId: '',
+      playerVars: { playsinline: 1, rel: 0, modestbranding: 1, autoplay: 0 },
+      events: {
+        onReady: function () {
+          if (preloadPlayer) {
+            preloadPlayer.cueVideoById(preloadVideoId);
+          }
+        },
+        onStateChange: function (e) {
+          // Mark ready when video is cued (state 5 = CUED) or playing
+          if (e.data === YT.PlayerState.CUED || e.data === YT.PlayerState.PLAYING) {
+            preloadReady = true;
+          }
+        }
+      }
+    });
+  }
+
+  function clearBufferSkip() {
+    if (bufferSkipTimer) { clearTimeout(bufferSkipTimer); bufferSkipTimer = null; }
+  }
+
+  function armBufferSkip() {
+    clearBufferSkip();
+    bufferSkipTimer = setTimeout(function () {
+      bufferSkipTimer = null;
+      // Stuck buffering too long — skip to next
+      nextSong(true);
+    }, 15000);
+  }
+
+  /* When current song ends, prefer the preloaded player for instant switch */
+  function advanceFromPreload() {
+    if (preloadPlayer && preloadReady && preloadVideoId) {
+      // Swap: destroy old main player, move preload iframe into main container
+      var ytFrame = document.getElementById('ytFrame');
+      var preloadFrame = preloadDiv.querySelector('iframe');
+      if (preloadFrame && ytFrame && ytFrame.parentNode) {
+        // Move preload iframe into the main player container
+        ytFrame.parentNode.insertBefore(preloadFrame, ytFrame);
+        preloadFrame.style.cssText = 'width:100%;height:100%;';
+        // Remove old iframe
+        ytFrame.parentNode.removeChild(ytFrame);
+        // Destroy old player
+        try { ytPlayer.destroy(); } catch (e) {}
+        // Reassign: the preload player now IS the main player
+        preloadFrame.id = 'ytFrame';
+        ytPlayer = preloadPlayer;
+        preloadPlayer = null;
+        preloadReady = false;
+        preloadVideoId = null;
+        // Rebind state change handler on the new player
+        ytPlayer.addEventListener('onStateChange', function (e) {
+          if (e.data === YT.PlayerState.ENDED) {
+            nextSong(true);
+          } else if (e.data === YT.PlayerState.PLAYING) {
+            forceLowQuality();
+            clearStallWatch();
+            clearBufferSkip();
+            wantPlaying = true;
+            playPauseBtn.textContent = '❚❚';
+            // Pre-buffer the next song
+            var entry = findList(current);
+            var list = playable(entry);
+            schedulePreload(list, currentSong);
+          } else if (e.data === YT.PlayerState.PAUSED) {
+            var dropPaused = !navigator.onLine || stallTimer || resumeInfo;
+            if (!dropPaused) {
+              wantPlaying = false;
+              playPauseBtn.textContent = '▶';
+            }
+          } else if (e.data === YT.PlayerState.BUFFERING) {
+            armStallWatch();
+            armBufferSkip();
+          }
+        });
+        // Start playback
+        ytPlayer.playVideo();
+        forceLowQuality();
+        return true;
+      }
+    }
+    return false;
   }
 
   function randomOtherIdx(list) {
@@ -986,6 +1108,10 @@
     if (ytReady && ytPlayer.stopVideo) ytPlayer.stopVideo();
     playerBar.classList.add('hidden');
     currentSong = -1;
+    clearBufferSkip();
+    // Clean up preload player
+    if (preloadPlayer) { try { preloadPlayer.destroy(); } catch (e) {} preloadPlayer = null; }
+    preloadReady = false; preloadVideoId = null;
     var rows = listEl.querySelectorAll('.song-row');
     Array.prototype.forEach.call(rows, function (r) { r.classList.remove('playing'); });
   });
