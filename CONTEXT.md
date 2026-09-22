@@ -22,15 +22,15 @@ Each app is an authored PWA with its own `index.html`, `styles.css`,
 
 | App dir            | SW cache         | In-page badge (v1.0 build) |
 |--------------------|------------------|----------------------------|
-| apps/traffic-news  | traffic-news-v5  | v1.0 build 202609160643    |
-| apps/mark-six      | mark-six-v8      | v1.0 build 202609210150    |
-| apps/music-trend   | music-trend-v21  | v1.0 build 202609210850    |
+| apps/traffic-news  | traffic-news-v6   | v1.0 build 202609160643    |
+| apps/mark-six      | mark-six-v8       | v1.0 build 202609210150    |
+| apps/music-trend   | music-trend-v22   | v1.0 build 202609220140    |
 
 > `apps/hk-bus-eta/` is **not** an authored app in this repo. It holds
 > `LICENSE`, `README.md`, `build-upstream/` and `build/` — vendored
 > upstream build outputs of an external project. There is no authored
 > `index.html`/`sw.js`/`styles.css` at its app root, so it is **not**
-> versioned/badged herehare. Do not hand-edit the vendored build.
+> versioned/badged here. Do not hand-edit the vendored build.
 
 ## Version badge convention (per app)
 
