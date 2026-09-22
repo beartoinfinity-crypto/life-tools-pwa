@@ -28,6 +28,7 @@
   var ytReady = false;
   var pendingPlay = null;    // videoId queued while the API loads
   var wantPlaying = false;
+  var userPauseIntent = false; // only the in-page button / media-session pause set this
   var shuffle = false;
   var resumeInfo = null;     // { list, country, idx, at, ytId, wantPlaying } -> set when a
                              // signal drop stalls the current song; consumed by 'online'
@@ -200,6 +201,7 @@
    * loses its advance path (that was how shuffle playback stopped). */
   function handleMainStateChange(e) {
     if (e.data === YT.PlayerState.ENDED) {
+      if (userPauseIntent) return; // user paused on purpose — don't jump ahead
       forceAdvance();
     } else if (e.data === YT.PlayerState.PLAYING) {
       forceLowQuality();
@@ -207,9 +209,11 @@
       clearBufferSkip();
       advanceLock = false;
       wantPlaying = true;
+      userPauseIntent = false;
       playPauseBtn.textContent = '❚❚';
       requestWakeLock();
       armEndWatch();
+      clearPlayKicks();
       var playingSong = currentListSong();
       if (playingSong) setMediaSessionSong(playingSong, true);
       // Warm the next track (shuffle-aware). After a preload promotion this
@@ -218,27 +222,25 @@
       var list = playable(entry);
       if (list.length) schedulePreload(list, currentSong);
     } else if (e.data === YT.PlayerState.PAUSED) {
-      // A drop also surfaces here: the IFrame API pauses mid-song when signal
-      // dies — and again when the display turns off (monitor sleep / lock).
-      // If we're offline, hidden, or a stall watchdog / resume is already
-      // pending, DON'T flip wantPlaying to false — that would orphan our
-      // resume intent and the reconnect / visibility handler would come back
-      // quietly. Only a real user pause — online, visible, nothing pending —
-      // is authoritative.
-      var dropPaused = !navigator.onLine || stallTimer || resumeInfo || document.hidden;
-      if (!dropPaused) {
+      // Only an explicit user pause (in-page button / lock-screen control) may
+      // clear intent. A PAUSED that the browser/YouTube emits when Brave goes
+      // to the background — or right after return when autoplay is blocked —
+      // used to flip wantPlaying off, after which ENDED/watchdog stopped
+      // advancing and resumeIfVisible became a no-op.
+      if (userPauseIntent) {
         wantPlaying = false;
         playPauseBtn.textContent = '▶';
         releaseWakeLock();
         clearEndWatch();
+        clearPlayKicks();
         var pausedSong = currentListSong();
         if (pausedSong) setMediaSessionSong(pausedSong, false);
-      }
-      // Hidden/drop PAUSED: keep the session looking like we're still playing
-      // so the lock-screen bar does not vanish mid-transition.
-      else if (wantPlaying) {
+      } else if (wantPlaying) {
+        // Drop/system pause: keep intent, refresh the lock-screen bar, and if
+        // we are visible try again (autoplay often needs a second kick).
         var stillSong = currentListSong();
         if (stillSong) setMediaSessionSong(stillSong, true);
+        if (!document.hidden && !stallTimer && !resumeInfo) schedulePlayKicks();
       }
     } else if (e.data === YT.PlayerState.BUFFERING) {
       armStallWatch();
@@ -405,6 +407,7 @@
     nowArtist.textContent = s.artist;
     if (pTimeEl) pTimeEl.textContent = '0:00 / ' + (s.durationMs ? fmtTime(s.durationMs / 1000) : '--:--');
     wantPlaying = !!autoplay;
+    userPauseIntent = !autoplay;
     setMediaSessionSong(s, !!autoplay);
 
     highlightRow(s);
@@ -415,11 +418,15 @@
       loadYTApi();
       return;
     }
-    
+
     ytPlayer.loadVideoById(s.youtubeId);
     forceLowQuality();
-    if (autoplay) ytPlayer.playVideo();
-    else ytPlayer.pauseVideo();
+    if (autoplay) {
+      ytPlayer.playVideo();
+      schedulePlayKicks();
+    } else {
+      ytPlayer.pauseVideo();
+    }
 
     // Pre-buffer the next song so switching is instant
     schedulePreload(list, idx);
@@ -571,6 +578,7 @@
     nowArtist.textContent = s.artist;
     if (pTimeEl) pTimeEl.textContent = '0:00 / ' + (s.durationMs ? fmtTime(s.durationMs / 1000) : '--:--');
     wantPlaying = true;
+    userPauseIntent = false;
     setMediaSessionSong(s, true);
     highlightRow(s);
     document.dispatchEvent(new CustomEvent('songchange', { detail: s }));
@@ -578,6 +586,7 @@
     ytPlayer.playVideo();
     forceLowQuality();
     requestWakeLock();
+    schedulePlayKicks();
     return true;
   }
 
@@ -618,12 +627,38 @@
   }
 
   function forceAdvance() {
-    if (advanceLock) return;
+    if (advanceLock || userPauseIntent) return;
     advanceLock = true;
     clearEndWatch();
     if (!advanceFromPreload()) nextSong(true);
+    // Background playVideo() is often ignored — kick again once visible/ready.
+    schedulePlayKicks();
     // Re-arm comes from the next PLAYING; unlock the gate if that never lands.
     setTimeout(function () { advanceLock = false; }, 500);
+  }
+
+  /* playVideo() right after ENDED / while the iframe is still "background" is
+   * frequently a no-op. Retry a few times until we actually see PLAYING. */
+  var playKickTimers = [];
+  function clearPlayKicks() {
+    for (var i = 0; i < playKickTimers.length; i++) clearTimeout(playKickTimers[i]);
+    playKickTimers = [];
+  }
+  function ensurePlaying() {
+    if (!wantPlaying || !ytReady || !ytPlayer) return;
+    try {
+      if (ytPlayer.getPlayerState && ytPlayer.getPlayerState() === YT.PlayerState.PLAYING) return;
+    } catch (e) {}
+    try { ytPlayer.playVideo(); } catch (e) {}
+  }
+  function schedulePlayKicks() {
+    clearPlayKicks();
+    if (!wantPlaying) return;
+    [0, 300, 1000, 2500].forEach(function (delay) {
+      playKickTimers.push(setTimeout(function () {
+        ensurePlaying();
+      }, delay));
+    });
   }
 
   function mediaPastEnd() {
@@ -688,16 +723,21 @@
     }
     on('play', function () {
       wantPlaying = true;
+      userPauseIntent = false;
       playPauseBtn.textContent = '❚❚';
       requestWakeLock();
       try { if (ytPlayer && ytReady) ytPlayer.playVideo(); } catch (e) {}
       var s = currentListSong();
       if (s) setMediaSessionSong(s, true);
+      schedulePlayKicks();
     });
     on('pause', function () {
+      userPauseIntent = true;
       wantPlaying = false;
       playPauseBtn.textContent = '▶';
       releaseWakeLock();
+      clearEndWatch();
+      clearPlayKicks();
       try { if (ytPlayer && ytReady) ytPlayer.pauseVideo(); } catch (e) {}
       var s = currentListSong();
       if (s) setMediaSessionSong(s, false);
@@ -733,39 +773,46 @@
     try { lock.release(); } catch (e) {}
   }
 
-  /* Display came back (or tab focused): if we still want audio but the player
-   * is stuck BUFFERING/PAUSED from monitor sleep, kick it again. */
+  /* Display/tab came back (or OS sent focus): if the track already finished
+   * while we were away, advance; otherwise always re-kick playback. YouTube
+   * often reports PLAYING after a background freeze, and a system PAUSED may
+   * have cleared nothing thanks to userPauseIntent — either way play again. */
   function resumeIfVisible() {
     if (document.visibilityState && document.visibilityState !== 'visible') return;
     if (!wantPlaying || !ytReady || !ytPlayer) return;
-    var st = -1;
-    try { if (ytPlayer.getPlayerState) st = ytPlayer.getPlayerState(); } catch (e) {}
-    if (st === YT.PlayerState.PLAYING) {
-      requestWakeLock();
-      return;
-    }
-    // Stuck after wake: ENDED while hidden already advanced the index, or the
-    // iframe is mid-buffer. playVideo() restarts the pipeline.
+    // ENDED held back until the tab was shown: promote next, don't restart dead track.
+    try {
+      if (ytPlayer.getPlayerState && ytPlayer.getPlayerState() === YT.PlayerState.ENDED) {
+        forceAdvance();
+        return;
+      }
+    } catch (e) {}
     try { ytPlayer.playVideo(); } catch (e) {}
     forceLowQuality();
     requestWakeLock();
     var s = currentListSong();
     if (s) setMediaSessionSong(s, true);
+    schedulePlayKicks();
+  }
+
+  function onAppForeground() {
+    if (document.visibilityState && document.visibilityState !== 'visible') return;
+    if (shouldAdvanceOnWake()) forceAdvance();
+    resumeIfVisible();
   }
 
   document.addEventListener('visibilitychange', function () {
     if (document.visibilityState === 'visible') {
-      if (shouldAdvanceOnWake()) {
-        forceAdvance();
-        return;
-      }
-      resumeIfVisible();
+      onAppForeground();
     } else if (wantPlaying) {
       // Re-schedule from live media time so a mid-track lock still wakes the
       // watchdog at the true remaining duration.
       armEndWatch();
     }
   });
+  // Brave/Android sometimes focuses the window without a visibilitychange.
+  window.addEventListener('focus', onAppForeground);
+  window.addEventListener('pageshow', onAppForeground);
 
   function randomOtherIdx(list) {
     return nextIndexFor(list, currentSong);
@@ -1360,13 +1407,23 @@
   playPauseBtn.addEventListener('click', function () {
     if (!ytReady || !ytPlayer) return;
     if (wantPlaying) {
+      userPauseIntent = true;
+      wantPlaying = false;
+      clearEndWatch();
+      clearPlayKicks();
+      releaseWakeLock();
       ytPlayer.pauseVideo();
+      playPauseBtn.textContent = '▶';
       var song = currentListSong();
       if (song) setMediaSessionSong(song, false);
     } else {
+      userPauseIntent = false;
+      wantPlaying = true;
       ytPlayer.playVideo();
-      var song = currentListSong();
-      if (song) setMediaSessionSong(song, true);
+      playPauseBtn.textContent = '❚❚';
+      schedulePlayKicks();
+      var song2 = currentListSong();
+      if (song2) setMediaSessionSong(song2, true);
     }
   });
   closeBtn.addEventListener('click', function () {
@@ -1374,9 +1431,11 @@
     playerBar.classList.add('hidden');
     currentSong = -1;
     wantPlaying = false;
+    userPauseIntent = false;
     clearBufferSkip();
     releaseWakeLock();
     clearEndWatch();
+    clearPlayKicks();
     if (navigator.mediaSession) {
       try { navigator.mediaSession.playbackState = 'none'; } catch (e) {}
     }

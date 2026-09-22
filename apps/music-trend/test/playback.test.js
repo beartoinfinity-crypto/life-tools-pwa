@@ -591,4 +591,132 @@ describe('music-trend playback transitions', () => {
     expect(main.videoId).toBe('vid00000001');
     expect(livePlayers(players).some((p) => p.videoId === 'vid00000002' && p.state === 1)).not.toBe(true);
   });
+
+  it('auto-plays the next track after unlock when background playVideo was ignored', async () => {
+    const { window, players, main } = await startAndSettle({ shuffle: false });
+    await flush();
+    await flush();
+
+    harness.setHidden(true);
+    await flush();
+
+    main.setState(0); // ENDED on lock screen — advance loads next
+    await flush();
+    await flush();
+
+    const next = livePlayers(players).find((p) => p.videoId === 'vid00000002');
+    expect(next).toBeTruthy();
+
+    // Simulate YouTube ignoring play while the page is hidden
+    next.setState(2); // PAUSED
+    await flush();
+
+    harness.setHidden(false);
+    await flush();
+    await flush();
+
+    expect(playingVideoIds(players)).toContain('vid00000002');
+    expect(next.playCalls || 0).toBeGreaterThan(0);
+    expect(next.state).toBe(1);
+  });
+
+  it('re-kicks playVideo after ENDED when the first play call is a no-op', async () => {
+    const { window, players, main } = await startAndSettle({ shuffle: false });
+    await flush();
+    await flush();
+
+    // Make playVideo a no-op once (first kick after advance is ignored)
+    let ignoreNextPlay = true;
+    const proto = Object.getPrototypeOf(main);
+    const origPlay = proto.playVideo;
+    const patched = function playVideo() {
+      if (ignoreNextPlay) {
+        ignoreNextPlay = false;
+        this.playCalls = (this.playCalls || 0) + 1;
+        return; // no state change — still not PLAYING
+      }
+      return origPlay.call(this);
+    };
+    proto.playVideo = patched;
+    try {
+      main.setState(0); // ENDED
+      await flush();
+      await flush();
+
+      const next = livePlayers(players).find((p) => p.videoId === 'vid00000002');
+      expect(next).toBeTruthy();
+      // First promote/load play may have been swallowed; state not PLAYING yet
+      // Wait for schedulePlayKicks (300ms+)
+      await new Promise((r) => setTimeout(r, 1200));
+      await flush();
+      await flush();
+
+      expect(playingVideoIds(players)).toContain('vid00000002');
+    } finally {
+      proto.playVideo = origPlay;
+    }
+  });
+
+  it('keeps auto-advance after a background system PAUSED (not a user pause)', async () => {
+    const { window, players, main } = await startAndSettle({ shuffle: false });
+    await flush();
+    await flush();
+
+    // Brave backgrounded: browser fires PAUSED while visible-looking to us
+    // after return, or mid-session — must NOT clear wantPlaying.
+    main.setState(2); // PAUSED without user intent
+    await flush();
+
+    const btn = window.document.getElementById('playPauseBtn');
+    expect(btn.textContent).toBe('❚❚'); // still "playing" intent
+
+    // Song ends after that system pause → must still advance and autoplay
+    main.setState(0); // ENDED
+    await flush();
+    await flush();
+
+    expect(playingVideoIds(players)).toContain('vid00000002');
+  });
+
+  it('does clear intent on the in-page pause button', async () => {
+    const { window, players, main } = await startAndSettle({ shuffle: false });
+    await flush();
+    await flush();
+
+    const btn = window.document.getElementById('playPauseBtn');
+    btn.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    await flush();
+    await flush();
+
+    expect(btn.textContent).toBe('▶');
+    // ENDED after a real user pause should not jump to next while paused
+    main.setState(0);
+    await flush();
+    await flush();
+    const playing = playingVideoIds(players);
+    expect(playing).not.toContain('vid00000002');
+  });
+
+  it('advances and plays on window focus when ENDED was held back', async () => {
+    const { window, players, main } = await startAndSettle({ shuffle: false });
+    await flush();
+    await flush();
+
+    main.setState(0); // ENDED fires but next play is blocked while "backgrounded"
+    // Simulate next track loaded but stuck paused (autoplay ignored)
+    await flush();
+    await flush();
+    const next = livePlayers(players).find((p) => p.videoId === 'vid00000002');
+    expect(next).toBeTruthy();
+    next.setState(2); // PAUSED
+    await flush();
+
+    // User reopens Brave — only focus, no visibilitychange in this sim
+    window.dispatchEvent(new window.Event('focus'));
+    await flush();
+    await flush();
+
+    expect(playingVideoIds(players)).toContain('vid00000002');
+    expect(next.playCalls || 0).toBeGreaterThan(0);
+  });
 });

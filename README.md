@@ -354,6 +354,11 @@ gate by country (`CANTO_COUNTRIES` = `{hk}` and `MANDO_COUNTRIES` = `{hk,tw,cn,s
   timer armed from the live duration advances on its own while still hidden, and unlock
   advances first (instead of resuming a finished track) when media time or the armed
   end deadline is already past.
+- **User pause vs system pause** — only the in-page pause button and the
+  lock-screen pause control set `userPauseIntent`. A `PAUSED` that Brave/YouTube
+  emits when the app is backgrounded (or when autoplay is blocked right after
+  return) no longer clears play intent, so ENDED/watchdog still advance and
+  `focus`/`pageshow`/`visibilitychange` re-kick `playVideo` when Brave comes back.
 - **Classification + per-country gating** — `apps/music-trend/parser.js` (`buildPlaylists`/`isCantonese`/`isMandarin`/
   `feedUrl`), covered by unit tests. Apple only tags Cantonese/Mandarin on the HK & TW feeds, so the genre tag comes
   from the **title language** (Chinese characters in the title; Cantonese-only characters 嘅咗唔喺嗰啲冇… mark 廣東歌).
