@@ -345,11 +345,13 @@ gate by country (`CANTO_COUNTRIES` = `{hk}` and `MANDO_COUNTRIES` = `{hk,tw,cn,s
   bar plays it in-page via the YouTube IFrame API — a 96×54 thumbnail-sized player keeps the stream at its lowest
   bitrate (~144p, minimal data), with one-by-one auto-advance, prev/next/pause, shuffle, unplayable videos
   skipped, and a ▶▶ toggle to expand the full 16:9 video only when wanted.
-- **Pre-buffer + stall auto-skip** — the player preloads the next track into a hidden
+- **Pre-buffer + stall auto-skip** — **TEMPORARILY DISABLED** (`PREBUFFER_NEXT_TRACK = false` in
+  `app.js`, suspected of breaking next-track auto-play). When enabled: the player preloads the next track into a hidden
   second YouTube instance while the current song plays (`loadVideoById` + pause, so the
   stream is actually downloaded — not just cued), so ENDED can start the next song
   instantly (shuffle-aware: the warmer tracks the same index `nextSong` will pick, and
-  promotion only toggles visibility — it never reparents the iframe). Screen Wake Lock
+  promotion only toggles visibility — it never reparents the iframe). While disabled,
+  `forceAdvance` always goes through `nextSong(true)` on the main player. Screen Wake Lock
   keeps the display awake while playing; on `visibilitychange` any mid-buffer pause from
   monitor sleep is kicked again. If BUFFERING persists >15 s, it auto-advances.
 - **Lock-screen / notification bar** — we own `navigator.mediaSession` ourselves instead

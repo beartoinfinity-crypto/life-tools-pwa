@@ -403,15 +403,20 @@ describe('music-trend playback transitions', () => {
     expect(playing.length).toBeGreaterThan(0);
   });
 
-  it('prebuffers the next track with loadVideoById (not cue-only)', async () => {
+  it('does not prebuffer the next track while PREBUFFER_NEXT_TRACK is disabled', async () => {
     const { window, players, main } = await startAndSettle({ shuffle: false });
     await flush();
     await flush();
 
+    // TEMP kill-switch (suspected of breaking next-track auto-play): no second
+    // player may be spun up for the warmer slot.
     const preload = players.find((p) => p !== main && !p.destroyed && p.videoId === 'vid00000002');
-    expect(preload).toBeTruthy();
-    expect(preload.loaded).toBe(true);
-    expect(preload.cuedOnly).not.toBe(true);
+    expect(preload).toBeFalsy();
+    // Re-enable path still exercised: ENDED must advance on the main player.
+    main.setState(0);
+    await flush();
+    await flush();
+    expect(playingVideoIds(players)).toContain('vid00000002');
   });
 
   it('keeps wantPlaying when the player pauses while the display is hidden', async () => {

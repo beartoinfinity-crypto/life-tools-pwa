@@ -463,9 +463,16 @@
    * The preload lives as a sibling of #ytFrame inside #playerMount. Promotion
    * only toggles CSS visibility — moving a YT iframe in the DOM kills the
    * player, which is why transitions used to freeze (especially under shuffle,
-   * where the pre-cued id was always sequential and never matched nextSong). */
+   * where the pre-cued id was always sequential and never matched nextSong).
+   *
+   * TEMP kill-switch: suspected of breaking next-track auto-play. While false,
+   * schedulePreload is a no-op so advanceFromPreload never succeeds and
+   * forceAdvance always goes through nextSong(true) on the main player.
+   * Re-enable by flipping PREBUFFER_NEXT_TRACK back to true. */
+  var PREBUFFER_NEXT_TRACK = false;
   function schedulePreload(list, idx) {
     clearBufferSkip();
+    if (!PREBUFFER_NEXT_TRACK) return;
     if (!list || !list.length) return;
 
     // Keep a still-valid warmer. Under shuffle the next index is arbitrary, so
