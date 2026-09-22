@@ -349,6 +349,11 @@ gate by country (`CANTO_COUNTRIES` = `{hk}` and `MANDO_COUNTRIES` = `{hk,tw,cn,s
   next track prebuffers), `playbackState` tracks playing/paused/`wantPlaying` (reset to
   `none` only when the player closes), and `play`/`pause`/`nexttrack`/`previoustrack`
   transport controls are wired to the same next/prev/pause paths as the in-page buttons.
+- **End watchdog while the display is off** — YouTube often withholds `ENDED` until the
+  page is visible again, so the next track used to load only on unlock. A wall-clock
+  timer armed from the live duration advances on its own while still hidden, and unlock
+  advances first (instead of resuming a finished track) when media time or the armed
+  end deadline is already past.
 - **Classification + per-country gating** — `apps/music-trend/parser.js` (`buildPlaylists`/`isCantonese`/`isMandarin`/
   `feedUrl`), covered by unit tests. Apple only tags Cantonese/Mandarin on the HK & TW feeds, so the genre tag comes
   from the **title language** (Chinese characters in the title; Cantonese-only characters 嘅咗唔喺嗰啲冇… mark 廣東歌).

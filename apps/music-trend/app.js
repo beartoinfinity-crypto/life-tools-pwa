@@ -43,6 +43,9 @@
   var preloadReady = false;   // true when preloadPlayer has finished cueing
   var preloadDiv = null;      // container for the preload iframe (sibling of #ytFrame)
   var bufferSkipTimer = null; // auto-skip if BUFFERING persists >15s
+  var endWatchTimer = null;   // wall-clock "track should be over" watchdog
+  var trackEndAt = 0;         // Date.now() when the current track should end
+  var advanceLock = false;    // debounce ENDED vs end-watch double-advance
   var wakeLock = null;        // Screen Wake Lock held while audio is meant to play
   var wakeLockPending = false;
   var MY_KEY = 'music-my-list';
@@ -197,14 +200,16 @@
    * loses its advance path (that was how shuffle playback stopped). */
   function handleMainStateChange(e) {
     if (e.data === YT.PlayerState.ENDED) {
-      if (!advanceFromPreload()) nextSong(true);
+      forceAdvance();
     } else if (e.data === YT.PlayerState.PLAYING) {
       forceLowQuality();
       clearStallWatch();
       clearBufferSkip();
+      advanceLock = false;
       wantPlaying = true;
       playPauseBtn.textContent = '❚❚';
       requestWakeLock();
+      armEndWatch();
       var playingSong = currentListSong();
       if (playingSong) setMediaSessionSong(playingSong, true);
       // Warm the next track (shuffle-aware). After a preload promotion this
@@ -225,6 +230,7 @@
         wantPlaying = false;
         playPauseBtn.textContent = '▶';
         releaseWakeLock();
+        clearEndWatch();
         var pausedSong = currentListSong();
         if (pausedSong) setMediaSessionSong(pausedSong, false);
       }
@@ -392,6 +398,7 @@
     idx = ((idx % list.length) + list.length) % list.length;
     currentSong = idx;
     var s = list[idx];
+    clearEndWatch();
 
     playerBar.classList.remove('hidden');
     nowName.textContent = s.name;
@@ -574,6 +581,76 @@
     return true;
   }
 
+  /* ---- end-of-track watchdog ----
+   * With the display off the YouTube iframe often never delivers ENDED (the
+   * player freezes or the event is held until unlock), so the next song only
+   * loads when the screen comes back. Schedule a wall-clock timer for when the
+   * track should be over and advance ourselves — while still hidden. */
+  function clearEndWatch() {
+    if (endWatchTimer) { clearTimeout(endWatchTimer); endWatchTimer = null; }
+    trackEndAt = 0;
+  }
+
+  function armEndWatch() {
+    clearEndWatch();
+    if (!wantPlaying || !ytReady || !ytPlayer) return;
+    var remain = null;
+    try {
+      var d = ytPlayer.getDuration ? ytPlayer.getDuration() : 0;
+      var c = ytPlayer.getCurrentTime ? ytPlayer.getCurrentTime() : 0;
+      if (d > 0 && isFinite(d) && c >= 0 && isFinite(c)) remain = (d - c) * 1000;
+    } catch (e) {}
+    if (remain == null) {
+      var s = currentListSong();
+      if (s && s.durationMs > 0) remain = s.durationMs;
+      else return;
+    }
+    remain = Math.max(0, remain);
+    // Small grace so a live ENDED can win the race without a double-skip.
+    trackEndAt = Date.now() + remain + 400;
+    endWatchTimer = setTimeout(onEndWatchFired, remain + 400);
+  }
+
+  function onEndWatchFired() {
+    endWatchTimer = null;
+    if (!wantPlaying) return;
+    forceAdvance();
+  }
+
+  function forceAdvance() {
+    if (advanceLock) return;
+    advanceLock = true;
+    clearEndWatch();
+    if (!advanceFromPreload()) nextSong(true);
+    // Re-arm comes from the next PLAYING; unlock the gate if that never lands.
+    setTimeout(function () { advanceLock = false; }, 500);
+  }
+
+  function mediaPastEnd() {
+    if (!ytPlayer || !ytReady) return false;
+    try {
+      if (ytPlayer.getPlayerState && ytPlayer.getPlayerState() === YT.PlayerState.ENDED) return true;
+      var d = ytPlayer.getDuration ? ytPlayer.getDuration() : 0;
+      var c = ytPlayer.getCurrentTime ? ytPlayer.getCurrentTime() : 0;
+      if (d > 0 && c >= d - 0.75) return true;
+    } catch (e) {}
+    return false;
+  }
+
+  /* Unlock path: if the track is already over (ENDED held back, or media /
+   * wall clock past the end), advance instead of resuming the dead track. */
+  function shouldAdvanceOnWake() {
+    if (!wantPlaying) return false;
+    if (mediaPastEnd()) return true;
+    if (trackEndAt && Date.now() >= trackEndAt) {
+      // Wall clock only counts when we are not sitting mid-track paused.
+      var st = -1;
+      try { if (ytPlayer.getPlayerState) st = ytPlayer.getPlayerState(); } catch (e) {}
+      if (st === YT.PlayerState.PLAYING || st === YT.PlayerState.ENDED) return true;
+    }
+    return false;
+  }
+
   /* ---- Media Session (lock-screen / notification playing bar) ----
    * The YouTube iframe owns the OS media session while it plays; on ENDED it
    * tears the session down, so the lock-screen bar disappears until we start
@@ -678,7 +755,15 @@
 
   document.addEventListener('visibilitychange', function () {
     if (document.visibilityState === 'visible') {
+      if (shouldAdvanceOnWake()) {
+        forceAdvance();
+        return;
+      }
       resumeIfVisible();
+    } else if (wantPlaying) {
+      // Re-schedule from live media time so a mid-track lock still wakes the
+      // watchdog at the true remaining duration.
+      armEndWatch();
     }
   });
 
@@ -1291,6 +1376,7 @@
     wantPlaying = false;
     clearBufferSkip();
     releaseWakeLock();
+    clearEndWatch();
     if (navigator.mediaSession) {
       try { navigator.mediaSession.playbackState = 'none'; } catch (e) {}
     }

@@ -120,8 +120,14 @@ function installMockYT(dom) {
 
     getAvailableQualityLevels() { return ['hd720', 'small']; }
     setPlaybackQuality() {}
-    getCurrentTime() { return 10; }
-    getDuration() { return 180; }
+    getCurrentTime() {
+      if (typeof this._currentTime === 'number') return this._currentTime;
+      return 10;
+    }
+    getDuration() {
+      if (typeof this._duration === 'number') return this._duration;
+      return 180;
+    }
   }
 
   window.YT = {
@@ -516,5 +522,73 @@ describe('music-trend playback transitions', () => {
     expect(actions).toContain('pause');
     expect(actions).toContain('nexttrack');
     expect(actions).toContain('previoustrack');
+  });
+
+  it('advances from the end watchdog while still hidden (no ENDED from YouTube)', async () => {
+    const { window, players, main } = await startAndSettle({ shuffle: false });
+    await flush();
+    await flush();
+
+    // Pretend the track is about to finish; visibilitychange re-arms the watch.
+    main._duration = 0.05;
+    main._currentTime = 0;
+    harness.setHidden(true);
+    await flush();
+
+    // Wait past remain(50ms)+grace(400ms) — ENDED never fires.
+    await new Promise((r) => setTimeout(r, 600));
+    await flush();
+    await flush();
+
+    expect(livePlayers(players).some((p) => p.videoId === 'vid00000002')).toBe(true);
+    expect(window.document.hidden).toBe(true);
+  });
+
+  it('advances on unlock when wall-clock end already passed (ENDED was held back)', async () => {
+    const { window, players, main } = await startAndSettle({ shuffle: false });
+    await flush();
+    await flush();
+
+    harness.setHidden(true);
+    await flush();
+
+    // Jump past trackEndAt while locked; unlock must advance, not resume song 1.
+    // app.js runs inside jsdom, so patch that realm's Date — not Node's.
+    const winDate = window.Date;
+    const realNow = winDate.now.bind(winDate);
+    const t0 = realNow();
+    try {
+      winDate.now = () => t0 + 10 * 60 * 1000;
+      harness.setHidden(false);
+      await flush();
+      await flush();
+    } finally {
+      winDate.now = realNow;
+    }
+
+    expect(livePlayers(players).some((p) => p.videoId === 'vid00000002')).toBe(true);
+    // Must not have just resumed song 1
+    const playing = playingVideoIds(players);
+    expect(playing).not.toContain('vid00000001');
+  });
+
+  it('does not advance on unlock when the track is still mid-play', async () => {
+    const { window, players, main } = await startAndSettle({ shuffle: false });
+    await flush();
+    await flush();
+
+    main._duration = 180;
+    main._currentTime = 10;
+    main.setState(1); // re-arm end watch with ~170s remaining
+    await flush();
+
+    harness.setHidden(true);
+    await flush();
+    harness.setHidden(false);
+    await flush();
+    await flush();
+
+    expect(main.videoId).toBe('vid00000001');
+    expect(livePlayers(players).some((p) => p.videoId === 'vid00000002' && p.state === 1)).not.toBe(true);
   });
 });
