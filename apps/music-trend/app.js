@@ -38,8 +38,10 @@
                                   // ~15s for up to ~2 min, then go quiet.
   var preloadPlayer = null;   // hidden YT.Player pre-buffering the next song
   var preloadVideoId = null;  // videoId currently preloaded
+  var preloadIdx = -1;        // playlist index currently preloaded (-1 = none)
+  var preloadShuffle = false; // shuffle mode captured when preload was scheduled
   var preloadReady = false;   // true when preloadPlayer has finished cueing
-  var preloadDiv = null;      // hidden container div for the preload iframe
+  var preloadDiv = null;      // container for the preload iframe (sibling of #ytFrame)
   var bufferSkipTimer = null; // auto-skip if BUFFERING persists >15s
   var MY_KEY = 'music-my-list';
   var pTimeEl = document.getElementById('pTime');
@@ -153,37 +155,7 @@
             pendingPlay = null;
           }
         },
-        onStateChange: function (e) {
-          if (e.data === YT.PlayerState.ENDED) {
-            if (!advanceFromPreload()) nextSong(true);
-          } else if (e.data === YT.PlayerState.PLAYING) {
-            forceLowQuality();
-            clearStallWatch();
-            clearBufferSkip();
-            wantPlaying = true;
-            playPauseBtn.textContent = '❚❚';
-          } else if (e.data === YT.PlayerState.PAUSED) {
-            // A drop also surfaces here: the IFrame API pauses mid-song when signal
-            // dies. If we're offline, or a stall watchdog / resume is already
-            // pending, DON'T flip wantPlaying to false — that would orphan our
-            // resume intent and the reconnect handler would come back quietly.
-            // The player may stay paused for 1-2 min (or longer) until the
-            // connection returns; only a real user pause — online and with nothing
-            // pending — is authoritative.
-            var dropPaused = !navigator.onLine || stallTimer || resumeInfo;
-            if (!dropPaused) {
-              wantPlaying = false;
-              playPauseBtn.textContent = '▶';
-            }
-          } else if (e.data === YT.PlayerState.BUFFERING) {
-            // Stalled mid-song. Most car drops show up here (BUFFERING that never
-            // resolves). Arm a watchdog instead of waiting forever: if we sit
-            // stalled ~10s, treat it as a signal drop and remember the position so
-            // the 'online' handler can resume this exact song where it stalled.
-            armStallWatch();
-            armBufferSkip();
-          }
-        },
+        onStateChange: handleMainStateChange,
         onError: function () {
           // Distinguish a genuine signal drop from an unplayable video, so a blip
           // in the car does NOT skip tracks. When we're offline (or looks like a
@@ -213,6 +185,39 @@
     s.id = 'yt-api-script';
     s.src = 'https://www.youtube.com/iframe_api';
     document.head.appendChild(s);
+  }
+
+  /* Shared onStateChange for whichever player is currently main. Bound in the
+   * constructor and re-bound after a preload-slot promotion so ENDED never
+   * loses its advance path (that was how shuffle playback stopped). */
+  function handleMainStateChange(e) {
+    if (e.data === YT.PlayerState.ENDED) {
+      if (!advanceFromPreload()) nextSong(true);
+    } else if (e.data === YT.PlayerState.PLAYING) {
+      forceLowQuality();
+      clearStallWatch();
+      clearBufferSkip();
+      wantPlaying = true;
+      playPauseBtn.textContent = '❚❚';
+      // Warm the next track (shuffle-aware). After a preload promotion this
+      // uses the updated currentSong so we do not re-cue the song on air.
+      var entry = findList(current);
+      var list = playable(entry);
+      if (list.length) schedulePreload(list, currentSong);
+    } else if (e.data === YT.PlayerState.PAUSED) {
+      // A drop also surfaces here: the IFrame API pauses mid-song when signal
+      // dies. If we're offline, or a stall watchdog / resume is already
+      // pending, DON'T flip wantPlaying to false — that would orphan our
+      // resume intent and the reconnect handler would come back quietly.
+      var dropPaused = !navigator.onLine || stallTimer || resumeInfo;
+      if (!dropPaused) {
+        wantPlaying = false;
+        playPauseBtn.textContent = '▶';
+      }
+    } else if (e.data === YT.PlayerState.BUFFERING) {
+      armStallWatch();
+      armBufferSkip();
+    }
   }
 
   /* ---- car-signal resume: watchdog + reconnect hook ---- *
@@ -393,44 +398,75 @@
     schedulePreload(list, idx);
   }
 
-  /* ---- pre-buffer next song in a hidden player ---- */
+  /* Pick the track that should play after `idx` under the current mode. */
+  function nextIndexFor(list, idx) {
+    if (!list.length) return -1;
+    if (list.length < 2) return idx;
+    if (shuffle) {
+      var i;
+      do { i = Math.floor(Math.random() * list.length); } while (i === idx);
+      return i;
+    }
+    return (((idx + 1) % list.length) + list.length) % list.length;
+  }
+
+  /* ---- pre-buffer next song in a second slot (no iframe reparent) ----
+   * The preload lives as a sibling of #ytFrame inside #playerMount. Promotion
+   * only toggles CSS visibility — moving a YT iframe in the DOM kills the
+   * player, which is why transitions used to freeze (especially under shuffle,
+   * where the pre-cued id was always sequential and never matched nextSong). */
   function schedulePreload(list, idx) {
     clearBufferSkip();
-    var nextIdx = ((idx + 1) % list.length + list.length) % list.length;
+    if (!list || !list.length) return;
+
+    // Keep a still-valid warmer. Under shuffle the next index is arbitrary, so
+    // re-rolling on every PLAYING would destroy the buffer we just built.
+    if (preloadReady && preloadPlayer && preloadShuffle === shuffle &&
+        preloadIdx >= 0 && preloadIdx < list.length && preloadIdx !== idx &&
+        list[preloadIdx].youtubeId === preloadVideoId) {
+      return;
+    }
+
+    var nextIdx = nextIndexFor(list, idx);
+    if (nextIdx < 0) return;
     var next = list[nextIdx];
     if (!next || !next.youtubeId) return;
-    // Already preloaded this video?
-    if (preloadReady && preloadVideoId === next.youtubeId) return;
+    if (preloadReady && preloadVideoId === next.youtubeId && preloadIdx === nextIdx && preloadShuffle === shuffle) return;
     preloadVideoId = next.youtubeId;
+    preloadIdx = nextIdx;
+    preloadShuffle = shuffle;
     preloadReady = false;
-    // Create hidden container if needed
+
     if (!preloadDiv) {
       preloadDiv = document.createElement('div');
-      preloadDiv.style.cssText = 'position:fixed;width:1px;height:1px;opacity:0;pointer-events:none;top:-9999px;left:-9999px;z-index:-1;';
-      document.body.appendChild(preloadDiv);
+      preloadDiv.id = 'ytPreloadMount';
+      preloadDiv.style.cssText = 'position:absolute;inset:0;display:none;pointer-events:none;';
+      playerMount.appendChild(preloadDiv);
     }
-    // Destroy old preload player
+
     if (preloadPlayer) {
       try { preloadPlayer.destroy(); } catch (e) {}
       preloadPlayer = null;
     }
-    // Create a new hidden player to preload the next video
-    var preloadFrameId = 'ytPreload_' + Date.now();
+    preloadDiv.innerHTML = '';
+    var frameId = 'ytPreload_' + Date.now();
     var frameDiv = document.createElement('div');
-    frameDiv.id = preloadFrameId;
+    frameDiv.id = frameId;
+    frameDiv.style.cssText = 'width:100%;height:100%;';
     preloadDiv.appendChild(frameDiv);
-    preloadPlayer = new YT.Player(preloadFrameId, {
-      height: '1', width: '1', videoId: '',
+    var wantId = preloadVideoId;
+    preloadPlayer = new YT.Player(frameId, {
+      height: '100%', width: '100%', videoId: '',
       playerVars: { playsinline: 1, rel: 0, modestbranding: 1, autoplay: 0 },
       events: {
         onReady: function () {
-          if (preloadPlayer) {
-            preloadPlayer.cueVideoById(preloadVideoId);
+          if (preloadPlayer && preloadVideoId === wantId) {
+            preloadPlayer.cueVideoById(wantId);
           }
         },
         onStateChange: function (e) {
-          // Mark ready when video is cued (state 5 = CUED) or playing
-          if (e.data === YT.PlayerState.CUED || e.data === YT.PlayerState.PLAYING) {
+          if (preloadVideoId === wantId &&
+              (e.data === YT.PlayerState.CUED || e.data === YT.PlayerState.PLAYING)) {
             preloadReady = true;
           }
         }
@@ -451,73 +487,67 @@
     }, 15000);
   }
 
-  /* When current song ends, prefer the preloaded player for instant switch */
+  /* When current song ends, promote the preloaded slot if it matches the
+   * real next track (same index AND shuffle mode). Never reparent iframes. */
   function advanceFromPreload() {
-    if (preloadPlayer && preloadReady && preloadVideoId) {
-      // Swap: destroy old main player, move preload iframe into main container
-      var ytFrame = document.getElementById('ytFrame');
-      var preloadFrame = preloadDiv.querySelector('iframe');
-      if (preloadFrame && ytFrame && ytFrame.parentNode) {
-        // Move preload iframe into the main player container
-        ytFrame.parentNode.insertBefore(preloadFrame, ytFrame);
-        preloadFrame.style.cssText = 'width:100%;height:100%;';
-        // Remove old iframe
-        ytFrame.parentNode.removeChild(ytFrame);
-        // Destroy old player
-        try { ytPlayer.destroy(); } catch (e) {}
-        // Reassign: the preload player now IS the main player
-        preloadFrame.id = 'ytFrame';
-        ytPlayer = preloadPlayer;
-        preloadPlayer = null;
-        preloadReady = false;
-        preloadVideoId = null;
-        // Rebind state change handler on the new player
-        ytPlayer.addEventListener('onStateChange', function (e) {
-          if (e.data === YT.PlayerState.ENDED) {
-            nextSong(true);
-          } else if (e.data === YT.PlayerState.PLAYING) {
-            forceLowQuality();
-            clearStallWatch();
-            clearBufferSkip();
-            wantPlaying = true;
-            playPauseBtn.textContent = '❚❚';
-            // Pre-buffer the next song
-            var entry = findList(current);
-            var list = playable(entry);
-            schedulePreload(list, currentSong);
-          } else if (e.data === YT.PlayerState.PAUSED) {
-            var dropPaused = !navigator.onLine || stallTimer || resumeInfo;
-            if (!dropPaused) {
-              wantPlaying = false;
-              playPauseBtn.textContent = '▶';
-            }
-          } else if (e.data === YT.PlayerState.BUFFERING) {
-            armStallWatch();
-            armBufferSkip();
-          }
-        });
-        // Start playback
-        ytPlayer.playVideo();
-        forceLowQuality();
-        return true;
-      }
+    if (!preloadPlayer || !preloadReady || !preloadVideoId || preloadIdx < 0) return false;
+    // Mode changed after we cued — the cued id is not the next track.
+    if (preloadShuffle !== shuffle) return false;
+    var entry = findList(current);
+    var list = playable(entry);
+    if (preloadIdx >= list.length || list[preloadIdx].youtubeId !== preloadVideoId) return false;
+    if (!preloadDiv || !preloadDiv.parentNode || !playerMount) return false;
+
+    var oldFrame = document.getElementById('ytFrame');
+    if (!oldFrame) return false;
+
+    // Swap slots in place: show preload, hide old. No DOM reparent of iframes.
+    try { ytPlayer.destroy(); } catch (e) {}
+    if (oldFrame.parentNode) oldFrame.parentNode.removeChild(oldFrame);
+
+    // Main player now lives in the preload slot.
+    preloadDiv.id = 'ytFrame';
+    preloadDiv.style.cssText = 'position:absolute;inset:0;';
+    var promoted = preloadPlayer;
+    var promotedIdx = preloadIdx;
+
+    // Detach preload bookkeeping before rebinding so a PLAYING from the
+    // promoted player does not treat itself as the next-track warmer.
+    preloadPlayer = null;
+    preloadReady = false;
+    preloadVideoId = null;
+    preloadIdx = -1;
+    preloadDiv = null;
+
+    ytPlayer = promoted;
+    if (typeof ytPlayer.addEventListener === 'function') {
+      ytPlayer.addEventListener('onStateChange', handleMainStateChange);
     }
-    return false;
+
+    // Sync app state to the track we actually promoted (shuffle-safe).
+    currentSong = promotedIdx;
+    var s = list[promotedIdx];
+    nowName.textContent = s.name;
+    nowArtist.textContent = s.artist;
+    if (pTimeEl) pTimeEl.textContent = '0:00 / ' + (s.durationMs ? fmtTime(s.durationMs / 1000) : '--:--');
+    wantPlaying = true;
+    highlightRow(s);
+    document.dispatchEvent(new CustomEvent('songchange', { detail: s }));
+
+    ytPlayer.playVideo();
+    forceLowQuality();
+    return true;
   }
 
   function randomOtherIdx(list) {
-    if (list.length < 2) return currentSong;
-    var i;
-    do { i = Math.floor(Math.random() * list.length); } while (i === currentSong);
-    return i;
+    return nextIndexFor(list, currentSong);
   }
 
   function nextSong(auto) {
     var entry = findList(current);
     var list = playable(entry);
     if (!list.length) return;
-    if (shuffle) playSong(entry, randomOtherIdx(list), true);
-    else playSong(entry, currentSong + 1, true);
+    playSong(entry, nextIndexFor(list, currentSong), true);
   }
 
   function prevSong() {
@@ -1109,9 +1139,11 @@
     playerBar.classList.add('hidden');
     currentSong = -1;
     clearBufferSkip();
-    // Clean up preload player
+    // Clean up preload player + slot
     if (preloadPlayer) { try { preloadPlayer.destroy(); } catch (e) {} preloadPlayer = null; }
-    preloadReady = false; preloadVideoId = null;
+    if (preloadDiv && preloadDiv.parentNode) preloadDiv.parentNode.removeChild(preloadDiv);
+    preloadDiv = null;
+    preloadReady = false; preloadVideoId = null; preloadIdx = -1; preloadShuffle = false;
     var rows = listEl.querySelectorAll('.song-row');
     Array.prototype.forEach.call(rows, function (r) { r.classList.remove('playing'); });
   });

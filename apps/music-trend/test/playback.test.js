@@ -1,0 +1,334 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+import { JSDOM } from 'jsdom';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const appJs = readFileSync(join(__dirname, '..', 'app.js'), 'utf8');
+const indexHtml = readFileSync(join(__dirname, '..', 'index.html'), 'utf8');
+
+const PLAYLIST_PAYLOAD = {
+  data: [
+    {
+      list: 'hk:trending',
+      chartTitle: 'Trending',
+      songs: [
+        { id: 's1', name: 'Song One', artist: 'A', genre: 'canto', youtubeId: 'vid00000001', durationMs: 180000 },
+        { id: 's2', name: 'Song Two', artist: 'B', genre: 'canto', youtubeId: 'vid00000002', durationMs: 180000 },
+        { id: 's3', name: 'Song Three', artist: 'C', genre: 'canto', youtubeId: 'vid00000003', durationMs: 180000 },
+        { id: 's4', name: 'Song Four', artist: 'D', genre: 'canto', youtubeId: 'vid00000004', durationMs: 180000 },
+      ],
+    },
+  ],
+  lastRefresh: new Date().toISOString(),
+  countries: { hk: 'HK' },
+};
+
+function installMockYT(dom) {
+  const { window } = dom;
+  const players = [];
+
+  class MockPlayer {
+    constructor(target, config) {
+      this.config = config;
+      this.videoId = config.videoId || '';
+      this.state = -1;
+      this.destroyed = false;
+      this.listeners = { onStateChange: [], onReady: [], onError: [] };
+      if (config.events) {
+        if (config.events.onStateChange) this.listeners.onStateChange.push(config.events.onStateChange);
+        if (config.events.onReady) this.listeners.onReady.push(config.events.onReady);
+        if (config.events.onError) this.listeners.onError.push(config.events.onError);
+      }
+      const el = typeof target === 'string' ? window.document.getElementById(target) : target;
+      if (el && el.parentNode) {
+        const iframe = window.document.createElement('iframe');
+        iframe.id = el.id || '';
+        iframe.style.width = '100%';
+        iframe.style.height = '100%';
+        el.parentNode.replaceChild(iframe, el);
+        this.iframe = iframe;
+      } else {
+        this.iframe = null;
+      }
+      players.push(this);
+      queueMicrotask(() => {
+        if (!this.destroyed) this.emitReady();
+      });
+    }
+
+    emitReady() {
+      this.listeners.onReady.forEach((fn) => fn({ target: this }));
+    }
+
+    setState(state) {
+      if (this.destroyed) return;
+      this.state = state;
+      this.listeners.onStateChange.slice().forEach((fn) => fn({ data: state, target: this }));
+    }
+
+    addEventListener(name, fn) {
+      if (this.listeners[name]) this.listeners[name].push(fn);
+    }
+
+    removeEventListener(name, fn) {
+      if (this.listeners[name]) {
+        this.listeners[name] = this.listeners[name].filter((f) => f !== fn);
+      }
+    }
+
+    cueVideoById(id) {
+      this.videoId = id;
+      this.setState(5); // CUED
+    }
+
+    loadVideoById(id) {
+      this.videoId = id;
+      this.setState(3); // BUFFERING
+      queueMicrotask(() => {
+        if (!this.destroyed && this.videoId === id) this.setState(1); // PLAYING
+      });
+    }
+
+    playVideo() {
+      if (this.destroyed) return;
+      this.setState(1);
+    }
+
+    pauseVideo() {
+      this.setState(2);
+    }
+
+    stopVideo() {
+      this.setState(-1);
+    }
+
+    destroy() {
+      this.destroyed = true;
+      if (this.iframe && this.iframe.parentNode) this.iframe.parentNode.removeChild(this.iframe);
+    }
+
+    getAvailableQualityLevels() { return ['hd720', 'small']; }
+    setPlaybackQuality() {}
+    getCurrentTime() { return 10; }
+    getDuration() { return 180; }
+  }
+
+  window.YT = {
+    Player: MockPlayer,
+    PlayerState: {
+      UNSTARTED: -1,
+      ENDED: 0,
+      PLAYING: 1,
+      PAUSED: 2,
+      BUFFERING: 3,
+      CUED: 5,
+    },
+  };
+
+  return { players, YT: window.YT };
+}
+
+async function flush() {
+  await new Promise((r) => setTimeout(r, 0));
+  await new Promise((r) => setTimeout(r, 0));
+}
+
+function createHarness({ shuffle = false } = {}) {
+  const dom = new JSDOM(indexHtml, {
+    url: 'https://example.test/music-trend/',
+    runScripts: 'outside-only',
+    pretendToBeVisual: true,
+  });
+  const { window } = dom;
+
+  window.localStorage.setItem('music-country', 'hk');
+  if (shuffle) window.localStorage.setItem('music-shuffle', '1');
+  else window.localStorage.removeItem('music-shuffle');
+
+  window.fetch = vi.fn(async (url) => {
+    const u = String(url);
+    if (u.includes('/music-trend/api/playlists')) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => PLAYLIST_PAYLOAD,
+      };
+    }
+    return { ok: false, status: 404, json: async () => ({ error: 'not found' }) };
+  });
+
+  Object.defineProperty(window.navigator, 'onLine', { value: true, configurable: true });
+  Object.defineProperty(window.navigator, 'serviceWorker', {
+    value: { register: () => Promise.resolve({}) },
+    configurable: true,
+  });
+
+  const { players, YT } = installMockYT(dom);
+
+  // app.js is an IIFE that talks to globals on window
+  window.eval(appJs);
+
+  return { dom, window, players, YT };
+}
+
+function livePlayers(players) {
+  return players.filter((p) => !p.destroyed);
+}
+
+function playingVideoIds(players) {
+  return livePlayers(players)
+    .filter((p) => p.state === 1)
+    .map((p) => p.videoId);
+}
+
+describe('music-trend playback transitions', () => {
+  let harness;
+
+  afterEach(() => {
+    if (harness) {
+      try { harness.dom.window.close(); } catch { /* ignore */ }
+      harness = null;
+    }
+  });
+
+  async function startAndSettle({ shuffle } = {}) {
+    harness = createHarness({ shuffle });
+    const { window, players } = harness;
+
+    window.onYouTubeIframeAPIReady();
+    await flush();
+    await flush();
+
+    // load() is kicked off by app.js; wait for render
+    await flush();
+    await flush();
+    await flush();
+
+    const rows = window.document.querySelectorAll('.song-row.tappable');
+    expect(rows.length).toBeGreaterThan(0);
+
+    // Click first playable row
+    rows[0].dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    await flush();
+    await flush();
+
+    const main = players.find((p) => !p.destroyed && p.videoId);
+    expect(main).toBeTruthy();
+    expect(main.videoId).toBe('vid00000001');
+    main.setState(1); // PLAYING
+    await flush();
+
+    return { window, players, main };
+  }
+
+  it('advances to the next song when ENDED fires (sequential)', async () => {
+    const { window, players, main } = await startAndSettle({ shuffle: false });
+
+    // Let preload cue the next sequential video
+    await flush();
+    await flush();
+
+    main.setState(0); // ENDED
+    await flush();
+    await flush();
+
+    const playing = playingVideoIds(players);
+    expect(playing).toContain('vid00000002');
+  });
+
+  it('advances to a different song when ENDED fires (shuffle)', async () => {
+    const { window, players, main } = await startAndSettle({ shuffle: true });
+
+    await flush();
+    await flush();
+
+    main.setState(0); // ENDED
+    await flush();
+    await flush();
+
+    const playing = playingVideoIds(players);
+    // Must have advanced: some live player is playing a non-first song
+    // (or at least something is playing — not a dead stop on song 1)
+    expect(playing.length).toBeGreaterThan(0);
+    expect(playing).not.toEqual(['vid00000001']);
+    // Under shuffle with 4 songs, next should not necessarily be vid2,
+    // but must be one of the playlist ids and currently playing
+    expect(playing.every((id) => id.startsWith('vid0000000'))).toBe(true);
+  });
+
+  it('keeps advancing across a second ENDED after a preload swap (sequential)', async () => {
+    const { window, players, main } = await startAndSettle({ shuffle: false });
+
+    await flush();
+    await flush();
+
+    // First transition (likely advanceFromPreload)
+    main.setState(0);
+    await flush();
+    await flush();
+
+    const afterFirst = livePlayers(players).filter((p) => p.state === 1);
+    expect(afterFirst.length).toBeGreaterThan(0);
+    const second = afterFirst[0];
+    expect(second.videoId).toBe('vid00000002');
+
+    // Second transition must also advance — this is where a broken rebind stops
+    second.setState(0); // ENDED on the swapped/preloaded player
+    await flush();
+    await flush();
+
+    const playing = playingVideoIds(players);
+    expect(playing).toContain('vid00000003');
+  });
+
+  it('keeps advancing across a second ENDED after a preload swap (shuffle)', async () => {
+    const { window, players, main } = await startAndSettle({ shuffle: true });
+
+    await flush();
+    await flush();
+
+    main.setState(0);
+    await flush();
+    await flush();
+
+    const afterFirst = livePlayers(players).filter((p) => p.state === 1);
+    expect(afterFirst.length).toBeGreaterThan(0);
+    const second = afterFirst[0];
+    const firstNext = second.videoId;
+    expect(firstNext).not.toBe('vid00000001');
+
+    second.setState(0);
+    await flush();
+    await flush();
+
+    const playing = playingVideoIds(players);
+    expect(playing.length).toBeGreaterThan(0);
+    // Must not be stuck: either still playing firstNext (bad if ENDED ignored)
+    // — we assert we MOVED on to some other song than the one that just ended.
+    const advanced = playing.filter((id) => id !== firstNext);
+    expect(advanced.length).toBeGreaterThan(0);
+  });
+
+  it('does not stop when ENDED fires while a preload player exists (shuffle)', async () => {
+    const { window, players, main } = await startAndSettle({ shuffle: true });
+
+    await flush();
+    await flush();
+
+    // Multiple transitions in a row — stress the swap/rebind path
+    let ended = main;
+    for (let i = 0; i < 3; i++) {
+      const playingNow = livePlayers(players).filter((p) => p.state === 1);
+      if (!playingNow.length) break;
+      ended = playingNow[0];
+      ended.setState(0);
+      await flush();
+      await flush();
+    }
+
+    const playing = playingVideoIds(players);
+    expect(playing.length).toBeGreaterThan(0);
+  });
+});

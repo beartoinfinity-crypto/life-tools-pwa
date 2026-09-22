@@ -338,8 +338,9 @@ gate by country (`CANTO_COUNTRIES` = `{hk}` and `MANDO_COUNTRIES` = `{hk,tw,cn,s
   skipped, and a ▶▶ toggle to expand the full 16:9 video only when wanted.
 - **Pre-buffer + stall auto-skip** — the player preloads the next track into a hidden
   second YouTube instance while the current song plays, so ENDED can start the next song
-  instantly. If the player sits in BUFFERING for >15 s (weak signal / dead video), it
-  auto-advances instead of hanging forever.
+  instantly (shuffle-aware: the warmer tracks the same index `nextSong` will pick, and
+  promotion only toggles visibility — it never reparents the iframe). If the player sits
+  in BUFFERING for >15 s (weak signal / dead video), it auto-advances instead of hanging.
 - **Classification + per-country gating** — `apps/music-trend/parser.js` (`buildPlaylists`/`isCantonese`/`isMandarin`/
   `feedUrl`), covered by unit tests. Apple only tags Cantonese/Mandarin on the HK & TW feeds, so the genre tag comes
   from the **title language** (Chinese characters in the title; Cantonese-only characters 嘅咗唔喺嗰啲冇… mark 廣東歌).
