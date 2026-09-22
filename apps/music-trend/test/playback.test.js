@@ -187,6 +187,26 @@ function createHarness({ shuffle = false, hidden = false } = {}) {
     configurable: true,
   });
 
+  // Media Session (lock-screen / Bluetooth bar)
+  const mediaSession = {
+    metadata: null,
+    playbackState: 'none',
+    setActionHandler: vi.fn(),
+    setPositionState: vi.fn(),
+  };
+  Object.defineProperty(window.navigator, 'mediaSession', {
+    value: mediaSession,
+    configurable: true,
+  });
+  window.MediaMetadata = class MediaMetadata {
+    constructor(init) {
+      this.title = (init && init.title) || '';
+      this.artist = (init && init.artist) || '';
+      this.album = (init && init.album) || '';
+      this.artwork = (init && init.artwork) || [];
+    }
+  };
+
   let visibilityState = hidden ? 'hidden' : 'visible';
   Object.defineProperty(window.document, 'visibilityState', {
     get: () => visibilityState,
@@ -208,6 +228,7 @@ function createHarness({ shuffle = false, hidden = false } = {}) {
     players,
     YT,
     wakeLock,
+    mediaSession,
     setHidden(next) {
       visibilityState = next ? 'hidden' : 'visible';
       window.document.dispatchEvent(new window.Event('visibilitychange'));
@@ -449,5 +470,51 @@ describe('music-trend playback transitions', () => {
     await flush();
     expect(harness.window.navigator.wakeLock.request).toHaveBeenCalledWith('screen');
     expect(harness.wakeLock.released).toBe(false);
+  });
+
+  it('publishes Media Session metadata for the current track', async () => {
+    const { window } = await startAndSettle({ shuffle: false });
+    await flush();
+    expect(harness.mediaSession.metadata).toBeTruthy();
+    expect(harness.mediaSession.metadata.title).toBe('Song One');
+    expect(harness.mediaSession.metadata.artist).toBe('A');
+    expect(harness.mediaSession.playbackState).toBe('playing');
+  });
+
+  it('keeps the lock-screen bar alive across ENDED by advancing Media Session while hidden', async () => {
+    const { window, players, main } = await startAndSettle({ shuffle: false });
+    await flush();
+    await flush();
+
+    harness.setHidden(true); // phone locked
+    await flush();
+
+    main.setState(0); // ENDED on lock screen
+    await flush();
+    await flush();
+
+    // YouTube clears its session on ENDED — we must own the next track's bar
+    expect(harness.mediaSession.metadata).toBeTruthy();
+    expect(harness.mediaSession.metadata.title).toBe('Song Two');
+    expect(harness.mediaSession.playbackState).toBe('playing');
+    // Next track must already be loading (not waiting for unlock)
+    expect(livePlayers(players).some((p) => p.videoId === 'vid00000002')).toBe(true);
+
+    // Unlock: bar still present with next track, playback can resume
+    harness.setHidden(false);
+    await flush();
+    await flush();
+    expect(harness.mediaSession.metadata.title).toBe('Song Two');
+    expect(harness.mediaSession.playbackState).toBe('playing');
+  });
+
+  it('registers lock-screen transport controls', async () => {
+    await startAndSettle({ shuffle: false });
+    await flush();
+    const actions = harness.mediaSession.setActionHandler.mock.calls.map((c) => c[0]);
+    expect(actions).toContain('play');
+    expect(actions).toContain('pause');
+    expect(actions).toContain('nexttrack');
+    expect(actions).toContain('previoustrack');
   });
 });

@@ -54,6 +54,9 @@
   var myImportBtn = document.getElementById('myImportBtn');
   var myImport = document.getElementById('myImport');
 
+  // Lock-screen / notification transport — registered once at boot.
+  setupMediaSession();
+
   /* ---- my playlist (localStorage, per device) ---- */
   function mySongs() {
     try { return JSON.parse(localStorage.getItem(MY_KEY) || '[]'); } catch (e) { return []; }
@@ -202,6 +205,8 @@
       wantPlaying = true;
       playPauseBtn.textContent = '❚❚';
       requestWakeLock();
+      var playingSong = currentListSong();
+      if (playingSong) setMediaSessionSong(playingSong, true);
       // Warm the next track (shuffle-aware). After a preload promotion this
       // uses the updated currentSong so we do not re-cue the song on air.
       var entry = findList(current);
@@ -220,6 +225,14 @@
         wantPlaying = false;
         playPauseBtn.textContent = '▶';
         releaseWakeLock();
+        var pausedSong = currentListSong();
+        if (pausedSong) setMediaSessionSong(pausedSong, false);
+      }
+      // Hidden/drop PAUSED: keep the session looking like we're still playing
+      // so the lock-screen bar does not vanish mid-transition.
+      else if (wantPlaying) {
+        var stillSong = currentListSong();
+        if (stillSong) setMediaSessionSong(stillSong, true);
       }
     } else if (e.data === YT.PlayerState.BUFFERING) {
       armStallWatch();
@@ -385,6 +398,7 @@
     nowArtist.textContent = s.artist;
     if (pTimeEl) pTimeEl.textContent = '0:00 / ' + (s.durationMs ? fmtTime(s.durationMs / 1000) : '--:--');
     wantPlaying = !!autoplay;
+    setMediaSessionSong(s, !!autoplay);
 
     highlightRow(s);
     document.dispatchEvent(new CustomEvent('songchange', { detail: s }));
@@ -550,6 +564,7 @@
     nowArtist.textContent = s.artist;
     if (pTimeEl) pTimeEl.textContent = '0:00 / ' + (s.durationMs ? fmtTime(s.durationMs / 1000) : '--:--');
     wantPlaying = true;
+    setMediaSessionSong(s, true);
     highlightRow(s);
     document.dispatchEvent(new CustomEvent('songchange', { detail: s }));
 
@@ -557,6 +572,61 @@
     forceLowQuality();
     requestWakeLock();
     return true;
+  }
+
+  /* ---- Media Session (lock-screen / notification playing bar) ----
+   * The YouTube iframe owns the OS media session while it plays; on ENDED it
+   * tears the session down, so the lock-screen bar disappears until we start
+   * the next video (and on a locked phone the next video may not actually
+   * start until unlock). We take ownership ourselves: publish metadata the
+   * moment a song is selected, re-publish after every transition, and keep
+   * playbackState = 'playing' while wantPlaying so the bar never vanishes. */
+  function setMediaSessionSong(s, playing) {
+    if (!s) return;
+    if (!navigator.mediaSession) return;
+    try {
+      if (typeof window.MediaMetadata === 'function') {
+        navigator.mediaSession.metadata = new window.MediaMetadata({
+          title: s.name || '',
+          artist: s.artist || '',
+          album: 'Music Trend',
+          artwork: s.artwork ? [{ src: s.artwork, sizes: '100x100', type: 'image/jpeg' }] : []
+        });
+      }
+      navigator.mediaSession.playbackState = playing ? 'playing' : 'paused';
+    } catch (e) { /* unsupported */ }
+  }
+
+  function currentListSong() {
+    var entry = findList(current);
+    var list = playable(entry);
+    if (!list.length || currentSong < 0 || currentSong >= list.length) return null;
+    return list[currentSong];
+  }
+
+  function setupMediaSession() {
+    if (!navigator.mediaSession || !navigator.mediaSession.setActionHandler) return;
+    function on(name, fn) {
+      try { navigator.mediaSession.setActionHandler(name, fn); } catch (e) { /* unsupported */ }
+    }
+    on('play', function () {
+      wantPlaying = true;
+      playPauseBtn.textContent = '❚❚';
+      requestWakeLock();
+      try { if (ytPlayer && ytReady) ytPlayer.playVideo(); } catch (e) {}
+      var s = currentListSong();
+      if (s) setMediaSessionSong(s, true);
+    });
+    on('pause', function () {
+      wantPlaying = false;
+      playPauseBtn.textContent = '▶';
+      releaseWakeLock();
+      try { if (ytPlayer && ytReady) ytPlayer.pauseVideo(); } catch (e) {}
+      var s = currentListSong();
+      if (s) setMediaSessionSong(s, false);
+    });
+    on('nexttrack', function () { nextSong(true); });
+    on('previoustrack', function () { prevSong(); });
   }
 
   /* ---- Screen Wake Lock: keep the display/system awake while we play ----
@@ -602,6 +672,8 @@
     try { ytPlayer.playVideo(); } catch (e) {}
     forceLowQuality();
     requestWakeLock();
+    var s = currentListSong();
+    if (s) setMediaSessionSong(s, true);
   }
 
   document.addEventListener('visibilitychange', function () {
@@ -1202,8 +1274,15 @@
   });
   playPauseBtn.addEventListener('click', function () {
     if (!ytReady || !ytPlayer) return;
-    if (wantPlaying) { ytPlayer.pauseVideo(); }
-    else { ytPlayer.playVideo(); }
+    if (wantPlaying) {
+      ytPlayer.pauseVideo();
+      var song = currentListSong();
+      if (song) setMediaSessionSong(song, false);
+    } else {
+      ytPlayer.playVideo();
+      var song = currentListSong();
+      if (song) setMediaSessionSong(song, true);
+    }
   });
   closeBtn.addEventListener('click', function () {
     if (ytReady && ytPlayer.stopVideo) ytPlayer.stopVideo();
@@ -1212,6 +1291,9 @@
     wantPlaying = false;
     clearBufferSkip();
     releaseWakeLock();
+    if (navigator.mediaSession) {
+      try { navigator.mediaSession.playbackState = 'none'; } catch (e) {}
+    }
     // Clean up preload player + slot
     if (preloadPlayer) { try { preloadPlayer.destroy(); } catch (e) {} preloadPlayer = null; }
     if (preloadDiv && preloadDiv.parentNode) preloadDiv.parentNode.removeChild(preloadDiv);

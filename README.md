@@ -343,6 +343,12 @@ gate by country (`CANTO_COUNTRIES` = `{hk}` and `MANDO_COUNTRIES` = `{hk,tw,cn,s
   promotion only toggles visibility — it never reparents the iframe). Screen Wake Lock
   keeps the display awake while playing; on `visibilitychange` any mid-buffer pause from
   monitor sleep is kicked again. If BUFFERING persists >15 s, it auto-advances.
+- **Lock-screen / notification bar** — we own `navigator.mediaSession` ourselves instead
+  of letting the YouTube iframe tear it down on ENDED: metadata is published the moment a
+  song is selected and re-published after every transition (so the bar stays up while the
+  next track prebuffers), `playbackState` tracks playing/paused/`wantPlaying` (reset to
+  `none` only when the player closes), and `play`/`pause`/`nexttrack`/`previoustrack`
+  transport controls are wired to the same next/prev/pause paths as the in-page buttons.
 - **Classification + per-country gating** — `apps/music-trend/parser.js` (`buildPlaylists`/`isCantonese`/`isMandarin`/
   `feedUrl`), covered by unit tests. Apple only tags Cantonese/Mandarin on the HK & TW feeds, so the genre tag comes
   from the **title language** (Chinese characters in the title; Cantonese-only characters 嘅咗唔喺嗰啲冇… mark 廣東歌).
