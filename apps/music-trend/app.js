@@ -262,8 +262,13 @@
     stallTimer = setTimeout(function () {
       stallTimer = null;
       // ~10s of stalling = a real signal drop (not a normal short buffer).
-      if (wantPlaying) resumeFromSpot();
-    }, 10000);
+      if (wantPlaying) {
+        resumeFromSpot();
+        // Online + still stuck buffering: don't wait ~15s for the resume poll —
+        // reload the same spot now so a network stall recovers without a skip.
+        if (navigator.onLine) finishResume();
+      }
+    }, watchMs('stallMs', 10000));
   }
 
   function clearStallWatch() {
@@ -403,6 +408,13 @@
     idx = ((idx % list.length) + list.length) % list.length;
     currentSong = idx;
     var s = list[idx];
+    // Switching tracks abandons any pending signal-drop resume/stall state —
+    // otherwise a leftover resumeRetry can loadVideoById the OLD song over
+    // the one we just advanced to (and a stale bufferSkip can double-skip).
+    resumeInfo = null;
+    clearResumeRetry();
+    clearStallWatch();
+    clearBufferSkip();
     clearEndWatch();
 
     playerBar.classList.remove('hidden');
@@ -529,12 +541,23 @@
   }
 
   function armBufferSkip() {
-    clearBufferSkip();
+    // Arm once per buffering episode. Re-arming on every BUFFERING re-emit
+    // (YouTube does this while stuck) meant the 15s skip never fired — the
+    // exact "sits on BUFFERING forever, never advances" failure mode.
+    if (bufferSkipTimer) return;
     bufferSkipTimer = setTimeout(function () {
       bufferSkipTimer = null;
       // Stuck buffering too long — skip to next
-      nextSong(true);
-    }, 15000);
+      if (wantPlaying && !userPauseIntent) nextSong(true);
+    }, watchMs('bufferSkipMs', 15000));
+  }
+
+  // Tests (or a future settings panel) can shorten the BUFFERING watchdogs
+  // via window.__MT_WATCH = { stallMs, bufferSkipMs } before app.js loads.
+  function watchMs(key, fallback) {
+    var w = (typeof window !== 'undefined' && window.__MT_WATCH) || null;
+    var n = w && typeof w[key] === 'number' ? w[key] : 0;
+    return n > 0 ? n : fallback;
   }
 
   /* When current song ends, promote the preloaded slot if it matches the

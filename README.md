@@ -366,6 +366,16 @@ gate by country (`CANTO_COUNTRIES` = `{hk}` and `MANDO_COUNTRIES` = `{hk,tw,cn,s
   retry (~2s) plus a Media Session heartbeat that re-publishes metadata +
   `playbackState = 'playing'`, and advance if the wall-clock end passed while
   timers were frozen. Cleared only on user pause / close.
+- **BUFFERING belt-and-suspenders** — a stall that never leaves `BUFFERING`
+  (network freeze, not Brave's pause) used to slip past both watchers: the
+  15s skip re-armed on every `BUFFERING` re-emit so YouTube's stutter kept
+  pushing the deadline out forever, and a pending signal-drop `resumeInfo`
+  could later `loadVideoById` the old track over the new one. The skip now
+  arms once per episode; if we're still stalled at ~10s **and online**, the
+  stall watch reloads the same song immediately instead of waiting for
+  `online`/the 15s resume poll; `playSong` clears any leftover resume/stall
+  state so an advancing track is never yanked backward. Thresholds are
+  overridable via `window.__MT_WATCH` for tests.
 - **Classification + per-country gating** — `apps/music-trend/parser.js` (`buildPlaylists`/`isCantonese`/`isMandarin`/
   `feedUrl`), covered by unit tests. Apple only tags Cantonese/Mandarin on the HK & TW feeds, so the genre tag comes
   from the **title language** (Chinese characters in the title; Cantonese-only characters 嘅咗唔喺嗰啲冇… mark 廣東歌).

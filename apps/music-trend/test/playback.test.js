@@ -88,6 +88,7 @@ function installMockYT(dom) {
       this.videoId = id;
       this.cuedOnly = false;
       this.loaded = true;
+      this.loadCalls = (this.loadCalls || 0) + 1;
       this.setState(3); // BUFFERING
       queueMicrotask(() => {
         if (!this.destroyed && this.videoId === id) this.setState(1); // PLAYING
@@ -150,7 +151,7 @@ async function flush() {
   await new Promise((r) => setTimeout(r, 0));
 }
 
-function createHarness({ shuffle = false, hidden = false } = {}) {
+function createHarness({ shuffle = false, hidden = false, watch } = {}) {
   const dom = new JSDOM(indexHtml, {
     url: 'https://example.test/music-trend/',
     runScripts: 'outside-only',
@@ -161,6 +162,7 @@ function createHarness({ shuffle = false, hidden = false } = {}) {
   window.localStorage.setItem('music-country', 'hk');
   if (shuffle) window.localStorage.setItem('music-shuffle', '1');
   else window.localStorage.removeItem('music-shuffle');
+  if (watch) window.__MT_WATCH = watch;
 
   window.fetch = vi.fn(async (url) => {
     const u = String(url);
@@ -262,8 +264,8 @@ describe('music-trend playback transitions', () => {
     }
   });
 
-  async function startAndSettle({ shuffle, hidden } = {}) {
-    harness = createHarness({ shuffle, hidden });
+  async function startAndSettle({ shuffle, hidden, watch } = {}) {
+    harness = createHarness({ shuffle, hidden, watch });
     const { window, players } = harness;
 
     window.onYouTubeIframeAPIReady();
@@ -773,5 +775,49 @@ describe('music-trend playback transitions', () => {
     expect(harness.mediaSession.metadata).toBeTruthy();
     expect(harness.mediaSession.metadata.title).toBe('Song One');
     expect(harness.mediaSession.playbackState).toBe('playing');
+  });
+
+  it('skips forward when BUFFERING persists, even if YT re-emits BUFFERING', async () => {
+    const { window, players, main } = await startAndSettle({
+      shuffle: false,
+      watch: { stallMs: 60000, bufferSkipMs: 150 },
+    });
+    await flush();
+
+    // Stuck on the current track; YouTube re-emits BUFFERING while stalled.
+    // The old watchdog re-armed each time, so the skip never fired.
+    main.setState(3);
+    for (let i = 0; i < 3; i++) {
+      await new Promise((r) => setTimeout(r, 30));
+      main.setState(3);
+    }
+    // First arm was at t=0; re-emits must not push the deadline out.
+    await new Promise((r) => setTimeout(r, 150));
+    await flush();
+    await flush();
+
+    const live = livePlayers(players);
+    // Advanced off song 1 onto song 2 (playSong → loadVideoById)
+    expect(live.some((p) => p.videoId === 'vid00000002')).toBe(true);
+    expect(playingVideoIds(players)).toContain('vid00000002');
+  });
+
+  it('reloads the same track when online BUFFERING hits the stall watchdog', async () => {
+    const { window, players, main } = await startAndSettle({
+      shuffle: false,
+      watch: { stallMs: 80, bufferSkipMs: 60000 },
+    });
+    await flush();
+    const loadsBefore = main.loadCalls || 0;
+
+    main.setState(3); // network stall, but navigator.onLine stays true
+    await new Promise((r) => setTimeout(r, 200));
+    await flush();
+    await flush();
+
+    // Same song still on air, but we forced a reload rather than sitting forever
+    expect(main.videoId).toBe('vid00000001');
+    expect((main.loadCalls || 0)).toBeGreaterThan(loadsBefore);
+    expect(playingVideoIds(players)).toContain('vid00000001');
   });
 });

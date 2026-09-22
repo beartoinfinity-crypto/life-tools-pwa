@@ -24,7 +24,7 @@ Each app is an authored PWA with its own `index.html`, `styles.css`,
 |--------------------|------------------|----------------------------|
 | apps/traffic-news  | traffic-news-v6   | v1.0 build 202609160643    |
 | apps/mark-six      | mark-six-v8       | v1.0 build 202609210150    |
-| apps/music-trend   | music-trend-v28   | v1.0 build 202609220642    |
+| apps/music-trend   | music-trend-v29   | v1.0 build 202609220657    |
 
 > `apps/hk-bus-eta/` is **not** an authored app in this repo. It holds
 > `LICENSE`, `README.md`, `build-upstream/` and `build/` — vendored
