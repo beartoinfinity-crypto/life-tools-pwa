@@ -3,7 +3,7 @@ const https = require('https');
 const { createClient } = require('@supabase/supabase-js');
 
 const { buildPlaylists, feedUrl } = require('./parser');
-const { searchYouTube, mapLimit } = require('./youtube');
+const { searchYouTube, mapLimit, validateYouTubeIds } = require('./youtube');
 
 /** Countries whose Apple Music charts are available (code -> label). */
 const COUNTRIES = {
@@ -50,6 +50,10 @@ function fetchUrl(url, timeout = 20000) {
 const YT_RESOLVE_PER_RUN = 20;
 const YT_CONCURRENCY = 4;
 const YT_DEADLINE_MS = 50 * 1000;
+// Rolling re-validation of ids that are already cached (broken/deleted videos).
+// A song is eligible when never checked or last checked > max age ago.
+const YT_VALIDATE_PER_RUN = 15;
+const YT_VALIDATE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 /**
  * Resolve YouTube ids for songs, reusing ids cached from previous runs
@@ -63,14 +67,24 @@ async function resolveYouTube(country, songs, skipCache) {
     try {
       const { data } = await supabase.from('music_trend').select('songs').eq('list', `${country}:trending`).single();
       for (const s of JSON.parse(data.songs || '[]')) {
-        if (s.youtubeId) cached.set(String(s.id), { youtubeId: s.youtubeId, youtubeTitle: s.youtubeTitle });
+        if (s.youtubeId) {
+          cached.set(String(s.id), {
+            youtubeId: s.youtubeId,
+            youtubeTitle: s.youtubeTitle,
+            youtubeCheckedAt: s.youtubeCheckedAt
+          });
+        }
       }
     } catch { /* first run / no cache */ }
   }
 
   for (const s of songs) {
     const c = cached.get(String(s.id));
-    if (c) { s.youtubeId = c.youtubeId; s.youtubeTitle = c.youtubeTitle; }
+    if (c) {
+      s.youtubeId = c.youtubeId;
+      s.youtubeTitle = c.youtubeTitle;
+      if (c.youtubeCheckedAt) s.youtubeCheckedAt = c.youtubeCheckedAt;
+    }
   }
 
   const need = skipCache ? songs.filter((s) => !s.youtubeId) : songs.filter((s) => !s.youtubeId).slice(0, YT_RESOLVE_PER_RUN);
@@ -83,6 +97,7 @@ async function resolveYouTube(country, songs, skipCache) {
     if (hit) {
       s.youtubeId = hit.videoId;
       s.youtubeTitle = hit.title;
+      s.youtubeCheckedAt = new Date().toISOString(); // brand-new id: eligible after max age
     }
   });
 }
@@ -101,14 +116,26 @@ async function refreshMusicTrend(country, { clearCache } = {}) {
   if (!lists.trending.length) throw new Error('feed had no songs');
 
   await resolveYouTube(cc, lists.trending, clearCache);
+  // Re-check a rolling window of cached ids (deleted/private videos) and
+  // re-search the dead ones — runs on every refresh so broken links self-heal.
+  const validation = await validateYouTubeIds(lists.trending);
 
-  // resolveYouTube mutates only the trending copies of each song; propagate the
-  // resolved ids to the cantonese/chinese playlists (same songs, new objects).
-  const ytById = new Map(lists.trending.filter((s) => s.youtubeId).map((s) => [String(s.id), s]));
+  // resolveYouTube/validate mutate only the trending copies of each song;
+  // propagate ids (and clear ids that validation dropped) to cantonese/chinese.
+  const ytById = new Map(lists.trending.map((s) => [String(s.id), s]));
   for (const name of ['cantonese', 'chinese']) {
     for (const s of lists[name]) {
       const src = ytById.get(String(s.id));
-      if (src) { s.youtubeId = src.youtubeId; s.youtubeTitle = src.youtubeTitle; }
+      if (!src) continue;
+      if (src.youtubeId) {
+        s.youtubeId = src.youtubeId;
+        s.youtubeTitle = src.youtubeTitle;
+        if (src.youtubeCheckedAt) s.youtubeCheckedAt = src.youtubeCheckedAt;
+      } else {
+        delete s.youtubeId;
+        delete s.youtubeTitle;
+        delete s.youtubeCheckedAt;
+      }
     }
   }
 
@@ -132,7 +159,8 @@ async function refreshMusicTrend(country, { clearCache } = {}) {
   return {
     country: cc,
     fetched: lists.trending.length,
-    resolved: lists.trending.filter((s) => s.youtubeId).length
+    resolved: lists.trending.filter((s) => s.youtubeId).length,
+    validation
   };
 }
 
@@ -205,7 +233,69 @@ app.post('/api/playlists/refresh', async (req, res) => {
     const { country, list, clearCache } = req.body || {};
     const r = await refreshMusicTrend(country, { clearCache: !!clearCache });
     const out = await readMusicTrend({ country: r.country, list });
-    res.json({ ...out, fetched: r.fetched, resolved: r.resolved });
+    res.json({ ...out, fetched: r.fetched, resolved: r.resolved, validation: r.validation });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Validate/re-validate cached YouTube ids without waiting for the Apple feed.
+// body: { country?, limit?, maxAgeMs? } — maxAgeMs: 0 forces a full sweep.
+app.post('/api/playlists/validate-youtube', async (req, res) => {
+  try {
+    const { country, list, limit, maxAgeMs } = req.body || {};
+    const cc = String(country || 'hk').toLowerCase();
+    if (!COUNTRIES[cc]) throw new Error(`unknown country: ${cc}`);
+    const { data: row, error: fetchErr } = await supabase
+      .from('music_trend')
+      .select('songs')
+      .eq('list', `${cc}:trending`)
+      .maybeSingle();
+    if (fetchErr) throw fetchErr;
+    if (!row) return res.status(404).json({ error: 'playlist not found' });
+
+    const songs = JSON.parse(row.songs || '[]');
+    const stats = await validateYouTubeIds(songs, {
+      limit: Number.isFinite(limit) ? Math.max(1, Number(limit)) : YT_VALIDATE_PER_RUN,
+      maxAgeMs: Number.isFinite(maxAgeMs) ? Math.max(0, Number(maxAgeMs)) : YT_VALIDATE_MAX_AGE_MS
+    });
+
+    // Persist fixed/cleared ids and mirror onto cantonese/chinese copies.
+    const ytById = new Map(songs.map((s) => [String(s.id), s]));
+    const rowsToUpdate = [{ list: `${cc}:trending`, songs: JSON.stringify(songs) }];
+    for (const listName of ['cantonese', 'chinese']) {
+      const { data: other, error: otherErr } = await supabase
+        .from('music_trend')
+        .select('songs')
+        .eq('list', `${cc}:${listName}`)
+        .maybeSingle();
+      if (otherErr || !other) continue;
+      const arr = JSON.parse(other.songs || '[]');
+      let touched = false;
+      for (const s of arr) {
+        const src = ytById.get(String(s.id));
+        if (!src) continue;
+        if (src.youtubeId) {
+          if (s.youtubeId !== src.youtubeId || s.youtubeTitle !== src.youtubeTitle || s.youtubeCheckedAt !== src.youtubeCheckedAt) {
+            s.youtubeId = src.youtubeId;
+            s.youtubeTitle = src.youtubeTitle;
+            if (src.youtubeCheckedAt) s.youtubeCheckedAt = src.youtubeCheckedAt;
+            touched = true;
+          }
+        } else if (s.youtubeId) {
+          delete s.youtubeId;
+          delete s.youtubeTitle;
+          delete s.youtubeCheckedAt;
+          touched = true;
+        }
+      }
+      if (touched) rowsToUpdate.push({ list: `${cc}:${listName}`, songs: JSON.stringify(arr) });
+    }
+    const { error: updErr } = await supabase.from('music_trend').upsert(rowsToUpdate, { onConflict: 'list' });
+    if (updErr) throw updErr;
+
+    const out = await readMusicTrend({ country: cc, list });
+    res.json({ ...out, validation: stats });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -600,4 +690,13 @@ function ensureMusicTrend() {
   return ensurePromise;
 }
 
-module.exports = { app, refreshMusicTrend, readMusicTrend, ensureMusicTrend, COUNTRIES };
+module.exports = {
+  app,
+  refreshMusicTrend,
+  readMusicTrend,
+  ensureMusicTrend,
+  validateYouTubeIds,
+  YT_VALIDATE_PER_RUN,
+  YT_VALIDATE_MAX_AGE_MS,
+  COUNTRIES
+};

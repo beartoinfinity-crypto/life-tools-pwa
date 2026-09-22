@@ -291,7 +291,8 @@ gate by country (`CANTO_COUNTRIES` = `{hk}` and `MANDO_COUNTRIES` = `{hk,tw,cn,s
 | Method | Endpoint | Request body | Description |
 |--------|----------|--------------|-------------|
 | POST | `/music-trend/api/playlists` | `{ "country"?: "hk", "list"?: "trending" }` | Cached playlists from Supabase |
-| POST | `/music-trend/api/playlists/refresh` | `{ "country"?, "list"? }` | Scrape the Apple feed for a country, upsert, return playlists |
+| POST | `/music-trend/api/playlists/refresh` | `{ "country"?, "list"?, "clearCache"? }` | Scrape the Apple feed for a country, upsert, return playlists |
+| POST | `/music-trend/api/playlists/validate-youtube` | `{ "country"?, "list"?, "limit"?, "maxAgeMs"? }` | Re-check cached YouTube ids (oEmbed); re-search dead ones. `maxAgeMs: 0` = full sweep |
 | POST | `/music-trend/api/playlists/:listKey/songs/:songId` | `{ "youtubeId" }` | Manually replace a chart song's YouTube ID |
 | GET | `/music-trend/api/myplaylists` | — | List saved playlists (name + song count + updated) |
 | POST | `/music-trend/api/myplaylists` | `{ "name", "songs" }` | Save/overwrite a named playlist |
@@ -320,6 +321,14 @@ gate by country (`CANTO_COUNTRIES` = `{hk}` and `MANDO_COUNTRIES` = `{hk,tw,cn,s
 - **Refresh cadence** — Render/local scrapes all countries at boot then round-robins one country every 6 min. On
   Vercel, reads kick a background re-scrape when a country's cache is older than 1 h; the app re-polls the active
   list every 10 min and the refresh button forces a scrape.
+- **Broken-link self-heal** — cached YouTube ids are re-validated via the public oEmbed endpoint on a rolling
+  window (never-checked or last checked >7 days ago; 15 songs/country/run). Dead ids (deleted / private /
+  embedding-disabled → HTTP 400/404/401) are cleared and re-searched once; a failed re-search leaves the song
+  without an id so the normal resolve pass fills it next refresh. Transient oEmbed errors never drop an id.
+  Runs two ways: inside every Apple refresh, and on a dedicated Render timer (one country every 30 min, cache-only)
+  so validation keeps going even when the Apple feed is down. Manual trigger:
+  `POST /music-trend/api/playlists/validate-youtube` with `{ "country": "hk", "maxAgeMs": 0 }` to force a full sweep
+  (response includes `validation: { candidates, checked, fixed, cleared }`).
 - **Instant paint from device cache** — the last successful payload per country+list is cached on the device
   (`localStorage`), so a reopen paints the chart the moment the page script runs — no cell round-trip in the
   critical path. The server read still refreshes it silently in the background, and a country switch refetches.

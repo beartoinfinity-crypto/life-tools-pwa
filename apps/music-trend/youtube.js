@@ -178,4 +178,127 @@ async function mapLimit(items, limit, fn) {
   return out;
 }
 
-module.exports = { searchYouTube, mapLimit, extractFirstVideo, extractVideos, pickOfficialMV };
+/**
+ * Classify a YouTube oEmbed HTTP status for an already-known video id.
+ *  200        → alive
+ *  400/404    → deleted / never existed (safe to drop)
+ *  401        → private or embedding disabled (unplayable in the IFrame API)
+ *  anything else (403, 429, 5xx, …) → unknown; do NOT clear the id
+ */
+function classifyOembedStatus(status) {
+  if (status === 200) return 'ok';
+  if (status === 400 || status === 404 || status === 401) return 'dead';
+  return 'unknown';
+}
+
+/**
+ * Should this song's cached youtubeId be re-checked?
+ * Missing id → no (the resolve path owns filling those).
+ * Never checked, unparsable timestamp, or older than maxAgeMs → yes.
+ */
+function needsYtRevalidate(song, now = Date.now(), maxAgeMs = 0) {
+  if (!song || !song.youtubeId) return false;
+  if (maxAgeMs <= 0) return true;
+  if (!song.youtubeCheckedAt) return true;
+  const t = Date.parse(song.youtubeCheckedAt);
+  if (!Number.isFinite(t)) return true;
+  return now - t > maxAgeMs;
+}
+
+/**
+ * Ask YouTube's oEmbed endpoint whether a video id is still embeddable.
+ * Returns { ok: true, title?, author? }, { ok: false } (definitively dead),
+ * or { ok: null } (network / rate-limit / 5xx — leave the id alone).
+ * Never rejects.
+ */
+async function validateYouTubeId(videoId, timeout = 8000) {
+  if (!/^[A-Za-z0-9_-]{11}$/.test(String(videoId || ''))) return { ok: false };
+  const url =
+    'https://www.youtube.com/oembed?format=json&url=' +
+    encodeURIComponent(`https://www.youtube.com/watch?v=${videoId}`);
+  try {
+    const { status, body } = await get(url, timeout);
+    const kind = classifyOembedStatus(status);
+    if (kind === 'ok') {
+      try {
+        const j = JSON.parse(body);
+        return { ok: true, title: j.title || '', author: j.author_name || '' };
+      } catch {
+        return { ok: true };
+      }
+    }
+    if (kind === 'dead') return { ok: false };
+    return { ok: null };
+  } catch {
+    return { ok: null };
+  }
+}
+
+const YT_VALIDATE_CONCURRENCY = 4;
+
+/**
+ * Re-check a rolling window of already-cached youtubeIds via oEmbed.
+ * Dead ids (deleted / private / embedding-disabled) are re-searched once;
+ * a failed re-search clears the id so the next resolve pass can fill it.
+ * Transient oEmbed errors leave the id untouched and do not stamp checkedAt.
+ * Never rejects. Returns { candidates, checked, fixed, cleared }.
+ *
+ * opts: { limit, maxAgeMs, deadlineMs, now, check, search }
+ *   maxAgeMs 0 = always eligible; check/search are injectable for tests.
+ */
+async function validateYouTubeIds(songs, opts = {}) {
+  const limit = Number.isFinite(opts.limit) ? opts.limit : 15;
+  const maxAgeMs = Number.isFinite(opts.maxAgeMs) ? opts.maxAgeMs : 7 * 24 * 60 * 60 * 1000;
+  const deadlineMs = Number.isFinite(opts.deadlineMs) ? opts.deadlineMs : 40 * 1000;
+  const now = Number.isFinite(opts.now) ? opts.now : Date.now();
+  const check = typeof opts.check === 'function' ? opts.check : validateYouTubeId;
+  const search = typeof opts.search === 'function' ? opts.search : searchYouTube;
+
+  const candidates = songs.filter((s) => needsYtRevalidate(s, now, maxAgeMs));
+  if (!candidates.length) return { candidates: 0, checked: 0, fixed: 0, cleared: 0 };
+
+  // Never-checked first, then oldest checkedAt — so the sweep is fair.
+  candidates.sort((a, b) => {
+    const t = (s) => (s.youtubeCheckedAt ? Date.parse(s.youtubeCheckedAt) || 0 : 0);
+    const at = t(a) - t(b);
+    if (at !== 0) return at;
+    return String(a.id).localeCompare(String(b.id));
+  });
+  const batch = candidates.slice(0, limit);
+
+  const deadline = Date.now() + deadlineMs;
+  let checked = 0;
+  let fixed = 0;
+  let cleared = 0;
+  await mapLimit(batch, YT_VALIDATE_CONCURRENCY, async (s) => {
+    if (Date.now() > deadline) return;
+    const v = await check(s.youtubeId);
+    if (!v || v.ok === null) return; // unknown — retry next run, don't stamp
+    s.youtubeCheckedAt = new Date().toISOString();
+    checked++;
+    if (v.ok) return;
+    delete s.youtubeId;
+    delete s.youtubeTitle;
+    const hit = await search(s);
+    if (hit) {
+      s.youtubeId = hit.videoId;
+      s.youtubeTitle = hit.title;
+      fixed++;
+    } else {
+      cleared++; // left without an id; resolveYouTube fills it next refresh
+    }
+  });
+  return { candidates: candidates.length, checked, fixed, cleared };
+}
+
+module.exports = {
+  searchYouTube,
+  mapLimit,
+  extractFirstVideo,
+  extractVideos,
+  pickOfficialMV,
+  validateYouTubeId,
+  classifyOembedStatus,
+  needsYtRevalidate,
+  validateYouTubeIds
+};
