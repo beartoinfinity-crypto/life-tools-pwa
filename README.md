@@ -359,6 +359,13 @@ gate by country (`CANTO_COUNTRIES` = `{hk}` and `MANDO_COUNTRIES` = `{hk,tw,cn,s
   emits when the app is backgrounded (or when autoplay is blocked right after
   return) no longer clears play intent, so ENDED/watchdog still advance and
   `focus`/`pageshow`/`visibilitychange` re-kick `playVideo` when Brave comes back.
+- **Background continuity (screen on, Brave not open)** — once the tab is
+  backgrounded, finite play-kicks (0–2.5s) and one-shot Media Session writes
+  expire: the notification bar disappears at ENDED and nothing retries until
+  the user reopens Brave. While `wantPlaying` we run a continuous `playVideo`
+  retry (~2s) plus a Media Session heartbeat that re-publishes metadata +
+  `playbackState = 'playing'`, and advance if the wall-clock end passed while
+  timers were frozen. Cleared only on user pause / close.
 - **Classification + per-country gating** — `apps/music-trend/parser.js` (`buildPlaylists`/`isCantonese`/`isMandarin`/
   `feedUrl`), covered by unit tests. Apple only tags Cantonese/Mandarin on the HK & TW feeds, so the genre tag comes
   from the **title language** (Chinese characters in the title; Cantonese-only characters 嘅咗唔喺嗰啲冇… mark 廣東歌).

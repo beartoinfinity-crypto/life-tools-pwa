@@ -213,7 +213,8 @@
       playPauseBtn.textContent = '❚❚';
       requestWakeLock();
       armEndWatch();
-      clearPlayKicks();
+      // Keep continuous retry + heartbeat running (they no-op if already PLAYING).
+      startChurn();
       var playingSong = currentListSong();
       if (playingSong) setMediaSessionSong(playingSong, true);
       // Warm the next track (shuffle-aware). After a preload promotion this
@@ -232,7 +233,7 @@
         playPauseBtn.textContent = '▶';
         releaseWakeLock();
         clearEndWatch();
-        clearPlayKicks();
+        clearPlaybackChurn();
         var pausedSong = currentListSong();
         if (pausedSong) setMediaSessionSong(pausedSong, false);
       } else if (wantPlaying) {
@@ -240,7 +241,9 @@
         // we are visible try again (autoplay often needs a second kick).
         var stillSong = currentListSong();
         if (stillSong) setMediaSessionSong(stillSong, true);
-        if (!document.hidden && !stallTimer && !resumeInfo) schedulePlayKicks();
+        // Background/system pause: always re-kick (even when hidden) so we keep
+        // retrying until Brave lets playVideo through again.
+        if (!stallTimer && !resumeInfo) schedulePlayKicks();
       }
     } else if (e.data === YT.PlayerState.BUFFERING) {
       armStallWatch();
@@ -622,7 +625,7 @@
 
   function onEndWatchFired() {
     endWatchTimer = null;
-    if (!wantPlaying) return;
+    if (!wantPlaying || userPauseIntent) return;
     forceAdvance();
   }
 
@@ -638,27 +641,66 @@
   }
 
   /* playVideo() right after ENDED / while the iframe is still "background" is
-   * frequently a no-op. Retry a few times until we actually see PLAYING. */
+   * frequently a no-op. Finite one-shot kicks (0/300/1000/2500ms) die while
+   * Brave is backgrounded (timers throttle, play stays blocked) and never
+   * resume — so playback only restarts when the user reopens the tab. Keep a
+   * continuous interval while wantPlaying instead, plus a media-session
+   * heartbeat so the notification bar is re-published after YouTube tears it
+   * down on ENDED. */
   var playKickTimers = [];
+  var playRetryTimer = null;
+  var mediaHeartTimer = null;
   function clearPlayKicks() {
     for (var i = 0; i < playKickTimers.length; i++) clearTimeout(playKickTimers[i]);
     playKickTimers = [];
   }
+  function clearChurn() {
+    clearPlayKicks();
+    if (playRetryTimer) { clearInterval(playRetryTimer); playRetryTimer = null; }
+    if (mediaHeartTimer) { clearInterval(mediaHeartTimer); mediaHeartTimer = null; }
+  }
   function ensurePlaying() {
-    if (!wantPlaying || !ytReady || !ytPlayer) return;
+    if (!wantPlaying || userPauseIntent || !ytReady || !ytPlayer) return;
     try {
       if (ytPlayer.getPlayerState && ytPlayer.getPlayerState() === YT.PlayerState.PLAYING) return;
     } catch (e) {}
     try { ytPlayer.playVideo(); } catch (e) {}
   }
-  function schedulePlayKicks() {
+  function startChurn() {
+    if (!wantPlaying || userPauseIntent) return;
+    // Immediate kicks for the common "just promoted/played" case.
     clearPlayKicks();
-    if (!wantPlaying) return;
     [0, 300, 1000, 2500].forEach(function (delay) {
-      playKickTimers.push(setTimeout(function () {
-        ensurePlaying();
-      }, delay));
+      playKickTimers.push(setTimeout(ensurePlaying, delay));
     });
+    // Continuous: Brave throttles timers while backgrounded, so keep kicking
+    // until PLAYING (cleared only on user pause / close / PLAYING settle).
+    if (playRetryTimer) clearInterval(playRetryTimer);
+    playRetryTimer = setInterval(function () {
+      if (!wantPlaying || userPauseIntent) {
+        if (playRetryTimer) { clearInterval(playRetryTimer); playRetryTimer = null; }
+        return;
+      }
+      // ENDED held back / past end while hidden: advance rather than re-play dead track.
+      if (document.hidden && shouldAdvanceOnWake()) { forceAdvance(); return; }
+      ensurePlaying();
+    }, 2000);
+    // Re-assert Media Session so the notification bar survives ENDED/YT teardown.
+    if (mediaHeartTimer) clearInterval(mediaHeartTimer);
+    mediaHeartTimer = setInterval(function () {
+      if (!wantPlaying || userPauseIntent) {
+        if (mediaHeartTimer) { clearInterval(mediaHeartTimer); mediaHeartTimer = null; }
+        return;
+      }
+      var s = currentListSong();
+      if (s) setMediaSessionSong(s, true);
+    }, 2000);
+  }
+  function schedulePlayKicks() {
+    startChurn();
+  }
+  function clearPlaybackChurn() {
+    clearChurn();
   }
 
   function mediaPastEnd() {
@@ -724,10 +766,10 @@
     on('play', function () {
       wantPlaying = true;
       userPauseIntent = false;
-      playPauseBtn.textContent = '❚❚';
-      requestWakeLock();
-      try { if (ytPlayer && ytReady) ytPlayer.playVideo(); } catch (e) {}
-      var s = currentListSong();
+    playPauseBtn.textContent = '❚❚';
+    requestWakeLock();
+    try { if (ytPlayer && ytReady) ytPlayer.playVideo(); } catch (e) {}
+    var s = currentListSong();
       if (s) setMediaSessionSong(s, true);
       schedulePlayKicks();
     });
@@ -737,10 +779,11 @@
       playPauseBtn.textContent = '▶';
       releaseWakeLock();
       clearEndWatch();
-      clearPlayKicks();
+      clearPlaybackChurn();
       try { if (ytPlayer && ytReady) ytPlayer.pauseVideo(); } catch (e) {}
       var s = currentListSong();
       if (s) setMediaSessionSong(s, false);
+      clearPlaybackChurn();
     });
     on('nexttrack', function () { nextSong(true); });
     on('previoustrack', function () { prevSong(); });
@@ -787,6 +830,12 @@
         return;
       }
     } catch (e) {}
+    // Wall-clock end already passed while Brave was backgrounded (timers froze
+    // so end-watch never fired): advance instead of replaying the dead track.
+    if (shouldAdvanceOnWake()) {
+      forceAdvance();
+      return;
+    }
     try { ytPlayer.playVideo(); } catch (e) {}
     forceLowQuality();
     requestWakeLock();
@@ -806,8 +855,10 @@
       onAppForeground();
     } else if (wantPlaying) {
       // Re-schedule from live media time so a mid-track lock still wakes the
-      // watchdog at the true remaining duration.
+      // watchdog at the true remaining duration. Also restart continuous play
+      // retry + media heartbeat — Brave may have frozen timers while hidden.
       armEndWatch();
+      schedulePlayKicks();
     }
   });
   // Brave/Android sometimes focuses the window without a visibilitychange.
@@ -1410,7 +1461,7 @@
       userPauseIntent = true;
       wantPlaying = false;
       clearEndWatch();
-      clearPlayKicks();
+      clearPlaybackChurn();
       releaseWakeLock();
       ytPlayer.pauseVideo();
       playPauseBtn.textContent = '▶';
@@ -1435,7 +1486,7 @@
     clearBufferSkip();
     releaseWakeLock();
     clearEndWatch();
-    clearPlayKicks();
+    clearPlaybackChurn();
     if (navigator.mediaSession) {
       try { navigator.mediaSession.playbackState = 'none'; } catch (e) {}
     }

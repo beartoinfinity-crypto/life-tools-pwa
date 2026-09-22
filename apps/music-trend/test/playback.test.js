@@ -719,4 +719,59 @@ describe('music-trend playback transitions', () => {
     expect(playingVideoIds(players)).toContain('vid00000002');
     expect(next.playCalls || 0).toBeGreaterThan(0);
   });
+
+  it('keeps re-kicking playVideo after the 2.5s finite kicks expire (backgrounded)', async () => {
+    const { players, main } = await startAndSettle({ shuffle: false });
+    await flush();
+    await flush();
+
+    // Next track stuck paused; finite kicks would die at ~2.5s.
+    main.setState(0); // ENDED → promote next
+    await flush();
+    await flush();
+    const next = livePlayers(players).find((p) => p.videoId === 'vid00000002');
+    expect(next).toBeTruthy();
+
+    // While "backgrounded", playVideo is counted but does not leave PAUSED —
+    // real Brave ignores play until the tab is foregrounded again.
+    const proto = Object.getPrototypeOf(next);
+    const origPlay = proto.playVideo;
+    proto.playVideo = function playVideo() {
+      if (this.destroyed) return;
+      this.playCalls = (this.playCalls || 0) + 1;
+      // intentionally do not setState(1)
+    };
+    try {
+      next.setState(2); // PAUSED, autoplay ignored
+      await flush();
+      const callsAfterAdvance = next.playCalls || 0;
+
+      // Wait past the old finite kick window (2500ms) plus a heartbeat interval.
+      await new Promise((r) => setTimeout(r, 2600));
+      await flush();
+      expect((next.playCalls || 0)).toBeGreaterThan(callsAfterAdvance);
+      // Heartbeat must keep metadata alive for the notification bar
+      expect(harness.mediaSession.metadata).toBeTruthy();
+      expect(harness.mediaSession.playbackState).toBe('playing');
+    } finally {
+      proto.playVideo = origPlay;
+    }
+  });
+
+  it('re-asserts Media Session if YouTube tears it down mid-track', async () => {
+    const { window, players, main } = await startAndSettle({ shuffle: false });
+    await flush();
+    await flush();
+
+    // Simulate YT clearing session (happens on ENDED / iframe teardown)
+    harness.mediaSession.metadata = null;
+    harness.mediaSession.playbackState = 'none';
+
+    await new Promise((r) => setTimeout(r, 2200));
+    await flush();
+
+    expect(harness.mediaSession.metadata).toBeTruthy();
+    expect(harness.mediaSession.metadata.title).toBe('Song One');
+    expect(harness.mediaSession.playbackState).toBe('playing');
+  });
 });
