@@ -825,4 +825,49 @@ describe('music-trend playback transitions', () => {
     expect((main.loadCalls || 0)).toBeGreaterThan(loadsBefore);
     expect(playingVideoIds(players)).toContain('vid00000001');
   });
+
+  it('auto-plays the whole sequential playlist end-to-end (visible)', async () => {
+    const { window, players, main } = await startAndSettle({ shuffle: false });
+    await flush();
+
+    const expected = ['vid00000002', 'vid00000003', 'vid00000004', 'vid00000001'];
+    for (const nextId of expected) {
+      const current = livePlayers(players).find((p) => p.state === 1 || p.state === 3) || main;
+      current.setState(0); // ENDED on whatever is on air
+      await flush();
+      await flush();
+      expect(playingVideoIds(players)).toContain(nextId);
+      expect(window.document.getElementById('playPauseBtn').textContent).toBe('❚❚');
+      expect(harness.mediaSession.metadata).toBeTruthy();
+      expect(harness.mediaSession.playbackState).toBe('playing');
+    }
+  });
+
+  it('auto-plays the whole sequential playlist while hidden (Brave background)', async () => {
+    const { window, players, main } = await startAndSettle({ shuffle: false });
+    await flush();
+
+    harness.setHidden(true); // screen/tab backgrounded
+    await flush();
+
+    const expected = ['vid00000002', 'vid00000003', 'vid00000004', 'vid00000001'];
+    for (const nextId of expected) {
+      const current = livePlayers(players).find((p) => p.state === 1 || p.state === 3) || main;
+      current.setState(0); // ENDED while hidden — YouTube may hold this back,
+      // but the end-watchdog / forceAdvance path must still advance.
+      await flush();
+      await flush();
+      // Either the ENDED landed, or give the churn/wake path a beat to promote
+      if (!playingVideoIds(players).includes(nextId)) {
+        await new Promise((r) => setTimeout(r, 200));
+        await flush();
+        await flush();
+      }
+      expect(playingVideoIds(players)).toContain(nextId);
+      // Notification bar must stay up the entire time
+      expect(harness.mediaSession.metadata).toBeTruthy();
+      expect(harness.mediaSession.playbackState).toBe('playing');
+      expect(window.document.getElementById('playPauseBtn').textContent).toBe('❚❚');
+    }
+  });
 });
