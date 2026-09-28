@@ -18,8 +18,17 @@ A hub of handy Progressive Web Apps (PWAs), served by one Express app and deploy
 | **Music Trend** | `/music-trend/` | Apple Music top-100 charts for 10 countries — 熱門趨勢 / 廣東歌 / 國語歌 playlists + cross-device 我的歌單, cached in Supabase |
 
 Browsing to the root (`/`) shows a launcher dashboard with a card per app. The dashboard itself has a **Dark/Light
-toggle** (persisted, defaults to system), a theme-aware favicon, and the cards can be **drag-reordered** (order
-persists in `localStorage`).
+toggle** (persisted, defaults to system), a theme-aware favicon, and the cards can be **reordered** (order persists
+in `localStorage`). It is also its own little PWA:
+
+- **Search & category filters** — a search box (matches titles, descriptions and keywords, English or 中文) plus
+  All / Transport / Lottery / Utilities filter pills (`aria-pressed` state, combined with the search query)
+- **Card badges** — status badges on cards (e.g. Traffic News shows **Live**)
+- **Install banner** — a glass slide-up "Install Life Tool" banner when the browser fires `beforeinstallprompt`
+  (dismissible for the session; the header **Simulate** button previews it)
+- **Offline shell** — `public/manifest.json` + `public/sw.js` (`life-tool-hub-v1`) make `/` installable and
+  offline-capable; the worker only handles hub-shell paths, never the sub-apps' URLs
+- **Version badge** — `v1.1 build <timestamp>` in the header, per the per-app badge convention in CONTEXT.md
 
 ---
 
@@ -49,7 +58,9 @@ for the apps.
 ├── public/               # Dashboard (served at /)
 │   ├── index.html
 │   ├── styles.css
-│   ├── app.js            # Renders launcher cards + theme toggle + drag-reorder (add new apps here)
+│   ├── app.js            # Launcher cards + search/filters + theme + reorder + install banner (add new apps here)
+│   ├── manifest.json      # Hub PWA manifest (scope /)
+│   ├── sw.js              # Hub service worker (offline shell, life-tool-hub-vN)
 │   ├── icon-light.svg    # Theme-aware favicon (light)
 │   └── icon-dark.svg     # Theme-aware favicon (dark)
 ├── apps/
@@ -89,6 +100,7 @@ for the apps.
 ├── render.yaml           # Render Blueprint config
 ├── package.json
 ├── .env.example
+├── test/                 # Hub launcher tests (JSDOM)
 └── vitest.config.mjs
 ```
 
@@ -96,7 +108,7 @@ for the apps.
 
 1. Create `apps/<name>/` with a `server.js` that exports `{ app, ensureInitialData? }` (an Express app plus an optional startup hook) — or, for a static-only PWA, drop its build output in a folder and serve it with `express.static` + a SPA fallback (see the `bus-eta` mount in `app.js`).
 2. In the hub `app.js`, mount it (with an exact-match `/name` → `/name/` redirect for PWAs that need one): `app.use('/<name>', require('./apps/<name>/server').app);`
-3. Add a card to `public/app.js` under `APPS`.
+3. Add a card to `public/app.js` under `APPS` — include `category`, `keywords`, `emoji` and an optional `badge` so the new card participates in search, the filter pills and card badges.
 4. Client code should use an `API_BASE` prefix matching its mount path (see `apps/mark-six/app.js`).
 
 ---
@@ -487,7 +499,7 @@ npm test            # Run all tests once
 npm run test:watch  # Watch mode
 ```
 
-185 tests across 10 files under `apps/mark-six/test/`, `apps/traffic-news/test/` and `apps/music-trend/test/`. The suite uses in-memory SQLite + fixtures, so it runs offline without a Supabase connection.
+199 tests across 11 files under `test/` (hub), `apps/mark-six/test/`, `apps/traffic-news/test/` and `apps/music-trend/test/`. The suite uses in-memory SQLite + fixtures, so it runs offline without a Supabase connection.
 
 ---
 

@@ -9,6 +9,7 @@
   <meta name="apple-mobile-web-app-title" content="Life Tool" />
   <meta name="description" content="Life Tool - a collection of handy web apps" />
   <title>Life Tool</title>
+  <link rel="manifest" href="manifest.json" />
   <link rel="stylesheet" href="styles.css" />
   <link rel="icon" type="image/svg+xml" href="icon-light.svg" media="(prefers-color-scheme: light)" />
   <link rel="icon" type="image/svg+xml" href="icon-dark.svg" media="(prefers-color-scheme: dark)" />
@@ -22,18 +23,50 @@
         <rect x="4" y="18" width="14" height="14" rx="3" fill="#2196f3" />
         <rect x="18" y="18" width="14" height="14" rx="3" fill="#f44336" />
       </svg>
-      <h1>Life Tool</h1>
+      <h1>Life Tool<span class="app-ver">v1.1 build 202609280705</span></h1>
       <button id="themeBtn" type="button" class="theme-btn" title="Toggle theme">Dark</button>
       <button id="sortBtn" type="button" class="theme-btn" title="Reorder apps">Sort</button>
+      <button id="simBtn" type="button" class="theme-btn sim-btn" title="Preview the install banner">Simulate</button>
     </div>
   </header>
 
   <main>
     <p class="tagline">A collection of handy web apps</p>
+
+    <div class="search-bar">
+      <svg class="search-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+      </svg>
+      <input type="search" id="appSearchInput" placeholder="Search tools &amp; apps..."
+        aria-label="Search apps" autocomplete="off" />
+    </div>
+
+    <div class="filter-row" role="group" aria-label="Filter by category">
+      <button type="button" class="filter-btn active" data-category="all" aria-pressed="true">All Tools</button>
+      <button type="button" class="filter-btn" data-category="transport" aria-pressed="false">Transport</button>
+      <button type="button" class="filter-btn" data-category="lottery" aria-pressed="false">Lottery</button>
+      <button type="button" class="filter-btn" data-category="utility" aria-pressed="false">Utilities</button>
+    </div>
+
     <section id="appGrid" class="app-grid" aria-label="Apps"></section>
+    <p id="noResults" class="no-results" hidden>No apps match your search.</p>
   </main>
 
   <footer>Life Tool &middot; 2026</footer>
+
+  <div id="installBanner" class="install-banner banner-enter" role="region" aria-label="Install Life Tool" hidden>
+    <div class="banner-body">
+      <div class="banner-icon" aria-hidden="true">LT</div>
+      <div class="banner-text">
+        <strong>Install Life Tool</strong>
+        <p>Add the hub to your home screen for quick access.</p>
+      </div>
+    </div>
+    <div class="banner-actions">
+      <button id="bannerDismiss" type="button" class="banner-btn ghost">Not now</button>
+      <button id="bannerInstall" type="button" class="banner-btn primary">Install</button>
+    </div>
+  </div>
 
   <script src="app.js"></script>
 </body>
