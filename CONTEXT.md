@@ -25,7 +25,7 @@ Each app is an authored PWA with its own `index.html`, `styles.css`,
 | apps/traffic-news     | traffic-news-v6   | v1.0 build 202609160643    |
 | apps/mark-six         | mark-six-v8       | v1.0 build 202609210150    |
 | apps/music-trend      | music-trend-v31   | v1.3 build 202609280140    |
-| apps/hk-bus-eta/build | buseta-lite-v21   | v1.3 build 202609280232    |
+| apps/hk-bus-eta/build | buseta-lite-v22   | v1.3 build 202609280249    |
 
 > `apps/hk-bus-eta/` holds both: `build-upstream/` and `LICENSE` are
 > the vendored upstream PWA (never hand-edit them), while `build/` is

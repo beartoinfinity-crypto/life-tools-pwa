@@ -600,7 +600,7 @@ function fetchRowEtas(cards) {
       return ta - tb;
     });
     const r = rows[i];
-    state.etaRows.set(r.rowkey, { etas: merged, entry: r.entry, co: r.cos[0], seq: r.seq });
+    state.etaRows.set(r.rowkey, { etas: merged, entry: r.entry, co: r.cos[0], cos: r.cos, seq: r.seq });
     const chips = r.el.querySelector(".eta-chips");
     if (chips) chips.innerHTML = chipsHTML(merged);
   })), Promise.resolve()).catch(() => {});
@@ -854,7 +854,7 @@ async function refreshVisibleEtas(silent) {
         return ta - tb;
       });
       const r = rows[i];
-      state.etaRows.set(r.rowEl.dataset.rowkey, { etas: merged, entry: r.entry, co: (r.cos || [r.co])[0], seq: r.seq });
+      state.etaRows.set(r.rowEl.dataset.rowkey, { etas: merged, entry: r.entry, co: (r.cos || [r.co])[0], cos: r.cos || [r.co], seq: r.seq });
       const chips = r.rowEl.querySelector(".eta-chips");
       if (chips) chips.innerHTML = chipsHTML(merged);
     }

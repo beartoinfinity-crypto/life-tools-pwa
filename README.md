@@ -242,7 +242,7 @@ Other features:
 - **Auto-refresh** — live arrival chips refresh every 30 s (paused while the tab is hidden; instant refresh when
   you return); manual refresh re-downloads the route database.
 - **Offline-first** — route database cached in IndexedDB; offline banner + Retry-on-failure; service worker caches
-  the shell (`buseta-lite-v21`).
+  the shell (`buseta-lite-v22`).
 - **Loading skeletons & >=48px touch targets** — shimmer placeholders replace the blocking splash; buttons and rows
   sized for gloved/fumbling taps.
 - **EN/ZH** toggle; near-black UI in night mode with corrected chip/badge colours.

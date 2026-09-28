@@ -41,13 +41,13 @@ A mobile-first, vanilla-JS app with no build step, tuned for quick glance-and-le
 - **Auto-refresh** — arrivals refresh every 30 s, but polling pauses while the tab is hidden (saves battery) and
   resumes with an instant refresh when you come back; manual refresh re-downloads the route database.
 - **Offline-first** — the ~8 MB route database is cached in IndexedDB (`bus-eta-lite` / `kv`); the service worker
-  caches the app shell (`buseta-lite-v21`) so the app opens instantly after the first visit. Losing the network
+  caches the app shell (`buseta-lite-v22`) so the app opens instantly after the first visit. Losing the network
   shows a persistent banner (and a Retry button if the database itself could not load); regaining it re-fetches.
 - **Loading skeletons** — the old blocking splash spinner was replaced by shimmering skeleton cards while the
   database loads (disabled under `prefers-reduced-motion`).
 - **Touch targets >= 48px** — header/tab/detail buttons, direction pills and list rows are sized for tapping on
   a moving bus.
-- **Versioning** — in-page badge (`v1.3 build <UTC>`) plus SW cache `buseta-lite-v21`; the badge build equals the
+- **Versioning** — in-page badge (`v1.3 build <UTC>`) plus SW cache `buseta-lite-v22`; the badge build equals the
   pinned commit time and the SW bump ships in the same commit (see `CONTEXT.md`).
 - **EN/ZH toggle**, and batching (incremental rendering) for long stop lists.
 
