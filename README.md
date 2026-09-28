@@ -268,6 +268,9 @@ manual refresh button and a 1-minute auto-poll; installable like the other apps 
 - **Filter & search** — a search box (matches category/location/detail text) plus data-driven category chips
   derived from each item's category prefix (道路事故, 擠塞信號, 惡劣天氣, ...), a 全部 chip and a 收藏 chip.
   Filter state deep-links via `?q=...&cat=...` so a view is bookmarkable/refreshable.
+- **District chips** — a second chip row filters by broad region (香港島 / 九龍 / 新界 / 大嶼山 / 其他),
+  inferred from each item's location by keyword (falling back to detail/category, then 其他), data-driven to
+  the regions actually present, and deep-linked via `?r=...`. Regions combine with the category/search filters.
 - **Severity badges** — active (最新情況) items are keyword-classified and badged: **L3 緊急** (red border +
   badge — 暫停服務, 全線封閉, 八號風球, 黑色暴雨, ...), **L2 警告** (amber — 擠塞, 封閉, 交通意外, 延誤, ...)
   and **L1 提示** (slate — 改道, 臨時, 工程, ...). Completed (完結) items never get a badge.
@@ -475,7 +478,7 @@ npm test            # Run all tests once
 npm run test:watch  # Watch mode
 ```
 
-166 tests across 9 files under `apps/mark-six/test/`, `apps/traffic-news/test/` and `apps/music-trend/test/`. The suite uses in-memory SQLite + fixtures, so it runs offline without a Supabase connection.
+170 tests across 9 files under `apps/mark-six/test/`, `apps/traffic-news/test/` and `apps/music-trend/test/`. The suite uses in-memory SQLite + fixtures, so it runs offline without a Supabase connection.
 
 ---
 

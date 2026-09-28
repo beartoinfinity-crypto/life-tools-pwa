@@ -353,4 +353,50 @@ describe('traffic-news app (v1.1)', () => {
     expect(urls[1]).toContain('/news/refresh');
     expect(window.document.querySelector('.news-empty')).not.toBeNull();
   });
+
+  // ---- district chips (broad regions) ----
+
+  function regionChips(window) {
+    return [...window.document.getElementById('regionRow').querySelectorAll('.chip')];
+  }
+
+  it('renders data-driven region chips inferred from locations', async () => {
+    const { window } = await boot();
+    const labels = regionChips(window).map((c) => c.textContent);
+    expect(labels).toEqual(['全部地區', '香港島', '九龍', '新界']); // 大嶼山/其他 absent from fixtures
+    expect(window.document.querySelector('.news-item[data-id="urgent1"]').getAttribute('data-region')).toBe('hk-island');
+    expect(window.document.querySelector('.news-item[data-id="warn1"]').getAttribute('data-region')).toBe('new-terr');
+    expect(window.document.querySelector('.news-item[data-id="info1"]').getAttribute('data-region')).toBe('kowloon');
+  });
+
+  it('filters by district chip and syncs ?r=', async () => {
+    const { window } = await boot();
+    click(window, regionChips(window).find((c) => c.getAttribute('data-r') === 'kowloon'));
+    await flush();
+    expect(ids(window).sort()).toEqual(['done1', 'info1', 'plain1']);
+    expect(window.location.search).toContain('r=kowloon');
+    const active = regionChips(window).find((c) => c.getAttribute('data-r') === 'kowloon');
+    expect(active.getAttribute('aria-pressed')).toBe('true');
+    expect(active.classList.contains('active')).toBe(true);
+  });
+
+  it('honours deep-link ?r= on boot', async () => {
+    const { window } = await boot({ url: 'https://example.test/traffic-news/?r=new-terr' });
+    expect(ids(window)).toEqual(['warn1']);
+    expect(regionChips(window).find((c) => c.getAttribute('data-r') === 'new-terr').getAttribute('aria-pressed')).toBe('true');
+    expect(window.document.getElementById('searchInput').value).toBe('');
+  });
+
+  it('puts unmapped locations under 其他', async () => {
+    const { window } = await boot({
+      items: [item({ id: 'x1', location: '無名小路', detail: '路面清理', category: '公共設施-檢查' })],
+    });
+    expect(window.document.querySelector('.news-item[data-id="x1"]').getAttribute('data-region')).toBe('other');
+    const other = regionChips(window).find((c) => c.textContent === '其他');
+    expect(other).toBeTruthy();
+    click(window, other);
+    await flush();
+    expect(ids(window)).toEqual(['x1']);
+    expect(window.location.search).toContain('r=other');
+  });
 });

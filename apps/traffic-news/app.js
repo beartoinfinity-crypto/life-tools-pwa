@@ -11,6 +11,7 @@
   var refreshBtn = document.getElementById('refreshBtn');
   var searchInput = document.getElementById('searchInput');
   var chipRow = document.getElementById('chipRow');
+  var regionRow = document.getElementById('regionRow');
   var banner = document.getElementById('offlineBanner');
 
   var renderedOnce = false;
@@ -18,9 +19,10 @@
   var lastItems = [];
   var lastSig = null;
   var chipSig = null;
+  var regionSig = null;
   var openIds = {};
   var favs = loadFavs();
-  var filterState = { cat: '', q: '' };
+  var filterState = { cat: '', q: '', r: '' };
 
   // ---- severity classification (L3 urgent > L2 warning > L1 info) ----
   var SEV_L3 = ['暫停服務', '停止服務', '服務中斷', '停駛', '全線封閉', '全面封閉', '全部封閉',
@@ -76,6 +78,43 @@
     return i > 0 ? cat.slice(0, i).trim() : cat;
   }
 
+  // ---- broad region inference (district chips) ----
+  // `location` is free text (road/MTR-stop names), so the region is inferred
+  // by keyword match against location first, then detail/category; unmatched
+  // items land under 'other'.
+  var REGION_DEFS = [
+    { key: 'hk-island', label: '香港島', keys: ['港島', '香港島', '中西區', '灣仔', '東區', '南區',
+      '上環', '中環', '金鐘', '銅鑼灣', '北角', '西灣河', '柴灣', '筲箕灣', '香港仔', '薄扶林',
+      '赤柱', '堅尼地城', '西環', '干諾道', '告士打道', '菲林明道', '英皇道', '太古城', '跑馬地', '大坑'] },
+    { key: 'kowloon', label: '九龍', keys: ['九龍', '油尖旺', '油麻地', '旺角', '太子', '深水埗',
+      '長沙灣', '荔枝角', '紅磡', '土瓜灣', '馬頭圍', '九龍城', '何文田', '黃大仙', '樂富', '彩虹',
+      '牛頭角', '九龍灣', '觀塘', '藍田', '油塘', '西九龍', '亞皆老街', '彌敦道', '加士居道',
+      '柯士甸', '渡船街', '公主道', '界限街', '京士柏', '觀塘道', '清水灣道'] },
+    { key: 'new-terr', label: '新界', keys: ['新界', '屯門', '元朗', '天水圍', '上水', '粉嶺',
+      '沙田', '大圍', '馬鞍山', '西貢', '將軍澳', '調景嶺', '荃灣', '葵涌', '青衣', '大埔',
+      '太和', '烏溪沙', '石門', '第一城', '恆安', '洪水橋', '屯門公路', '元朗公路', '青朗公路',
+      '大老山', '城門隧道'] },
+    { key: 'lantau', label: '大嶼山', keys: ['大嶼山', '東涌', '迪士尼', '機場', '青嶼', '汲水門',
+      '馬灣', '梅窩', '昂坪', '北大嶼山', '欣澳'] }
+  ];
+
+  function matchRegion(text) {
+    var hay = String(text || '').toLowerCase();
+    if (!hay) return null;
+    for (var i = 0; i < REGION_DEFS.length; i++) {
+      var keys = REGION_DEFS[i].keys;
+      for (var j = 0; j < keys.length; j++) {
+        if (hay.indexOf(keys[j]) !== -1) return REGION_DEFS[i].key;
+      }
+    }
+    return null;
+  }
+
+  /** Broad region for an item: location first, then detail/category. */
+  function regionOf(n) {
+    return matchRegion(n.location) || matchRegion((n.detail || '') + ' ' + (n.category || '')) || 'other';
+  }
+
   function matches(n) {
     var cat = filterState.cat;
     if (cat === FAV_CAT) {
@@ -83,6 +122,7 @@
     } else if (cat && chipPrefix(n) !== cat) {
       return false;
     }
+    if (filterState.r && regionOf(n) !== filterState.r) return false;
     var q = filterState.q.trim().toLowerCase();
     if (q) {
       var hay = ((n.category || '') + ' ' + (n.location || '') + ' ' + (n.detail || '')).toLowerCase();
@@ -124,12 +164,14 @@
     var p = new URLSearchParams(location.search);
     filterState.q = p.get('q') || '';
     filterState.cat = p.get('cat') || '';
+    filterState.r = p.get('r') || '';
   }
 
   function writeUrl() {
     var p = new URLSearchParams(location.search);
     if (filterState.q) p.set('q', filterState.q); else p.delete('q');
     if (filterState.cat) p.set('cat', filterState.cat); else p.delete('cat');
+    if (filterState.r) p.set('r', filterState.r); else p.delete('r');
     var qs = p.toString();
     history.replaceState(null, '', location.pathname + (qs ? '?' + qs : ''));
   }
@@ -160,6 +202,38 @@
     }
   }
 
+  // ---- region chips (broad areas inferred from location text) ----
+  function renderRegions() {
+    var present = {}, order = [];
+    lastItems.forEach(function (n) {
+      var k = regionOf(n);
+      if (!present[k]) { present[k] = 1; }
+    });
+    // stable order: REGION_DEFS order, with 'other' last
+    REGION_DEFS.forEach(function (d) { if (present[d.key]) order.push(d.key); });
+    if (present.other) order.push('other');
+
+    var sig = order.join(',') + '|' + filterState.r;
+    if (sig === regionSig) return;
+    regionSig = sig;
+
+    var html = rChip('', '全部地區', filterState.r === '');
+    order.forEach(function (k) {
+      html += rChip(k, k === 'other' ? '其他' : labelFor(k), filterState.r === k);
+    });
+    regionRow.innerHTML = html;
+
+    function rChip(value, label, active) {
+      return '<button type="button" class="chip' + (active ? ' active' : '') +
+        '" data-r="' + esc(value) + '" aria-pressed="' + (active ? 'true' : 'false') + '">' +
+        esc(label) + '</button>';
+    }
+    function labelFor(key) {
+      for (var i = 0; i < REGION_DEFS.length; i++) if (REGION_DEFS[i].key === key) return REGION_DEFS[i].label;
+      return key;
+    }
+  }
+
   function srcBadge(n) {
     var s = n.source;
     if (!s) return '';
@@ -185,7 +259,7 @@
       ? '<time datetime="' + esc(n.posted_at) + '">' + esc(fmtTime(n.posted_at)) + '</time>'
       : esc(fmtTime(n.posted_at));
     return '<article class="news-item' + (latest ? '' : ' closed-item') + (r.sev ? ' sev-' + r.sev : '') +
-        '" data-id="' + esc(n.id) + '">' +
+        '" data-id="' + esc(n.id) + '" data-region="' + esc(r.region || '') + '">' +
         '<button type="button" class="ni-fav' + (fav ? ' on' : '') + '" aria-pressed="' + (fav ? 'true' : 'false') +
           '" aria-label="' + (fav ? '取消收藏' : '加入收藏') + '" title="' + (fav ? '取消收藏' : '加入收藏') + '">' +
           (fav ? '&#9733;' : '&#9734;') + '</button>' +
@@ -208,7 +282,7 @@
   function renderList() {
     var rows = [];
     lastItems.forEach(function (n) {
-      if (matches(n)) rows.push({ n: n, sev: classify(n), fav: !!favs[n.id] });
+        if (matches(n)) rows.push({ n: n, sev: classify(n), fav: !!favs[n.id], region: regionOf(n) });
     });
     // favourites pin to top (stable within each group)
     rows.sort(function (a, b) { return (b.fav ? 1 : 0) - (a.fav ? 1 : 0); });
@@ -252,6 +326,7 @@
     // else: keep showing what we have (never blank on a scrape hiccup)
     renderedOnce = true;
     renderChips();
+    renderRegions();
     renderList();
     // attach the live region only after the first paint so the initial
     // list is not announced wholesale to screen readers
@@ -354,6 +429,16 @@
     writeUrl();
     chipSig = null;
     renderChips();
+    renderList();
+  });
+
+  regionRow.addEventListener('click', function (e) {
+    var b = e.target.closest ? e.target.closest('.chip') : null;
+    if (!b) return;
+    filterState.r = b.getAttribute('data-r') || '';
+    writeUrl();
+    regionSig = null;
+    renderRegions();
     renderList();
   });
 
