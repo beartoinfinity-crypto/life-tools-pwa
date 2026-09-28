@@ -36,12 +36,14 @@ const T = {
   retry: { zh: "重試", en: "Retry" },
   offBanner: { zh: "網絡連線中斷，正顯示快取資料", en: "Network offline — showing cached data" },
   onlineBack: { zh: "已恢復連線", en: "Back online" },
+  lastUpdate: { zh: "更新於", en: "Updated" },
 };
 
 /* ---------------- state ---------------- */
 const state = {
   db: null,
   dbStatus: "loading",
+  lastEtaAt: null,
   lang: localStorage.getItem("buseta-lang") || "zh",
   routeNoIndex: new Map(),
   stopIndex: new Map(),
@@ -479,6 +481,7 @@ function appendRouteRow(box, no, dir) {
 /* ---------------- route detail ---------------- */
 function openRoute(no, silent, from, dir) {
   state.view = "detail";
+  state.lastEtaAt = null;
   const groups = groupByDirection(no);
   let sel = 0;
   if (dir) {
@@ -512,7 +515,7 @@ function renderDetail() {
         ${esc(pickEntry(x).dest[state.lang] || "")}<small>${esc(pickEntry(x).orig[state.lang] || "")}</small>
       </button>`).join("")}
     </div>
-    <div class="note">${state.lang === "zh" ? "點擊車站查看經此站的所有路線 · 每 30 秒自動更新" : "Tap a stop to see all routes via it · auto-refresh 30s"}</div>`;
+    <div class="note">${state.lang === "zh" ? "點擊車站查看經此站的所有路線 · 每 30 秒自動更新" : "Tap a stop to see all routes via it · auto-refresh 30s"}<span id="etaStamp" class="eta-stamp"></span></div>`;
   el.detailTop.querySelector("#backBtn").addEventListener("click", () => {
     const f = state.detail.from;
     if (f && f.kind === "stop") {
@@ -540,6 +543,7 @@ function renderDetail() {
   );
   el.detailContent.innerHTML = '<div class="stop-list"></div>';
   renderRouteStops(g);
+  renderEtaStamp();
 }
 function renderRouteStops(group) {
   const listEl = $("#detailContent .stop-list");
@@ -603,6 +607,7 @@ function fetchRowEtas(cards) {
     state.etaRows.set(r.rowkey, { etas: merged, entry: r.entry, co: r.cos[0], cos: r.cos, seq: r.seq });
     const chips = r.el.querySelector(".eta-chips");
     if (chips) chips.innerHTML = chipsHTML(merged);
+    markEtaRefresh();
   })), Promise.resolve()).catch(() => {});
 }
 
@@ -709,6 +714,7 @@ function hav(aLat, aLng, bLat, bLng) {
 /* ---------------- stop detail ---------------- */
 function openStop(ref, silent, from) {
   state.view = "detail";
+  state.lastEtaAt = null;
   state.detail = { kind: "stop", stopId: ref, from: from || null };
   const rows = stopRows(ref);
   el.viewHome.classList.add("hidden");
@@ -723,7 +729,7 @@ function openStop(ref, silent, from) {
       <button class="btn-star${isStopBooked(ref) ? " on" : ""}" id="starBtn"
         title="${esc(T.bookToggle[state.lang])}">${isStopBooked(ref) ? "★" : "☆"}</button>
     </div>
-    <div class="note">${T.noteStop[state.lang]}</div>`;
+    <div class="note">${T.noteStop[state.lang]}<span id="etaStamp" class="eta-stamp"></span></div>`;
   el.detailTop.querySelector("#starBtn").addEventListener("click", () => {
     const on = toggleStopBook(ref, stopNameObj(ref));
     const star = el.detailTop.querySelector("#starBtn");
@@ -745,6 +751,7 @@ function openStop(ref, silent, from) {
   });
   el.detailContent.innerHTML = '<div class="stop-list"></div>';
   renderStopRows(rows);
+  renderEtaStamp();
   if (!silent) renderCurrentList();
 }
 function stopRows(ref) {
@@ -814,6 +821,7 @@ function appendStopRow(listEl, r) {
     state.etaRows.set(rowkey, { etas, entry: e, co: r.co, seq: r.seq });
     const chips = line.querySelector(".eta-chips");
     if (chips) chips.innerHTML = chipsHTML(etas);
+    markEtaRefresh();
   });
 }
 
@@ -858,6 +866,7 @@ async function refreshVisibleEtas(silent) {
       const chips = r.rowEl.querySelector(".eta-chips");
       if (chips) chips.innerHTML = chipsHTML(merged);
     }
+    markEtaRefresh();
     if (!silent) statusNow(T.updated[state.lang]);
   } finally {
     state.refreshing = false;
@@ -885,6 +894,19 @@ function updateNetBanner() {
   if (!b) return;
   if (navigator.onLine) b.classList.add("hidden");
   else { b.textContent = T.offBanner[state.lang]; b.classList.remove("hidden"); }
+}
+function markEtaRefresh() {
+  state.lastEtaAt = Date.now();
+  renderEtaStamp();
+}
+function renderEtaStamp() {
+  const s = document.getElementById("etaStamp");
+  if (!s) return;
+  if (!state.lastEtaAt) { s.textContent = ""; return; }
+  const d = new Date(state.lastEtaAt);
+  const p = (n) => String(n).padStart(2, "0");
+  s.textContent = " · " + T.lastUpdate[state.lang] + " " +
+    p(d.getHours()) + ":" + p(d.getMinutes()) + ":" + p(d.getSeconds());
 }
 function goHome() {
   state.view = "home";

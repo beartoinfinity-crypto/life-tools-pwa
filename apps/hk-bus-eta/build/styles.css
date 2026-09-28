@@ -240,6 +240,7 @@ body {
   font-family: var(--font); font-size: 14px; font-weight: 700; cursor: pointer;
 }
 .note { font-size: 12px; color: var(--ink-2); margin-bottom: 8px; }
+.eta-stamp { font-weight: 700; white-space: nowrap; }
 
 /* status bar */
 #statusbar {
