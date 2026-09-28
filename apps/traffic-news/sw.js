@@ -1,4 +1,4 @@
-var CACHE_NAME = 'traffic-news-v6';
+var CACHE_NAME = 'traffic-news-v7';
 var ASSETS = [
   './',
   './index.html',

@@ -265,6 +265,21 @@ upserted into Supabase, so page loads stay fast and routejam is hit at most once
 last **12 hours** of incidents with 最新/完結 badges, HK-time + relative timestamps, tap-to-expand details, a
 manual refresh button and a 1-minute auto-poll; installable like the other apps (manifest + service worker).
 
+- **Filter & search** — a search box (matches category/location/detail text) plus data-driven category chips
+  derived from each item's category prefix (道路事故, 擠塞信號, 惡劣天氣, ...), a 全部 chip and a 收藏 chip.
+  Filter state deep-links via `?q=...&cat=...` so a view is bookmarkable/refreshable.
+- **Severity badges** — active (最新情況) items are keyword-classified and badged: **L3 緊急** (red border +
+  badge — 暫停服務, 全線封閉, 八號風球, 黑色暴雨, ...), **L2 警告** (amber — 擠塞, 封閉, 交通意外, 延誤, ...)
+  and **L1 提示** (slate — 改道, 臨時, 工程, ...). Completed (完結) items never get a badge.
+- **Favourites** — star any card to pin it to the top of the list and keep it under the 收藏 chip
+  (persisted in `localStorage`).
+- **Offline resilience** — the last good payload is snapshotted to `localStorage`; when the fetch fails or the
+  device is offline the snapshot is rendered behind an `⚡ Offline / ⚠ Refresh failed — showing cached news
+  from Xm ago` banner and the list is never wiped. Polling pauses while offline and resumes on `online`.
+- **Accessibility** — `role="status"` freshness line, semantic `<time datetime>` stamps, cards expose
+  `role="button"` + `aria-expanded` and toggle with Enter/Space; the `aria-live="polite"` region is attached
+  only after the first paint so the initial list is not announced wholesale.
+
 | Method | Endpoint | Request body | Description |
 |--------|----------|--------------|-------------|
 | POST | `/traffic-news/api/news` | `{ "limit"?: 30, "status"?: "最新情況", "hours"?: 12 }` | Latest cached news from Supabase (default: last 12 h) |
@@ -274,7 +289,8 @@ manual refresh button and a 1-minute auto-poll; installable like the other apps 
   On Vercel (serverless, no timers) each read kicks a background re-scrape when the cache is older than 60 s
   (stale-while-revalidate in `api/index.js`); the app's refresh button scrapes on demand.
 - **Parser** — `apps/traffic-news/parser.js` reads routejam's server-rendered accordion HTML: item id, posted time
-  (converted to ISO `+08:00`), category/status, location, detail, source, and map coordinates (when present).
+  (converted to ISO `+08:00`), category/status, location, detail, **source attribution** (the `資料來源:` line,
+  falling back to the feed name — shown as the card's source badge) and map coordinates (when present).
   Covered by unit tests with a fixture page.
 
 ---
@@ -457,7 +473,7 @@ npm test            # Run all tests once
 npm run test:watch  # Watch mode
 ```
 
-93 tests across 7 files under `apps/mark-six/test/`, `apps/traffic-news/test/` and `apps/music-trend/test/`. The suite uses in-memory SQLite + fixtures, so it runs offline without a Supabase connection.
+163 tests across 9 files under `apps/mark-six/test/`, `apps/traffic-news/test/` and `apps/music-trend/test/`. The suite uses in-memory SQLite + fixtures, so it runs offline without a Supabase connection.
 
 ---
 
