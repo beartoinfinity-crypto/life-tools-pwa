@@ -30,6 +30,21 @@
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);
 }
 
+/* Auto dark mode: follow the OS unless the user picked an explicit theme
+   (data-theme="day" suppresses it; data-theme="night" applies above). */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="day"]) {
+    --bg: #12161a;
+    --card-bg: #1c2329;
+    --text: #e6edf2;
+    --text-secondary: #93a2ad;
+    --border: #2b333b;
+    --primary: #b0bec5;
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);
+  }
+}
+
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   background: var(--bg);
@@ -71,8 +86,8 @@ header {
 
 .refresh-btn {
   flex: 0 0 auto;
-  width: 40px;
-  height: 40px;
+  width: 48px;
+  height: 48px;
   border-radius: 50%;
   border: 1px solid rgba(255, 255, 255, 0.35);
   background: rgba(255, 255, 255, 0.14);
@@ -321,6 +336,47 @@ main {
   border: 1px solid var(--border);
 }
 
+/* Skeleton shimmer: mirrors real song rows so the chart snaps in with zero
+   layout shift instead of a text "Loading…" that then reflows. */
+.sk-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-sm);
+  padding: 10px 14px;
+}
+
+.sk {
+  position: relative;
+  display: block;
+  flex: 0 0 auto;
+  overflow: hidden;
+  background: var(--border);
+  border-radius: 6px;
+}
+
+.sk::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.5) 50%, rgba(255, 255, 255, 0) 100%);
+  animation: sk-shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes sk-shimmer { 100% { transform: translateX(100%); } }
+
+.sk-rank { width: 28px; height: 16px; }
+.sk-art { width: 52px; height: 52px; border-radius: 8px; }
+.sk-main { flex: 1; min-width: 0; }
+.sk-line { height: 12px; margin: 7px 0; width: 100%; }
+.w70 { width: 70%; } .w60 { width: 60%; } .w75 { width: 75%; }
+.w55 { width: 55%; } .w65 { width: 65%; } .w45 { width: 45%; }
+.w50 { width: 50%; } .w40 { width: 40%; } .w35 { width: 35%; }
+
 .song-row {
   display: flex;
   align-items: center;
@@ -419,10 +475,42 @@ main {
   text-align: center;
 }
 
-/* Playing row highlight */
+/* Playing row highlight: pulsing glow + animated equalizer bars in the rank
+   column so the active track is obvious at a glance. */
 .song-row.playing {
   border-color: var(--accent);
   box-shadow: 0 0 0 2px rgba(123, 31, 162, 0.25);
+  animation: play-pulse 1.8s ease-in-out infinite;
+}
+
+@keyframes play-pulse {
+  50% { box-shadow: 0 0 0 5px rgba(123, 31, 162, 0.32); }
+}
+
+.song-row.playing .s-rank {
+  color: transparent;
+  font-size: 0;
+}
+
+.song-row.playing .s-rank::after {
+  content: '';
+  display: block;
+  width: 18px;
+  height: 14px;
+  margin: 0 auto;
+  background-image:
+    linear-gradient(var(--accent), var(--accent)),
+    linear-gradient(var(--accent), var(--accent)),
+    linear-gradient(var(--accent), var(--accent));
+  background-repeat: no-repeat;
+  background-position: 0 100%, 7px 100%, 14px 100%;
+  background-size: 4px 45%, 4px 85%, 4px 60%;
+  animation: eq-bars 0.9s ease-in-out infinite;
+}
+
+@keyframes eq-bars {
+  0%, 100% { background-size: 4px 45%, 4px 85%, 4px 60%; }
+  50% { background-size: 4px 85%, 4px 45%, 4px 80%; }
 }
 
 .song-row.tappable { cursor: pointer; }
@@ -558,6 +646,12 @@ main {
   flex: 0 0 auto;
 }
 
+.player-bar.video-mode .p-controls {
+  flex: 0 0 auto;
+  justify-content: center;
+  gap: 10px;
+}
+
 .p-info {
   flex: 1;
   min-width: 0;
@@ -600,13 +694,13 @@ main {
 }
 
 .p-btn {
-  width: 34px;
-  height: 34px;
+  width: 48px;
+  height: 48px;
   border-radius: 50%;
   border: 1px solid var(--border);
   background: var(--card-bg);
   color: var(--text);
-  font-size: 14px;
+  font-size: 15px;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -618,7 +712,7 @@ main {
   background: var(--accent);
   border-color: var(--accent);
   color: #fff;
-  font-size: 15px;
+  font-size: 17px;
 }
 
 .p-btn.p-close { color: var(--text-secondary); }
@@ -642,7 +736,17 @@ main {
     -webkit-line-clamp: 3;
     font-size: 14px;
   }
-  .p-btn { width: 30px; height: 30px; }
+  .sk-row { gap: 8px; padding: 9px 10px; }
+  .sk-art { width: 44px; height: 44px; }
+  /* Two-row player: mount + info on top, controls on their own full-width
+     row below so every control keeps a real 48x48 tap target on a phone. */
+  .player-bar { flex-wrap: wrap; padding: 8px 8px calc(8px + var(--safe-bottom)); }
+  .p-bar-row { flex: 1 1 0%; min-width: 0; }
+  .p-controls {
+    flex: 1 0 100%;
+    justify-content: space-evenly;
+    gap: 2px;
+  }
 }
 
 .header-content h1 .app-ver {
@@ -651,4 +755,55 @@ main {
   letter-spacing: 0.3px;
   color: rgba(255, 255, 255, 0.78);
   white-space: nowrap;
+}
+
+/* Toast: non-intrusive recoverable error notice floating above the player
+   bar (or bottom of screen when the bar is closed). High-contrast in both
+   themes (dark panel + white text). */
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(88px + var(--safe-bottom));
+  z-index: 300;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: min(92vw, 480px);
+  padding: 10px 12px 10px 16px;
+  background: #1f2933;
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 12px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+  font-size: 14px;
+  line-height: 1.4;
+  opacity: 0;
+  transform: translateX(-50%) translateY(8px);
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+.toast.hidden { display: none; }
+
+.toast-btn {
+  flex: 0 0 auto;
+  min-height: 40px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.toast-btn:active { filter: brightness(1.15); }
+
+@media (prefers-reduced-motion: reduce) {
+  .sk::after,
+  .song-row.playing,
+  .song-row.playing .s-rank::after {
+    animation: none;
+  }
+  .toast { transition: none; }
 }

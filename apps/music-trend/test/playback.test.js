@@ -151,7 +151,7 @@ async function flush() {
   await new Promise((r) => setTimeout(r, 0));
 }
 
-function createHarness({ shuffle = false, hidden = false, watch } = {}) {
+function createHarness({ shuffle = false, hidden = false, watch, failPlaylists = false } = {}) {
   const dom = new JSDOM(indexHtml, {
     url: 'https://example.test/music-trend/',
     runScripts: 'outside-only',
@@ -167,6 +167,7 @@ function createHarness({ shuffle = false, hidden = false, watch } = {}) {
   window.fetch = vi.fn(async (url) => {
     const u = String(url);
     if (u.includes('/music-trend/api/playlists')) {
+      if (failPlaylists) throw new TypeError('Network down');
       return {
         ok: true,
         status: 200,
@@ -869,5 +870,75 @@ describe('music-trend playback transitions', () => {
       expect(harness.mediaSession.playbackState).toBe('playing');
       expect(window.document.getElementById('playPauseBtn').textContent).toBe('❚❚');
     }
+  });
+
+  // ---- v1.3 UX: skeleton load, retry toast, position state, theme ----
+
+  it('renders shimmer skeleton placeholders before the chart lands', async () => {
+    harness = createHarness();
+    const { window } = harness;
+    // sync after boot: fetch still pending → skeleton visible, aria-busy set
+    expect(window.document.querySelectorAll('.sk-row').length).toBeGreaterThan(0);
+    expect(window.document.getElementById('playList').getAttribute('aria-busy')).toBe('true');
+    await flush();
+    await flush();
+    await flush();
+    expect(window.document.querySelectorAll('.sk-row').length).toBe(0);
+    expect(window.document.querySelectorAll('.song-row.tappable').length).toBeGreaterThan(0);
+    expect(window.document.getElementById('playList').getAttribute('aria-busy')).toBe('false');
+  });
+
+  it('publishes Media Session position state while playing', async () => {
+    await startAndSettle({});
+    const calls = harness.mediaSession.setPositionState.mock.calls;
+    expect(calls.length).toBeGreaterThan(0);
+    expect(calls[calls.length - 1][0]).toEqual({ duration: 180, position: 10, playbackRate: 1 });
+  });
+
+  it('shows a retryable toast when the playlist fetch fails', async () => {
+    harness = createHarness({ failPlaylists: true });
+    const { window } = harness;
+    await flush();
+    await flush();
+    await flush();
+    const toast = window.document.getElementById('toast');
+    expect(toast.classList.contains('hidden')).toBe(false);
+    expect(toast.classList.contains('show')).toBe(true);
+    expect(window.document.getElementById('toastMsg').textContent).toContain('playlists');
+    expect(window.document.getElementById('playList').textContent).toContain('Failed to load');
+    // network back: the Retry button re-runs load()
+    window.fetch = vi.fn(async () => ({ ok: true, status: 200, json: async () => PLAYLIST_PAYLOAD }));
+    window.document.getElementById('toastAction').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    await flush();
+    await flush();
+    await flush();
+    expect(window.document.querySelectorAll('.song-row.tappable').length).toBeGreaterThan(0);
+  });
+
+  it('keeps existing rows visible when a background refresh fails', async () => {
+    const { window } = await startAndSettle({});
+    window.fetch = vi.fn(async () => { throw new TypeError('Network down'); });
+    window.document.getElementById('refreshBtn').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    await flush();
+    await flush();
+    await flush();
+    expect(window.document.querySelectorAll('.song-row.tappable').length).toBeGreaterThan(0);
+    expect(window.document.getElementById('toast').classList.contains('hidden')).toBe(false);
+  });
+
+  it('cycles theme auto → day → night → auto and persists the choice', async () => {
+    harness = createHarness();
+    const { window } = harness;
+    const root = window.document.documentElement;
+    const btn = window.document.getElementById('themeBtn');
+    expect(root.hasAttribute('data-theme')).toBe(false); // auto = follow OS
+    btn.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    expect(root.getAttribute('data-theme')).toBe('day');
+    expect(window.localStorage.getItem('music-theme')).toBe('day');
+    btn.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    expect(root.getAttribute('data-theme')).toBe('night');
+    btn.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    expect(root.hasAttribute('data-theme')).toBe(false);
+    expect(window.localStorage.getItem('music-theme')).toBe('auto');
   });
 });

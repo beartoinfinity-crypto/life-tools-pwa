@@ -360,6 +360,8 @@ gate by country (`CANTO_COUNTRIES` = `{hk}` and `MANDO_COUNTRIES` = `{hk,tw,cn,s
   next track prebuffers), `playbackState` tracks playing/paused/`wantPlaying` (reset to
   `none` only when the player closes), and `play`/`pause`/`nexttrack`/`previoustrack`
   transport controls are wired to the same next/prev/pause paths as the in-page buttons.
+  `setPositionState` publishes live position/duration (guarded, try/catch) so the OS bar
+  draws a progress scrubber.
 - **End watchdog while the display is off** — YouTube often withholds `ENDED` until the
   page is visible again, so the next track used to load only on unlock. A wall-clock
   timer armed from the live duration advances on its own while still hidden, and unlock
@@ -399,6 +401,28 @@ gate by country (`CANTO_COUNTRIES` = `{hk}` and `MANDO_COUNTRIES` = `{hk,tw,cn,s
   exact song would have burned at YouTube's default 720p had we not pinned it to ~144p. It's scaled by the server
   duration (`durationMs`, `~0.14 MB/s` saved) and only rendered when that song is actually streamable *and* has a known
   length — no made-up numbers for unplayable or unknowable rows.
+- **Skeleton loading (v1.3)** — the HTML itself ships shimmer placeholders (`.sk-row`, same
+  geometry as real song rows), so first paint is instant and the chart swaps in with zero
+  layout shift; a fetch in flight marks the list `aria-busy`. A refresh keeps the current
+  rows on screen instead of re-skeletoning them (stale beats empty).
+- **Recoverable error toasts (v1.3)** — failures surface as a non-intrusive toast above
+  the player instead of dying silently: a failed playlist fetch shows the error + a
+  **Retry** button that re-runs the request (and never wipes rows already on screen),
+  `offline`/`online` announce drop/auto-resume, and YouTube `onError` says "resuming…" for
+  a transient blip vs "skipping" for a genuinely dead video. The spec's `<audio>`
+  error-listener pattern doesn't apply here — playback is a YouTube iframe, so the
+  equivalent hooks are `onError`, `offline`/`online`, and fetch failures.
+- **Mobile touch targets (v1.3)** — every player control (shuffle/prev/play/next/video/
+  close) is a 48×48 px button, as are the header refresh/theme buttons; under 480 px the
+  bar wraps into two rows (mount + info on top, controls full-width below) so the targets
+  fit without shrinking.
+- **Theme: auto / day / night (v1.3)** — the header button cycles auto (follow
+  `prefers-color-scheme`) → day → night, persisted in `localStorage` (`music-theme`);
+  night is the high-contrast dark palette aimed at OLED battery life, and explicit `day`
+  suppresses the OS dark preference.
+- **Active-track equalizer (v1.3)** — the playing row pulses its accent border and swaps
+  the rank number for three animated equalizer bars; all shimmer/pulse animation is
+  disabled under `prefers-reduced-motion`.
 
 ---
 

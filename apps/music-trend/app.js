@@ -57,9 +57,46 @@
   var myPickerBtn = document.getElementById('myPickerBtn');
   var myImportBtn = document.getElementById('myImportBtn');
   var myImport = document.getElementById('myImport');
+  var themeBtn = document.getElementById('themeBtn');
+  var toastEl = document.getElementById('toast');
+  var toastMsg = document.getElementById('toastMsg');
+  var toastAction = document.getElementById('toastAction');
 
   // Lock-screen / notification transport — registered once at boot.
   setupMediaSession();
+
+  /* ---- toast: non-intrusive error notice with an optional action ----
+   * Used for recoverable failures (playlist fetch, signal drops) so the app
+   * never dies silently behind a dead-end message. */
+  var toastTimer = null;
+  var toastActionFn = null;
+
+  function showToast(msg, opts) {
+    opts = opts || {};
+    if (!toastEl) return;
+    if (toastTimer) { clearTimeout(toastTimer); toastTimer = null; }
+    toastMsg.textContent = msg;
+    toastActionFn = opts.action || null;
+    if (opts.actionLabel && toastActionFn) {
+      toastAction.textContent = opts.actionLabel;
+      toastAction.classList.remove('hidden');
+    } else {
+      toastAction.classList.add('hidden');
+    }
+    toastEl.classList.remove('hidden');
+    toastEl.classList.add('show');
+    var dur = opts.duration === undefined ? 6000 : opts.duration;
+    if (dur > 0) toastTimer = setTimeout(hideToast, dur);
+  }
+
+  function hideToast() {
+    if (!toastEl) return;
+    if (toastTimer) { clearTimeout(toastTimer); toastTimer = null; }
+    toastEl.classList.remove('show');
+    setTimeout(function () {
+      if (toastEl && !toastEl.classList.contains('show')) toastEl.classList.add('hidden');
+    }, 260);
+  }
 
   /* ---- my playlist (localStorage, per device) ---- */
   function mySongs() {
@@ -124,6 +161,18 @@
     try { if (ytPlayer.getDuration) dur = ytPlayer.getDuration(); } catch (e) {}
     if (cur < 0) return;
     pTimeEl.textContent = fmtTime(cur) + ' / ' + (dur > 0 ? fmtTime(dur) : '--:--');
+    // Lock-screen timeline: publish position so the OS media bar draws a
+    // progress scrubber. Guarded + try/catch — Safari throws on bad values.
+    if (navigator.mediaSession && navigator.mediaSession.setPositionState &&
+        isFinite(cur) && isFinite(dur) && dur > 0) {
+      try {
+        navigator.mediaSession.setPositionState({
+          duration: dur,
+          position: Math.min(cur, dur),
+          playbackRate: 1
+        });
+      } catch (e) { /* unsupported shape */ }
+    }
   }
   setInterval(setTimeDisplay, 500);
 
@@ -179,9 +228,11 @@
             // We have real progress past the start: likely a transient blip, not a
             // dead video. Remember the spot and resume it when signal returns.
             resumeFromSpot();
+            showToast('Network hiccup — resuming playback…', { duration: 4000 });
             return;
           }
           // Genuinely unplayable video at load: skip forward
+          showToast('Video unavailable — skipping.', { duration: 3000 });
           nextSong(true);
         }
       }
@@ -217,12 +268,14 @@
       startChurn();
       var playingSong = currentListSong();
       if (playingSong) setMediaSessionSong(playingSong, true);
+      setTimeDisplay(); // refresh lock-screen position right away (not on the 500ms tick)
       // Warm the next track (shuffle-aware). After a preload promotion this
       // uses the updated currentSong so we do not re-cue the song on air.
       var entry = findList(current);
       var list = playable(entry);
       if (list.length) schedulePreload(list, currentSong);
     } else if (e.data === YT.PlayerState.PAUSED) {
+      setTimeDisplay(); // snapshot position for the lock-screen timeline
       // Only an explicit user pause (in-page button / lock-screen control) may
       // clear intent. A PAUSED that the browser/YouTube emits when Brave goes
       // to the background — or right after return when autoplay is blocked —
@@ -392,7 +445,10 @@
   window.addEventListener('offline', function () {
     // Signal dropped while we wanted audio: capture the spot right away so we
     // don't wait the full 10s watchdog for a hard drop. Nothing if we were quiet.
-    if (wantPlaying) resumeFromSpot();
+    if (wantPlaying) {
+      resumeFromSpot();
+      showToast('Connection lost — will resume automatically.', { duration: 0 });
+    }
   });
 
   window.addEventListener('online', function () {
@@ -400,6 +456,7 @@
     // pending stall watchdog so it can't double-fire on the newly resumed audio.
     clearStallWatch();
     finishResume();
+    showToast('Back online — resuming.', { duration: 3000 });
   });
 
   function playSong(entry, idx, autoplay) {
@@ -970,6 +1027,7 @@
 
   function render() {
     var entry = findList(current);
+    listEl.setAttribute('aria-busy', 'false');
     renderCountries();
     myTools.classList.toggle('hidden', current !== 'my');
     if (current !== 'my') myPicker.classList.add('hidden');
@@ -1535,6 +1593,54 @@
     load(true, clearCache);
   });
 
+  /* ---- theme: auto (follow OS) / day / night, persisted ---- */
+  var THEMES = ['auto', 'day', 'night'];
+  function applyTheme() {
+    var t = 'auto';
+    try { t = localStorage.getItem('music-theme') || 'auto'; } catch (e) {}
+    if (THEMES.indexOf(t) < 0) t = 'auto';
+    if (t === 'auto') document.documentElement.removeAttribute('data-theme');
+    else document.documentElement.setAttribute('data-theme', t);
+    if (themeBtn) {
+      themeBtn.title = 'Theme: ' + t;
+      Array.prototype.forEach.call(themeBtn.querySelectorAll('.theme-icon'), function (svg) {
+        svg.style.display = svg.classList.contains('theme-icon-' + t) ? '' : 'none';
+      });
+    }
+  }
+  applyTheme();
+  if (themeBtn) {
+    themeBtn.addEventListener('click', function () {
+      var t = 'auto';
+      try { t = localStorage.getItem('music-theme') || 'auto'; } catch (e) {}
+      var next = THEMES[(THEMES.indexOf(t) + 1) % THEMES.length];
+      try { localStorage.setItem('music-theme', next); } catch (e) {}
+      applyTheme();
+    });
+  }
+
+  if (toastAction) {
+    toastAction.addEventListener('click', function () {
+      var fn = toastActionFn;
+      hideToast();
+      if (fn) fn();
+    });
+  }
+
+  /* Skeleton rows mirroring .song-row geometry so the real chart replaces the
+   * placeholders with zero layout shift (matches the static HTML at boot). */
+  function skeletonHtml(n) {
+    var widths = [['w70', 'w45'], ['w60', 'w50'], ['w75', 'w40'], ['w55', 'w45'], ['w70', 'w35'], ['w65', 'w50']];
+    var html = '';
+    for (var i = 0; i < n; i++) {
+      var w = widths[i % widths.length];
+      html += '<div class="sk-row"><span class="sk sk-rank"></span><span class="sk sk-art"></span>' +
+        '<span class="sk-main"><span class="sk sk-line ' + w[0] + '"></span>' +
+        '<span class="sk sk-line ' + w[1] + '"></span></span></div>';
+    }
+    return html;
+  }
+
   function load(refresh, clearCache) {
     var wantList = (current === 'my') ? 'trending' : current;
     refreshBtn.classList.add('spinning');
@@ -1549,8 +1655,11 @@
       loadedKey = country + ':' + wantList;
       render();
     }
-    if (refresh || country + ':' + wantList !== loadedKey) {
-      listEl.innerHTML = '<div class="loading-note">Loading…</div>';
+    // Skeleton only when we have nothing usable for this country+list yet —
+    // a manual refresh keeps the current rows on screen (stale beats empty).
+    if (country + ':' + wantList !== loadedKey) {
+      listEl.setAttribute('aria-busy', 'true');
+      listEl.innerHTML = skeletonHtml(6);
     }
     var body = { country: country, list: wantList };
     if (clearCache) body.clearCache = true;
@@ -1570,7 +1679,16 @@
         render();
       })
       .catch(function () {
-        listEl.innerHTML = '<div class="loading-note">Failed to load playlists.</div>';
+        listEl.setAttribute('aria-busy', 'false');
+        // Never wipe rows that are already on screen — stale-but-usable beats
+        // an empty list. Show a retryable toast instead of dying silently.
+        if (!listEl.querySelector('.song-row')) {
+          listEl.innerHTML = '<div class="loading-note">Failed to load playlists.</div>';
+        }
+        showToast('Couldn\u2019t load playlists.', {
+          actionLabel: 'Retry',
+          action: function () { load(false); }
+        });
       })
       .finally(function () { refreshBtn.classList.remove('spinning'); });
   }
