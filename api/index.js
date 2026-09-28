@@ -21,7 +21,10 @@ module.exports = async function handler(req, res) {
 
   // Traffic news stale-while-revalidate: no always-on process on serverless,
   // so kick a background refresh when the cached copy is older than 60 s.
-  if (req.method === 'POST' && (req.url || '').indexOf('/traffic-news/api/news') === 0) {
+  // Match only the cached read: /news/refresh already does its own blocking
+  // scrape, so matching it here would double-scrape both sources.
+  const trafficUrl = (req.url || '').split('?')[0];
+  if (req.method === 'POST' && trafficUrl === '/traffic-news/api/news') {
     try {
       const { lastRefresh } = await readTrafficNews({ limit: 1 });
       if (!lastRefresh || Date.now() - new Date(lastRefresh).getTime() > 60 * 1000) {

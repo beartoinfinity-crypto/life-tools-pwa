@@ -286,8 +286,10 @@ manual refresh button and a 1-minute auto-poll; installable like the other apps 
 | POST | `/traffic-news/api/news/refresh` | `{ "limit"?, "hours"? }` | Scrape routejam, upsert, return latest |
 
 - **Refresh cadence** — on Render/local the server scrapes at boot + every 60 s (`setInterval` in `server.js`).
-  On Vercel (serverless, no timers) each read kicks a background re-scrape when the cache is older than 60 s
-  (stale-while-revalidate in `api/index.js`); the app's refresh button scrapes on demand.
+  On Vercel (serverless, no timers) each cached read kicks a background re-scrape when the cache is older than 60 s
+  (stale-while-revalidate in `api/index.js`, matching `/news` only — `/news/refresh` does its own blocking scrape
+  and never double-scrapes). The app **boots from the cached read** for a fast first paint (a cold cache falls
+  through to the blocking scrape); only the refresh button waits on a live scrape.
 - **Parser** — `apps/traffic-news/parser.js` reads routejam's server-rendered accordion HTML: item id, posted time
   (converted to ISO `+08:00`), category/status, location, detail, **source attribution** (the `資料來源:` line,
   falling back to the feed name — shown as the card's source badge) and map coordinates (when present).
@@ -473,7 +475,7 @@ npm test            # Run all tests once
 npm run test:watch  # Watch mode
 ```
 
-163 tests across 9 files under `apps/mark-six/test/`, `apps/traffic-news/test/` and `apps/music-trend/test/`. The suite uses in-memory SQLite + fixtures, so it runs offline without a Supabase connection.
+166 tests across 9 files under `apps/mark-six/test/`, `apps/traffic-news/test/` and `apps/music-trend/test/`. The suite uses in-memory SQLite + fixtures, so it runs offline without a Supabase connection.
 
 ---
 

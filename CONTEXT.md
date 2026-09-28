@@ -22,7 +22,7 @@ Each app is an authored PWA with its own `index.html`, `styles.css`,
 
 | App dir              | SW cache          | In-page badge (build)      |
 |-----------------------|-------------------|----------------------------|
-| apps/traffic-news     | traffic-news-v7   | v1.1 build 202609280346    |
+| apps/traffic-news     | traffic-news-v8   | v1.1 build 202609280600    |
 | apps/mark-six         | mark-six-v8       | v1.0 build 202609210150    |
 | apps/music-trend      | music-trend-v31   | v1.3 build 202609280140    |
 | apps/hk-bus-eta/build | buseta-lite-v23   | v1.3 build 202609280300    |
@@ -39,7 +39,7 @@ Every authored app shows its own version + build number inside the
 `<h1>` header:
 
 ```html
-<h1>TITLE<span class="app-ver">v1.1 build 202609280346</span></h1>
+<h1>TITLE<span class="app-ver">v1.1 build 202609280600</span></h1>
 ```
 
 Rules:

@@ -325,4 +325,32 @@ describe('traffic-news app (v1.1)', () => {
     expect(snap.payload.data.length).toBe(5);
     expect(typeof snap.t).toBe('number');
   });
+
+  // ---- fast first paint (v1.1 perf) ----
+
+  it('boots from the cached read, not the blocking scrape', async () => {
+    const { window } = await boot();
+    expect(window.fetch).toHaveBeenCalledTimes(1);
+    const url = String(window.fetch.mock.calls[0][0]);
+    expect(url).toContain('/traffic-news/api/news');
+    expect(url).not.toContain('refresh');
+    expect(ids(window).length).toBe(5); // still renders the full list
+  });
+
+  it('the refresh button still triggers the live scrape', async () => {
+    const { window } = await boot();
+    click(window, window.document.getElementById('refreshBtn'));
+    await flush();
+    const urls = window.fetch.mock.calls.map((c) => String(c[0]));
+    expect(urls[urls.length - 1]).toContain('/news/refresh');
+  });
+
+  it('falls through to the live scrape when the cache is cold', async () => {
+    const { window } = await boot({ items: [] });
+    const urls = window.fetch.mock.calls.map((c) => String(c[0]));
+    expect(urls.length).toBe(2);
+    expect(urls[0]).not.toContain('refresh');
+    expect(urls[1]).toContain('/news/refresh');
+    expect(window.document.querySelector('.news-empty')).not.toBeNull();
+  });
 });

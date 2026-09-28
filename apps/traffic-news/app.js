@@ -310,15 +310,21 @@
   function load(refresh) {
     if (!navigator.onLine) { serveFallback('offline'); return; }
     refreshBtn.classList.add('spinning');
-    // Live-first: opening/clicking the page triggers a real scrape so the latest
-    // news shows immediately without a manual refresh. If the live scrape yields
-    // nothing, fall back to the stored snapshot so the page is never blank/stale.
+    // Fast first paint: boot and the auto-poll read the cached snapshot (POST
+    // /news) which the server keeps <=60 s fresh (Render interval / Vercel SWR
+    // background scrape), so the page renders in ~100 ms instead of waiting on
+    // a live scrape of routejam + 881903. The refresh button still pays for
+    // the blocking /news/refresh scrape -- and a plain read only falls through
+    // to it when the cache is cold (no items yet, e.g. first deploy).
     var p = refresh
       ? post(API_BASE + '/news/refresh').then(function (payload) {
           if (payload && payload.data && payload.data.length) return payload;
           return post(API_BASE + '/news');
         })
-      : post(API_BASE + '/news');
+      : post(API_BASE + '/news').then(function (payload) {
+          if (payload && payload.data && payload.data.length) return payload;
+          return post(API_BASE + '/news/refresh');
+        });
 
     p.then(function (payload) {
         // only overwrite the snapshot with real data (never with a hiccup)
@@ -392,7 +398,7 @@
   // ---- boot ----
   readUrl();
   searchInput.value = filterState.q;
-  load(true);
+  load(false);
   setInterval(function () { if (navigator.onLine) load(false); }, 60 * 1000);
 
   if ('serviceWorker' in navigator) {
