@@ -33,11 +33,15 @@ const T = {
   noteDetail: { zh: "點擊時間查看班次詳情 · 每 30 秒自動更新", en: "Tap a time for details · auto-refresh 30s" },
   noteStop: { zh: "此站在所有路線的到站時間", en: "Arrivals of all routes at this stop" },
   km: { zh: "km", en: "km" },
+  retry: { zh: "重試", en: "Retry" },
+  offBanner: { zh: "網絡連線中斷，正顯示快取資料", en: "Network offline — showing cached data" },
+  onlineBack: { zh: "已恢復連線", en: "Back online" },
 };
 
 /* ---------------- state ---------------- */
 const state = {
   db: null,
+  dbStatus: "loading",
   lang: localStorage.getItem("buseta-lang") || "zh",
   routeNoIndex: new Map(),
   stopIndex: new Map(),
@@ -78,6 +82,7 @@ function setLang(l) {
     l === "zh" ? "輸入車站名稱或編號，如 怡和街、TA292" : "Enter stop name or code, e.g. Percival St, TA292";
   $("#nearBtn").textContent = l === "zh" ? "附近的站" : "Nearby";
   renderThemeBtn();
+  updateNetBanner();
   applyLangToCurrent();
 }
 
@@ -137,26 +142,30 @@ async function idbSet(key, val) {
 async function loadDb() {
   const [cachedDb, cachedTs] = await Promise.all([idbGet("db"), idbGet("ts")]);
   if (cachedDb) {
+    state.dbStatus = "ready";
     applyDb(cachedDb);
-    hideSplash();
     const age = Date.now() - (cachedTs || 0);
     if (age > 6 * 3600 * 1000) {
-      if (navigator.onLine) { statusNow(T.updating[state.lang]); refreshDb().then(() => statusNow(T.updated[state.lang])); }
-      else statusNow(T.offline[state.lang]);
+      if (navigator.onLine) {
+        statusNow(T.updating[state.lang]);
+        refreshDb()
+          .then(() => statusNow(T.updated[state.lang]))
+          .catch(() => statusNow(T.offline[state.lang]));
+      } else statusNow(T.offline[state.lang]);
     }
     return;
   }
-  $("#splashMsg").textContent = T.loading[state.lang];
   try {
     const db = await fetchEtaDb();
     if (!db || !db.routeList) throw new Error("bad db");
+    state.dbStatus = "ready";
     applyDb(db);
     await idbSet("db", db);
     await idbSet("ts", Date.now());
   } catch {
+    state.dbStatus = "failed";
     statusNow(T.offline[state.lang]);
-  } finally {
-    hideSplash();
+    renderCurrentList();
   }
 }
 async function refreshDb() {
@@ -207,7 +216,7 @@ function buildIndexes() {
     if (!norm) continue;
     let o = seen.get(norm);
     if (o) { o.ids.push(ref); continue; }
-    o = { norm, ids: [ref], name: e.name, loc: e.location || null, code: extractCode(e.name) };
+    o = { norm, normEn: normalizeName({ zh: e.name.en || "" }), ids: [ref], name: e.name, loc: e.location || null, code: extractCode(e.name) };
     seen.set(norm, o);
     items.push(o);
   }
@@ -218,8 +227,11 @@ function normalizeName(name) {
   return String(name.zh || name.en || "").replace(/\s*\(.*\)$/, "").trim().toLowerCase().replace(/\s+/g, " ");
 }
 function extractCode(name) {
-  const m = String(name.zh || name.en || "").match(/\(([^()]+)\)\s*$/);
-  return m ? m[1].trim().toUpperCase() : null;
+  for (const s of [name.zh, name.en]) {
+    const m = String(s || "").match(/\(([^()]+)\)\s*$/);
+    if (m) return m[1].trim().toUpperCase();
+  }
+  return null;
 }
 
 /* ---------------- helpers ---------------- */
@@ -394,8 +406,29 @@ function stopNameObj(ref) {
 }
 
 /* ---------------- route search ---------------- */
+function skeletonRows(n) {
+  return Array.from({ length: n }, () =>
+    '<div class="sk-card"><span class="sk-badge"></span><span class="sk-lines">' +
+    '<span class="sk-line"></span><span class="sk-line sk-short"></span></span></div>').join("");
+}
+function dbGuard(box) {
+  if (state.db) return true;
+  if (state.dbStatus === "failed") {
+    box.innerHTML = `<div class="msg">${esc(T.offline[state.lang])}<div style="margin-top:10px">` +
+      `<button class="btn-more" style="margin:0" id="dbRetry">${esc(T.retry[state.lang])}</button></div></div>`;
+    box.querySelector("#dbRetry").addEventListener("click", () => {
+      state.dbStatus = "loading";
+      renderCurrentList();
+      loadDb();
+    });
+    return false;
+  }
+  box.innerHTML = skeletonRows(5);
+  return false;
+}
 function renderRouteResults(q) {
   const box = el.routeResults;
+  if (!dbGuard(box)) return;
   box.innerHTML = "";
   const text = String(q || "").trim().toUpperCase();
   if (!text) { box.innerHTML = `<div class="msg">${T.empty[state.lang]}</div>`; return; }
@@ -576,6 +609,7 @@ function fetchRowEtas(cards) {
 /* ---------------- bookmark lists ---------------- */
 function renderRouteBook() {
   const box = el.routeBookResults;
+  if (!dbGuard(box)) return;
   box.innerHTML = "";
   const list = bookRoutes();
   if (!list.length) { box.innerHTML = `<div class="msg">${T.bookEmptyR[state.lang]}</div>`; return; }
@@ -583,6 +617,7 @@ function renderRouteBook() {
 }
 function renderStopBook() {
   const box = el.stopBookResults;
+  if (!dbGuard(box)) return;
   box.innerHTML = "";
   const list = bookStops();
   if (!list.length) { box.innerHTML = `<div class="msg">${T.bookEmptyS[state.lang]}</div>`; return; }
@@ -612,11 +647,13 @@ function stopRouteCount(ref) {
 }
 function renderStopResults(q) {
   const box = el.stopResults;
+  if (!dbGuard(box)) return;
   box.innerHTML = "";
   const text = String(q || "").trim().toLowerCase();
   if (!text) { box.innerHTML = `<div class="msg">${T.stopEmpty[state.lang]}</div>`; return; }
   const hits = state.uniqueStops
-    .filter((o) => o.norm.includes(text) || (o.code && o.code.toLowerCase().includes(text)))
+    .filter((o) => o.norm.includes(text) || (o.normEn && o.normEn.includes(text)) ||
+      (o.code && o.code.toLowerCase().includes(text)))
     .slice(0, 25);
   if (!hits.length) { box.innerHTML = `<div class="msg">${T.noStop[state.lang]}</div>`; return; }
   hits.forEach((o) => {
@@ -634,6 +671,7 @@ function renderStopResults(q) {
   });
 }
 function nearby() {
+  if (!state.db) { statusNow(T.loading[state.lang]); return; }
   if (!state._pos) { statusNow(T.nearErr[state.lang]); return; }
   const { lat, lng } = state._pos;
   const scored = state.uniqueStops.filter((o) => o.loc)
@@ -796,31 +834,44 @@ function collectVisibleRows() {
   });
   return rows;
 }
-function startAutoRefresh() {
-  setInterval(async () => {
-    if (state.view !== "detail" || state.refreshing) return;
-    const rows = collectVisibleRows();
-    if (!rows.length) return;
-    state.refreshing = true;
-    try {
-      const tasks = rows.map((r) => Promise.all((r.cos || [r.co]).map((co) => etaFor(r.entry, co, r.seq))));
-      for (let i = 0; i < tasks.length; i++) {
-        const results = await tasks[i];
-        const merged = results.flat().sort((a, b) => {
-          const ta = a.eta ? new Date(a.eta).getTime() : Infinity;
-          const tb = b.eta ? new Date(b.eta).getTime() : Infinity;
-          return ta - tb;
-        });
-        const r = rows[i];
-        state.etaRows.set(r.rowEl.dataset.rowkey, { etas: merged, entry: r.entry, co: (r.cos || [r.co])[0], seq: r.seq });
-        const chips = r.rowEl.querySelector(".eta-chips");
-        if (chips) chips.innerHTML = chipsHTML(merged);
-      }
-      statusNow(T.updated[state.lang]);
-    } finally {
-      state.refreshing = false;
+async function refreshVisibleEtas(silent) {
+  if (state.view !== "detail" || state.refreshing) return;
+  if (!navigator.onLine) {
+    updateNetBanner();
+    if (!silent) statusNow(T.offline[state.lang]);
+    return;
+  }
+  const rows = collectVisibleRows();
+  if (!rows.length) return;
+  state.refreshing = true;
+  try {
+    const tasks = rows.map((r) => Promise.all((r.cos || [r.co]).map((co) => etaFor(r.entry, co, r.seq))));
+    for (let i = 0; i < tasks.length; i++) {
+      const results = await tasks[i];
+      const merged = results.flat().sort((a, b) => {
+        const ta = a.eta ? new Date(a.eta).getTime() : Infinity;
+        const tb = b.eta ? new Date(b.eta).getTime() : Infinity;
+        return ta - tb;
+      });
+      const r = rows[i];
+      state.etaRows.set(r.rowEl.dataset.rowkey, { etas: merged, entry: r.entry, co: (r.cos || [r.co])[0], seq: r.seq });
+      const chips = r.rowEl.querySelector(".eta-chips");
+      if (chips) chips.innerHTML = chipsHTML(merged);
     }
+    if (!silent) statusNow(T.updated[state.lang]);
+  } finally {
+    state.refreshing = false;
+  }
+}
+function startAutoRefresh() {
+  setInterval(() => {
+    if (document.hidden || !navigator.onLine) return;
+    refreshVisibleEtas(false);
   }, 30000);
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) return;
+    if (state.view === "detail") refreshVisibleEtas(true);
+  });
 }
 function statusNow(msg) {
   const bar = $("#statusbar");
@@ -829,8 +880,11 @@ function statusNow(msg) {
   clearTimeout(bar._t);
   bar._t = setTimeout(() => bar.classList.remove("show"), 2200);
 }
-function hideSplash() {
-  $("#splash").classList.add("hidden");
+function updateNetBanner() {
+  const b = $("#offbanner");
+  if (!b) return;
+  if (navigator.onLine) b.classList.add("hidden");
+  else { b.textContent = T.offBanner[state.lang]; b.classList.remove("hidden"); }
 }
 function goHome() {
   state.view = "home";
@@ -917,6 +971,13 @@ function init() {
       { timeout: 8000 }
     );
   });
+  window.addEventListener("offline", () => { updateNetBanner(); statusNow(T.offline[state.lang]); });
+  window.addEventListener("online", () => {
+    updateNetBanner();
+    statusNow(T.onlineBack[state.lang]);
+    if (state.view === "detail") refreshVisibleEtas(true);
+  });
+  updateNetBanner();
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("/bus-eta-lite/sw.js").catch(() => {});
   }

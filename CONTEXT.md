@@ -20,17 +20,18 @@ URL path. Shared infra lives at the repo root:
 Each app is an authored PWA with its own `index.html`, `styles.css`,
 `sw.js`, service worker, and manifest, cached offline.
 
-| App dir            | SW cache         | In-page badge (v1.0 build) |
-|--------------------|------------------|----------------------------|
-| apps/traffic-news  | traffic-news-v6   | v1.0 build 202609160643    |
-| apps/mark-six      | mark-six-v8       | v1.0 build 202609210150    |
-| apps/music-trend   | music-trend-v31   | v1.3 build 202609280140    |
+| App dir              | SW cache          | In-page badge (build)      |
+|-----------------------|-------------------|----------------------------|
+| apps/traffic-news     | traffic-news-v6   | v1.0 build 202609160643    |
+| apps/mark-six         | mark-six-v8       | v1.0 build 202609210150    |
+| apps/music-trend      | music-trend-v31   | v1.3 build 202609280140    |
+| apps/hk-bus-eta/build | buseta-lite-v21   | v1.3 build 202609280232    |
 
-> `apps/hk-bus-eta/` is **not** an authored app in this repo. It holds
-> `LICENSE`, `README.md`, `build-upstream/` and `build/` — vendored
-> upstream build outputs of an external project. There is no authored
-> `index.html`/`sw.js`/`styles.css` at its app root, so it is **not**
-> versioned/badged here. Do not hand-edit the vendored build.
+> `apps/hk-bus-eta/` holds both: `build-upstream/` and `LICENSE` are
+> the vendored upstream PWA (never hand-edit them), while `build/` is
+> this repo's authored lite UI served at `/bus-eta-lite/` -- it has
+> its own `index.html`/`sw.js`/`styles.css`, is SW-cached, and is
+> versioned/badged in the table above like every other authored app.
 
 ## Version badge convention (per app)
 
@@ -42,7 +43,7 @@ Every authored app shows its own version + build number inside the
 ```
 
 Rules:
-1. Version is `v1.0`.
+1. Version tracks the app's shipped feature batch (`v1.0`, `v1.3`, ...).
 2. Build number is the **app-specific pinned UTC timestamp** of the
    commit that ships that app's badge (format `yyyyMMddHHmm`, UTC).
 3. Each app has its **own** build number. Apps are committed at
@@ -54,7 +55,8 @@ Rules:
 
 ## Service worker cache bump rule (must be same commit as badge)
 
-`sw.js` in each app begins with `var CACHE_NAME = '...-vN';`. Because
+`sw.js` in each app begins with `var CACHE_NAME = '...-vN';`
+(bus-eta-lite uses `const VERSION = 'buseta-lite-vN';` instead). Because
 the SW precaches `index.html` and `styles.css`, any change to those two
 files **must ship in the same commit as a `CACHE_NAME` version bump**
 (or the new badge never reaches clients). In the table above, the

@@ -11,10 +11,11 @@
 <link rel="stylesheet" href="/bus-eta-lite/styles.css">
 </head>
 <body>
+<div class="topbar">
 <header class="appbar">
   <div class="brand">
     <div class="brand-logo">巴</div>
-    <h1>巴士預報</h1>
+    <h1>巴士預報<span class="app-ver">v1.3 build 202609280232</span></h1>
   </div>
   <div class="header-actions">
     <button id="themeBtn" type="button" class="hbtn" title="日夜模式">夜</button>
@@ -29,6 +30,8 @@
   <button type="button" class="tab" data-tab="routebook">收藏路線</button>
   <button type="button" class="tab" data-tab="stopbook">收藏車站</button>
 </nav>
+<div id="offbanner" class="offbanner hidden"></div>
+</div>
 
 <main>
   <section id="viewHome" class="view">
@@ -37,7 +40,7 @@
         <span class="search-icon">▣</span>
         <input id="routeInput" class="search-input" placeholder="輸入路線號碼，如 1A、286X、A12" autocomplete="off" spellcheck="false">
       </div>
-      <div id="routeResults" class="results"></div>
+      <div id="routeResults" class="results"><div class="sk-card"><span class="sk-badge"></span><span class="sk-lines"><span class="sk-line"></span><span class="sk-line sk-short"></span></span></div><div class="sk-card"><span class="sk-badge"></span><span class="sk-lines"><span class="sk-line"></span><span class="sk-line sk-short"></span></span></div><div class="sk-card"><span class="sk-badge"></span><span class="sk-lines"><span class="sk-line"></span><span class="sk-line sk-short"></span></span></div><div class="sk-card"><span class="sk-badge"></span><span class="sk-lines"><span class="sk-line"></span><span class="sk-line sk-short"></span></span></div><div class="sk-card"><span class="sk-badge"></span><span class="sk-lines"><span class="sk-line"></span><span class="sk-line sk-short"></span></span></div></div>
     </div>
     <div id="panelStop" class="panel hidden">
       <div class="search-row">
@@ -64,7 +67,6 @@
 </main>
 
 <div id="statusbar"></div>
-<div id="splash"><div class="splash-box"><div class="splash-spin"></div><div id="splashMsg">載入路線資料…</div></div></div>
 
 <script type="module" src="/bus-eta-lite/app.js"></script>
 </body>
