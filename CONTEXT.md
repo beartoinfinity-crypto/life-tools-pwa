@@ -86,6 +86,9 @@ git rev-parse --short '@{u}'
 git status --porcelain
 git show HEAD:apps/<name>/index.html | Select-String 'app-ver'
 git show HEAD:apps/<name>/sw.js   # first line = CACHE_NAME
+# hub (dashboard) lives at public/, not apps/<name>/:
+git show HEAD:public/index.html | Select-String 'app-ver'
+git show HEAD:public/sw.js        # first line = life-tool-hub-vN
 # bus-eta-lite differs: apps/hk-bus-eta/build/, VERSION is on line 2
 ```
 

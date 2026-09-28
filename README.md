@@ -39,8 +39,8 @@ npm install
 npm start
 ```
 
-Open `http://localhost:3000` — visit `/` for the dashboard, `/mark-six/`, `/bus-eta-lite/` and `/traffic-news/`
-for the apps.
+Open `http://localhost:3000` — visit `/` for the dashboard, `/mark-six/`, `/bus-eta-lite/`, `/traffic-news/` and
+`/music-trend/` for the apps (`/bus-eta/` is the upstream PWA).
 
 > Prerequisite: a Supabase project and a `.env` file — see [Supabase Setup](#supabase-setup-storage).
 
@@ -525,7 +525,7 @@ The repo is Vercel-ready — no further setup beyond the project.
 2. Framework Preset: **Other** (no build framework). The `vercel.json` sets the build command, output directory and routing.
 3. Add the environment variables `SUPABASE_URL` and `SUPABASE_KEY` (same as the Render host).
 4. Deploy. Nothing to configure for routing:
-   - `vercel-out/` (produced by `npm run build:vercel`, runs `build-vercel.mjs`) holds the dashboard + all three static apps at their hub paths.
+   - `vercel-out/` (produced by `npm run build:vercel`, runs `build-vercel.mjs`) holds the dashboard + all five sub-apps at their hub paths.
    - The whole Express API runs inside a single serverless function (`api/index.js`) via the catch-all rewrite in `vercel.json`. Static files are served by Vercel's CDN; anything unmatched (APIs, SPA fallbacks, `bus-eta` redirects) is handled by Express, exactly like `server.js` does locally.
    - On a fresh Supabase DB the first Mark Six data request backfills the ~4,300 historical draws once, lazily.
 

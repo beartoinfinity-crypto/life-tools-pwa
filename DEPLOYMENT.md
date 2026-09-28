@@ -1,6 +1,9 @@
 # Deployment Guide
 
-Walkthrough for deploying the **Life Tool** hub (dashboard + Mark Six PWA) to production: hosting on **Render**, storage on **Supabase**.
+Walkthrough for deploying the **Life Tool** hub (dashboard + all sub-apps) to production: hosting on **Render**, storage on **Supabase**.
+
+> **Vercel is the preferred host** — the repo is already Vercel-ready (see README → Deployment).
+> This guide is the legacy **Render** walkthrough.
 
 ---
 
@@ -18,32 +21,9 @@ All draw history is stored in Supabase (PostgreSQL).
 
 1. Create a project at [supabase.com](https://supabase.com).
 
-2. In the dashboard, open **SQL Editor** and run `apps/mark-six/supabase-schema.sql`:
-
-   ```sql
-   create table if not exists public.draws (
-     id bigint generated always as identity primary key,
-     draw text not null unique,
-     date text not null,
-     numbers text not null,
-     special integer,
-     source text,
-     created_at timestamptz not null default now()
-   );
-   create index if not exists idx_draws_date on public.draws (date);
-   create index if not exists idx_draws_draw on public.draws (draw);
-
-   create table if not exists public.meta (
-     key text primary key,
-     value text,
-     updated_at timestamptz not null default now()
-   );
-
-   alter table public.draws enable row level security;
-   alter table public.meta enable row level security;
-   create policy "allow all draws" on public.draws for all using (true) with check (true);
-   create policy "allow all meta" on public.meta for all using (true) with check (true);
-   ```
+2. In the dashboard, open **SQL Editor** and run `apps/mark-six/supabase-schema.sql`
+   (the single source of truth — creates `draws`, `meta`, `traffic_news`, `music_trend`
+   and `music_user_playlists`, with RLS enabled and allow-all policies on each).
 
 3. Note your credentials from **Settings → API**:
    - `SUPABASE_URL` e.g. `https://<project-ref>.supabase.co`
@@ -70,10 +50,12 @@ Verify locally:
 ```bash
 npm install
 npm start
-# open http://localhost:3000  (dashboard)
+# open http://localhost:3000  (dashboard - searchable launcher)
 # open http://localhost:3000/mark-six/  (Mark Six)
 # open http://localhost:3000/bus-eta/  (HK Bus ETA, upstream)
 # open http://localhost:3000/bus-eta-lite/  (Bus ETA, lite)
+# open http://localhost:3000/traffic-news/  (Traffic News)
+# open http://localhost:3000/music-trend/  (Music Trend)
 ```
 
 ---
@@ -131,10 +113,12 @@ HTTPS is automatic, at a URL like `https://mark-six-pwa.onrender.com`.
 
 ### What you get
 
-- `https://mark-six-pwa.onrender.com/` → **dashboard** (launcher cards)
+- `https://mark-six-pwa.onrender.com/` → **dashboard** (searchable launcher cards, installable PWA)
 - `https://mark-six-pwa.onrender.com/mark-six/` → **Mark Six PWA**
 - `https://mark-six-pwa.onrender.com/bus-eta/` → **HK Bus ETA** (unmodified upstream build served from `apps/hk-bus-eta/build-upstream/`)
 - `https://mark-six-pwa.onrender.com/bus-eta-lite/` → **Bus ETA (lite)** (authored static app under `apps/hk-bus-eta/build/` — no build step on the server; route data is fetched client-side)
+- `https://mark-six-pwa.onrender.com/traffic-news/` → **Traffic News PWA** (served by Express; refreshes a Supabase cache every minute)
+- `https://mark-six-pwa.onrender.com/music-trend/` → **Music Trend PWA** (served by Express; refreshes Supabase hourly)
 
 ---
 
@@ -160,7 +144,8 @@ Fix: set `NODE_VERSION=22` and redeploy.
 - If rows truly lack `special`, hit `/mark-six/api/marksix/refresh` (the parser extracts the special ball).
 
 ### Tables missing (`Could not find the table 'public.draws'`)
-Run `apps/mark-six/supabase-schema.sql` in the Supabase SQL Editor.
+Run `apps/mark-six/supabase-schema.sql` in the Supabase SQL Editor — it creates all five
+tables (`draws`, `meta`, `traffic_news`, `music_trend`, `music_user_playlists`).
 
 ### `/mark-six` redirect loops
 Ensure the hub server has the exact-match redirect (`req.originalUrl.split('?')[0] === '/mark-six'`), not a plain `get('/mark-six')` — Express non-strict routing would otherwise match the trailing-slash path too and loop.
