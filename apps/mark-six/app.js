@@ -22,6 +22,18 @@
   var olderSpinner = document.getElementById('olderSpinner');
   var olderStatus = document.getElementById('olderStatus');
 
+  var ndDateEl = document.getElementById('ndDate');
+  var ndCutoffEl = document.getElementById('ndCutoff');
+  var statsPanel = document.getElementById('statsPanel');
+  var hotNumsEl = document.getElementById('hotNums');
+  var coldNumsEl = document.getElementById('coldNums');
+  var oeBarEl = document.getElementById('oeBar');
+  var oeLegendEl = document.getElementById('oeLegend');
+  var ticketInput = document.getElementById('ticketInput');
+  var saveTicketBtn = document.getElementById('saveTicketBtn');
+  var ticketErrorEl = document.getElementById('ticketError');
+  var ticketListEl = document.getElementById('ticketList');
+
   function showLoading() {
     loadingEl.style.display = 'flex';
     errorEl.style.display = 'none';
@@ -43,47 +55,66 @@
     resultsEl.style.display = 'block';
   }
 
+  // Official Mark Six ball colours (numbers 1-49).
   var BALL_COLORS = {
     red: [1,2,7,8,12,13,18,19,23,24,29,30,34,35,40,45,46],
-    blue: [3,4,9,10,14,15,20,25,26,31,36,37,41,42,47,48],
-    green: [5,6,11,16,17,21,22,27,28,32,33,38,39,43,44,49]
+    blue: [3,4,9,10,14,15,20,25,26,31,32,36,37,41,42,47,48],
+    green: [5,6,11,16,17,21,22,27,28,33,38,39,43,44,49]
   };
   var BALL_COLOR_CLASS = {};
+  var BALL_COLOR_NAME = { red: 'Red', blue: 'Blue', green: 'Green' };
   Object.keys(BALL_COLORS).forEach(function (c) {
     BALL_COLORS[c].forEach(function (n) { BALL_COLOR_CLASS[n] = c; });
   });
 
+  function ballColor(n) { return BALL_COLOR_CLASS[n] || 'red'; }
+
+  function ballHtml(n, opts) {
+    opts = opts || {};
+    var color = ballColor(n);
+    var cls = 'ball ball-' + color + (opts.sm ? ' sm' : '') + (opts.special ? ' special' : '');
+    var label = (opts.special ? 'Special number ' + n + ' ' : n + ' ') + BALL_COLOR_NAME[color];
+    return '<span class="' + cls + '" aria-label="' + label + '">' + n + '</span>';
+  }
+
   function renderBalls(numbers, special) {
-    var html = '<div class="numbers-row">';
-    numbers.forEach(function (n) {
-      var num = String(n).padStart(2, '0');
-      var color = BALL_COLOR_CLASS[n] || '';
-      html += '<div class="number-ball ' + color + '">' + num + '</div>';
-    });
+    var html = '<div class="winning-numbers" role="group" aria-label="Winning numbers">';
+    numbers.forEach(function (n) { html += ballHtml(n); });
     if (special !== null && special !== undefined) {
-      var snum = String(special).padStart(2, '0');
-      var sColor = BALL_COLOR_CLASS[special] || '';
-      html += '<div class="special-wrap"><span class="special-plus">+</span><div class="number-ball special ' + sColor + '">' + snum + '</div></div>';
+      html += '<span class="divider" aria-hidden="true">+</span>' + ballHtml(special, { special: true });
     }
     html += '</div>';
     return html;
   }
 
+  var MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sept', 'Oct', 'Nov', 'Dec'];
+
+  /** "2026-09-08+08:00" -> { iso: "2026-09-08", text: "8 Sept 2026" } */
+  function fmtDrawDate(drawDate) {
+    var iso = String(drawDate || '').split('+')[0];
+    var parts = iso.split('-');
+    if (parts.length !== 3) return { iso: iso, text: iso };
+    var day = parseInt(parts[2], 10);
+    var month = MONTHS[parseInt(parts[1], 10) - 1] || '';
+    return { iso: iso, text: (isNaN(day) ? parts[2] : day) + ' ' + month + ' ' + parts[0] };
+  }
+
   function drawCardHTML(d) {
-    var dateStr = d.drawDate || '';
     var drawNum = d.id || '';
     var numbers = (d.drawResult && d.drawResult.drawnNo) || [];
     var special = d.drawResult ? d.drawResult.xDrawnNo : null;
+    var date = fmtDrawDate(d.drawDate);
+    var headingId = 'draw-heading-' + String(drawNum).replace(/[^A-Za-z0-9]/g, '-');
 
-    return '<div class="draw-card">' +
+    return '<section class="draw-card" aria-labelledby="' + headingId + '">' +
       '<div class="draw-header">' +
-        '<span class="draw-number">Draw #' + drawNum + '</span>' +
-        '<span class="draw-date">' + dateStr + '</span>' +
+        '<h2 class="draw-number" id="' + headingId + '">Draw Results - ' + drawNum + '</h2>' +
+        '<time class="draw-date" datetime="' + date.iso + '">' + date.text + '</time>' +
       '</div>' +
       '<div class="draw-body">' +
         renderBalls(numbers, special) +
       '</div>' +
-    '</div>';
+    '</section>';
   }
 
   function renderInitial(draws, total, src) {
@@ -97,6 +128,7 @@
 
     showResults();
     updateOlderUI(src);
+    renderTickets();
   }
 
   function appendOlder(draws, total) {
@@ -191,6 +223,247 @@
     }
   }
 
+  // ---- next draw countdown (mirrors draw-day.js: Tue/Thu/Sat, 21:15 HKT) ----
+  var DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  var CUTOFF_UTC_HOURS = 13; // 21:15 HKT == 13:15 UTC (HKT has no DST)
+
+  function isDrawDayUTC(day) { return day === 2 || day === 4 || day === 6; }
+
+  /** Next sales cutoff at/after nowMs: draw day (Tue/Thu/Sat) at 21:15 HKT. */
+  function nextDrawCutoff(nowMs) {
+    var hkt = new Date(nowMs + 8 * 3600 * 1000); // HKT calendar date via UTC getters
+    for (var i = 0; i < 8; i++) {
+      var guess = new Date(Date.UTC(hkt.getUTCFullYear(), hkt.getUTCMonth(), hkt.getUTCDate() + i));
+      if (!isDrawDayUTC(guess.getUTCDay())) continue;
+      var cutoff = Date.UTC(guess.getUTCFullYear(), guess.getUTCMonth(), guess.getUTCDate(), CUTOFF_UTC_HOURS, 15, 0);
+      if (cutoff > nowMs) {
+        return {
+          cutoffMs: cutoff,
+          dateIso: guess.toISOString().slice(0, 10),
+          dayName: DAY_NAMES[guess.getUTCDay()]
+        };
+      }
+    }
+    return null;
+  }
+
+  function pad2(n) { return (n < 10 ? '0' : '') + n; }
+
+  function tickCountdown(nowMs) {
+    var next = nextDrawCutoff(nowMs);
+    if (!next) return;
+    var totalSec = Math.floor((next.cutoffMs - nowMs) / 1000);
+    var hrs = Math.floor(totalSec / 3600);
+    var mins = Math.floor((totalSec % 3600) / 60);
+    var secs = totalSec % 60;
+
+    if (ndDateEl) ndDateEl.textContent = next.dateIso + ' (' + next.dayName + ')';
+    if (ndCutoffEl) {
+      ndCutoffEl.setAttribute('datetime', new Date(next.cutoffMs).toISOString());
+      ndCutoffEl.textContent = pad2(hrs) + ' hrs : ' + pad2(mins) + ' mins : ' + pad2(secs) + ' secs';
+    }
+  }
+
+  // ---- number frequency & hot/cold analytics ----
+  var statsDraws = [];   // up to 100 newest draws (newest first)
+  var statsWindow = 50;
+  var STATS_WINDOWS = [20, 50, 100];
+
+  function drawNumbers(d) {
+    return (d && d.drawResult && d.drawResult.drawnNo) || [];
+  }
+
+  /**
+   * Hot = most frequent in the window. Cold = absent from the window, ranked by
+   * how many draws ago they last appeared in the fetched history (numbers never
+   * seen in the fetch rank coldest). Odd/even = split over all drawn numbers in
+   * the window.
+   */
+  function computeStats(draws, windowSize) {
+    var win = draws.slice(0, windowSize);
+    var counts = {}, i, j;
+    for (i = 1; i <= 49; i++) counts[i] = 0;
+    var odd = 0, even = 0;
+    for (i = 0; i < win.length; i++) {
+      var ns = drawNumbers(win[i]);
+      for (j = 0; j < ns.length; j++) {
+        counts[ns[j]]++;
+        if (ns[j] % 2 === 1) odd++; else even++;
+      }
+    }
+
+    var hot = [];
+    for (i = 1; i <= 49; i++) if (counts[i] > 0) hot.push({ n: i, count: counts[i] });
+    hot.sort(function (a, b) { return b.count - a.count || a.n - b.n; });
+    hot = hot.slice(0, 6);
+
+    function lastSeen(n) {
+      for (var k = 0; k < draws.length; k++) {
+        if (drawNumbers(draws[k]).indexOf(n) !== -1) return k;
+      }
+      return Infinity;
+    }
+    var cold = [];
+    for (i = 1; i <= 49; i++) {
+      if (counts[i] === 0) cold.push({ n: i, since: lastSeen(i) });
+    }
+    cold.sort(function (a, b) { return b.since - a.since || a.n - b.n; });
+    cold = cold.slice(0, 6);
+
+    return { hot: hot, cold: cold, odd: odd, even: even, windowSize: Math.min(windowSize, draws.length) };
+  }
+
+  function renderStats() {
+    if (!statsDraws.length || !statsPanel) return;
+    var s = computeStats(statsDraws, statsWindow);
+
+    hotNumsEl.innerHTML = s.hot.map(function (h) {
+      return '<span class="stat-entry">' + ballHtml(h.n, { sm: true }) +
+        '<span class="stat-count">' + h.count + '\u00d7</span></span>';
+    }).join('');
+
+    coldNumsEl.innerHTML = s.cold.map(function (c) {
+      var label = c.since === Infinity ? '>' + statsDraws.length : c.since;
+      return '<span class="stat-entry">' + ballHtml(c.n, { sm: true }) +
+        '<span class="stat-count">' + label + '</span></span>';
+    }).join('');
+
+    var total = s.odd + s.even;
+    var oddPct = total ? Math.round((s.odd / total) * 100) : 0;
+    var evenPct = total ? 100 - oddPct : 0;
+    oeBarEl.innerHTML = '<span class="oe-odd" style="width:' + oddPct + '%"></span>' +
+      '<span class="oe-even" style="width:' + evenPct + '%"></span>';
+    oeBarEl.setAttribute('aria-label', s.odd + ' odd, ' + s.even + ' even across the last ' + s.windowSize + ' draws');
+    oeLegendEl.textContent = s.odd + ' Odd (' + oddPct + '%) / ' + s.even + ' Even (' + evenPct + '%)';
+
+    statsPanel.style.display = 'block';
+  }
+
+  async function fetchStats() {
+    try {
+      var resp = await fetch(API_BASE + '/marksix/history', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ limit: 100 }),
+        cache: 'no-store'
+      });
+      if (!resp.ok) throw new Error('Server returned ' + resp.status);
+      var json = await resp.json();
+      var draws = json.data && json.data.lotteryDraws;
+      if (!draws || !draws.length) throw new Error('No data');
+      statsDraws = draws;
+      renderStats();
+    } catch (e) {
+      // stats are best-effort; keep the panel hidden when history is unavailable
+      if (statsPanel) statsPanel.style.display = 'none';
+    }
+  }
+
+  // ---- ticket checker (localStorage saved_tickets) ----
+  var TICKETS_KEY = 'saved_tickets';
+
+  function loadTickets() {
+    try {
+      var a = JSON.parse(localStorage.getItem(TICKETS_KEY) || '[]');
+      return Array.isArray(a) ? a : [];
+    } catch (e) { return []; }
+  }
+
+  function persistTickets(list) {
+    try { localStorage.setItem(TICKETS_KEY, JSON.stringify(list)); } catch (e) {}
+  }
+
+  /** Parse "3 7 11 15 33 46" (space/comma separated) into 6 unique ints 1-49. */
+  function parseTicketNumbers(input) {
+    var parts = String(input || '').split(/[\s,;]+/).filter(function (s) { return s.length; });
+    if (parts.length !== 6) return { ok: false, error: 'Enter exactly 6 numbers (1-49).' };
+    var nums = [], i;
+    for (i = 0; i < parts.length; i++) {
+      if (!/^\d{1,2}$/.test(parts[i])) return { ok: false, error: 'Numbers must be whole numbers from 1 to 49.' };
+      var v = parseInt(parts[i], 10);
+      if (v < 1 || v > 49) return { ok: false, error: 'Numbers must be from 1 to 49.' };
+      if (nums.indexOf(v) !== -1) return { ok: false, error: 'Duplicates are not allowed.' };
+      nums.push(v);
+    }
+    nums.sort(function (a, b) { return a - b; });
+    return { ok: true, numbers: nums };
+  }
+
+  /** Prize division (1-7) per the HKJC matrix, or 0 for no prize. */
+  function checkTicket(numbers, drawn, special) {
+    var hit = 0, i;
+    for (i = 0; i < numbers.length; i++) if (drawn.indexOf(numbers[i]) !== -1) hit++;
+    var specialHit = special !== null && special !== undefined && numbers.indexOf(special) !== -1;
+    if (hit === 6) return 1;
+    if (hit === 5) return specialHit ? 2 : 3;
+    if (hit === 4) return specialHit ? 4 : 5;
+    if (hit === 3) return specialHit ? 6 : 7;
+    return 0;
+  }
+
+  function divisionLabel(div) {
+    if (div <= 0) return 'No prize';
+    return ['1st', '2nd', '3rd', '4th', '5th', '6th', '7th'][div - 1] + ' Division';
+  }
+
+  function nextTicketId(list) {
+    var d = new Date();
+    var stamp = d.getUTCFullYear() + pad2(d.getUTCMonth() + 1) + pad2(d.getUTCDate());
+    var prefix = 't_' + stamp + '_';
+    var seq = 0;
+    list.forEach(function (t) {
+      if (String(t.id).indexOf(prefix) === 0) seq++;
+    });
+    return prefix + pad2(seq + 1);
+  }
+
+  function renderTickets() {
+    if (!ticketListEl) return;
+    var list = loadTickets();
+    if (!list.length) {
+      ticketListEl.innerHTML = '<p class="ticket-empty">No saved tickets yet.</p>';
+      return;
+    }
+    var latest = allDraws[0];
+    var drawn = drawNumbers(latest);
+    var special = latest && latest.drawResult ? latest.drawResult.xDrawnNo : null;
+
+    ticketListEl.innerHTML = list.map(function (t) {
+      var div = latest ? checkTicket(t.numbers, drawn, special) : null;
+      var badge = div === null
+        ? '<span class="ticket-badge pending">Pending</span>'
+        : '<span class="ticket-badge div-' + div + (div === 0 ? ' none' : '') + '">' + divisionLabel(div) + '</span>';
+      var balls = t.numbers.map(function (n) { return ballHtml(n, { sm: true }); }).join('');
+      return '<div class="ticket-row" data-id="' + t.id + '">' +
+        '<div class="ticket-balls" role="group" aria-label="Ticket numbers">' + balls + '</div>' +
+        badge +
+        '<button type="button" class="ticket-del" data-id="' + t.id + '" aria-label="Delete ticket ' + t.id + '">&times;</button>' +
+      '</div>';
+    }).join('');
+  }
+
+  function showTicketError(msg) {
+    if (!ticketErrorEl) return;
+    ticketErrorEl.textContent = msg;
+    ticketErrorEl.hidden = !msg;
+  }
+
+  function saveTicket() {
+    var parsed = parseTicketNumbers(ticketInput.value);
+    if (!parsed.ok) { showTicketError(parsed.error); return; }
+    showTicketError('');
+    var list = loadTickets();
+    list.unshift({
+      id: nextTicketId(list),
+      numbers: parsed.numbers,
+      type: 'single',
+      created_at: new Date().toISOString()
+    });
+    persistTickets(list);
+    ticketInput.value = '';
+    renderTickets();
+  }
+
   var lastRefreshDate = null;
 
   function isPastMidnight() {
@@ -214,7 +487,40 @@
   retryBtn.addEventListener('click', function () { loadInitial(true); });
   loadOlderBtn.addEventListener('click', loadOlder);
 
-  loadInitial(true);
+  saveTicketBtn.addEventListener('click', saveTicket);
+  ticketInput.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') { e.preventDefault(); saveTicket(); }
+  });
+  ticketInput.addEventListener('input', function () { showTicketError(''); });
+  ticketListEl.addEventListener('click', function (e) {
+    var b = e.target.closest ? e.target.closest('.ticket-del') : null;
+    if (!b) return;
+    var id = b.getAttribute('data-id');
+    persistTickets(loadTickets().filter(function (t) { return t.id !== id; }));
+    renderTickets();
+  });
+
+  var statsChipsEl = document.getElementById('statsChips');
+  if (statsChipsEl) {
+    statsChipsEl.addEventListener('click', function (e) {
+      var b = e.target.closest ? e.target.closest('.stats-chip') : null;
+      if (!b) return;
+      statsWindow = parseInt(b.getAttribute('data-w'), 10) || 50;
+      Array.prototype.forEach.call(statsChipsEl.querySelectorAll('.stats-chip'), function (c) {
+        var on = c === b;
+        c.classList.toggle('active', on);
+        c.setAttribute('aria-pressed', on ? 'true' : 'false');
+      });
+      renderStats();
+    });
+  }
+
+  // Boot: cache-first read (documented behaviour — no scraping on page load);
+  // the refresh button and the draw-day midnight schedule still force one.
+  tickCountdown(Date.now());
+  setInterval(function () { tickCountdown(Date.now()); }, 1000);
+  loadInitial(false);
+  fetchStats();
   scheduleMidnightRefresh();
 
   if ('serviceWorker' in navigator) {
@@ -248,4 +554,16 @@
       installBanner.style.display = 'none';
     });
   });
+
+  // Pure-logic test hooks (no DOM dependency).
+  window.MarksixCore = {
+    ballColor: ballColor,
+    parseTicketNumbers: parseTicketNumbers,
+    checkTicket: checkTicket,
+    divisionLabel: divisionLabel,
+    nextDrawCutoff: nextDrawCutoff,
+    computeStats: computeStats,
+    fmtDrawDate: fmtDrawDate,
+    tickCountdown: tickCountdown
+  };
 })();

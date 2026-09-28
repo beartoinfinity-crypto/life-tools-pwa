@@ -198,6 +198,7 @@ header {
   font-size: 18px;
   font-weight: 800;
   color: var(--primary);
+  margin: 0;
 }
 
 .draw-date {
@@ -210,78 +211,48 @@ header {
   padding: 24px 20px 20px;
 }
 
-/* Number balls */
-.numbers-row {
+/* Number balls - official Mark Six colours (spec tokens) */
+.winning-numbers {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: wrap;
   justify-content: center;
   align-items: center;
 }
 
-
-.number-ball {
-  width: 56px;
-  height: 56px;
+.ball {
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 20px;
-  font-weight: 800;
-  color: #fff;
-  position: relative;
-  user-select: none;
-  flex-shrink: 0;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.2);
-}
-
-.number-ball::after {
-  content: '';
-  position: absolute;
-  top: 6px;
-  left: 10px;
-  width: 14px;
-  height: 9px;
-  background: rgba(255,255,255,0.3);
-  border-radius: 50%;
-  transform: rotate(-20deg);
-  pointer-events: none;
-}
-
-.number-ball.red {
-  background: radial-gradient(circle at 38% 32%, #ef5350, #c62828);
-  box-shadow: 0 3px 10px rgba(198, 40, 40, 0.35), inset 0 1px 2px rgba(255,255,255,0.25);
-}
-
-.number-ball.blue {
-  background: radial-gradient(circle at 38% 32%, #42a5f5, #0d47a1);
-  box-shadow: 0 3px 10px rgba(13, 71, 161, 0.35), inset 0 1px 2px rgba(255,255,255,0.25);
-}
-
-.number-ball.green {
-  background: radial-gradient(circle at 38% 32%, #66bb6a, #1b5e20);
-  box-shadow: 0 3px 10px rgba(27, 94, 32, 0.35), inset 0 1px 2px rgba(255,255,255,0.25);
-}
-
-/* Special number */
-.special-wrap {
   display: inline-flex;
   align-items: center;
-  gap: 0;
+  justify-content: center;
+  font-weight: bold;
+  color: #fff;
+  box-shadow: inset -2px -2px 4px rgba(0,0,0,0.3);
+  user-select: none;
+  flex-shrink: 0;
 }
 
-.special-plus {
-  font-size: 22px;
+.ball-red   { background: radial-gradient(circle at 30% 30%, #ff6b6b, #c0392b); }
+.ball-blue  { background: radial-gradient(circle at 30% 30%, #54a0ff, #2980b9); }
+.ball-green { background: radial-gradient(circle at 30% 30%, #1dd1a1, #10ac84); }
+
+.ball.sm {
+  width: 30px;
+  height: 30px;
+  font-size: 13px;
+}
+
+.ball.special {
+  box-shadow: inset -2px -2px 4px rgba(0,0,0,0.3), 0 0 0 2.5px var(--primary);
+}
+
+.divider {
+  font-size: 20px;
   font-weight: 800;
   color: var(--primary);
-  margin-right: 2px;
   line-height: 1;
-}
-
-.number-ball.special {
-  border: 3px solid #fff;
-  box-shadow: 0 0 0 2.5px var(--primary), 0 3px 10px rgba(183, 28, 28, 0.3);
 }
 
 /* Footer */
@@ -419,4 +390,286 @@ footer {
   letter-spacing: 0.3px;
   color: rgba(255, 255, 255, 0.78);
   white-space: nowrap;
+}
+
+/* ---- v1.1: next draw countdown, stats, ticket checker ---- */
+
+.next-draw {
+  width: calc(100% - 32px);
+  max-width: 600px;
+  margin: 16px auto 0;
+  padding: 16px 20px;
+  background: linear-gradient(135deg, #b71c1c, #d32f2f);
+  color: #fff;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+  text-align: center;
+}
+
+.nd-heading {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  margin: 0 0 10px;
+}
+
+.nd-heading .nd-date {
+  font-size: 21px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+}
+
+.nd-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  align-items: center;
+}
+
+.nd-label {
+  font-size: 14px;
+  font-weight: 600;
+  opacity: 0.9;
+}
+
+.nd-countdown {
+  font-size: 19px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  background: rgba(0,0,0,0.22);
+  padding: 4px 12px;
+  border-radius: 8px;
+  letter-spacing: 0.5px;
+}
+
+.panel {
+  width: calc(100% - 32px);
+  max-width: 600px;
+  margin: 16px auto 0;
+  padding: 18px 20px;
+  background: var(--card-bg);
+  border: 1px solid rgba(0,0,0,0.04);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+}
+
+.panel h2 {
+  font-size: 18px;
+  font-weight: 800;
+  margin: 0 0 12px;
+  color: var(--text);
+}
+
+.panel h3 {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  margin: 0 0 8px;
+}
+
+.stats-chips {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.stats-chip {
+  min-height: 40px;
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 700;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--card-bg);
+  color: var(--text-secondary);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.stats-chip.active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+
+.stats-block {
+  margin-bottom: 16px;
+}
+
+.stats-balls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.stat-entry {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+
+.stat-count {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.oe-bar {
+  display: flex;
+  height: 14px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--border);
+}
+
+.oe-bar .oe-odd {
+  display: block;
+  height: 100%;
+  background: #c62828;
+}
+
+.oe-bar .oe-even {
+  display: block;
+  height: 100%;
+  background: #1565c0;
+}
+
+.oe-legend {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-top: 8px;
+}
+
+.stats-note {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+}
+
+.ticket-form {
+  display: flex;
+  gap: 8px;
+}
+
+.ticket-input {
+  flex: 1;
+  min-width: 0;
+  padding: 12px 14px;
+  font-size: 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card-bg);
+  color: var(--text);
+}
+
+.ticket-input:focus {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+  border-color: transparent;
+}
+
+.save-ticket-btn {
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  padding: 12px 18px;
+  font-size: 15px;
+  font-weight: 700;
+  border-radius: 10px;
+  cursor: pointer;
+  white-space: nowrap;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.save-ticket-btn:active {
+  transform: scale(0.97);
+}
+
+.ticket-error {
+  color: #c62828;
+  font-size: 14px;
+  font-weight: 600;
+  margin-top: 8px;
+}
+
+.ticket-list {
+  margin-top: 12px;
+}
+
+.ticket-empty {
+  color: var(--text-secondary);
+  font-size: 15px;
+  padding: 6px 0;
+}
+
+.ticket-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+}
+
+.ticket-row + .ticket-row {
+  border-top: 1px solid var(--border);
+}
+
+.ticket-balls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex: 1;
+}
+
+.ticket-badge {
+  font-size: 13px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #e8f5e9;
+  color: #1b5e20;
+  white-space: nowrap;
+}
+
+.ticket-badge.none {
+  background: #eeeeee;
+  color: #777777;
+}
+
+.ticket-badge.pending {
+  background: #fff3e0;
+  color: #e65100;
+}
+
+.ticket-del {
+  width: 44px;
+  height: 44px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 22px;
+  line-height: 1;
+  border-radius: 50%;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.ticket-del:active {
+  background: var(--primary-bg);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }

@@ -23,7 +23,7 @@ Each app is an authored PWA with its own `index.html`, `styles.css`,
 | App dir              | SW cache          | In-page badge (build)      |
 |-----------------------|-------------------|----------------------------|
 | apps/traffic-news     | traffic-news-v9   | v1.2 build 202609280614    |
-| apps/mark-six         | mark-six-v8       | v1.0 build 202609210150    |
+| apps/mark-six         | mark-six-v9       | v1.1 build 202609280639    |
 | apps/music-trend      | music-trend-v31   | v1.3 build 202609280140    |
 | apps/hk-bus-eta/build | buseta-lite-v23   | v1.3 build 202609280300    |
 

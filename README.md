@@ -202,14 +202,23 @@ Response shape:
 - Auto-refresh at midnight on draw days only (Tue/Thu/Sat)
 - Manual refresh button scrapes a fresh copy of the latest draws
 - 6 main numbers + 1 **special number** (rendered with a `+` and red ring)
+- **Next-draw countdown** — next draw date + live ticking countdown to the 21:15 HKT sales
+  cutoff (Tue/Thu/Sat), computed client-side from the clock (no backend change)
+- **Ticket checker** — save 6-number single tickets (localStorage); each is re-evaluated
+  against the latest draw and shown with its prize division (1st–7th / No prize)
+- **Hot/cold statistics** — appearance counts for the last 20/50/100 draws, six coldest
+  numbers ranked by draws-since-last-seen, and an odd/even split bar, all computed in the
+  browser from `/mark-six/api/marksix/history`
+- **Accessible markup** — each draw is a `<section aria-labelledby>` with an `<h2>` and a
+  machine-readable `<time datetime>`; balls carry colour-name aria labels
 
 ### Ball colours
 
 | Colour | Numbers |
 |--------|---------|
 | Red | 1, 2, 7, 8, 12, 13, 18, 19, 23, 24, 29, 30, 34, 35, 40, 45, 46 |
-| Blue | 3, 4, 9, 10, 14, 15, 20, 25, 26, 31, 36, 37, 41, 42, 47, 48 |
-| Green | 5, 6, 11, 16, 17, 21, 22, 27, 28, 32, 33, 38, 39, 43, 44, 49 |
+| Blue | 3, 4, 9, 10, 14, 15, 20, 25, 26, 31, 32, 36, 37, 41, 42, 47, 48 |
+| Green | 5, 6, 11, 16, 17, 21, 22, 27, 28, 33, 38, 39, 43, 44, 49 |
 
 ---
 
@@ -478,7 +487,7 @@ npm test            # Run all tests once
 npm run test:watch  # Watch mode
 ```
 
-170 tests across 9 files under `apps/mark-six/test/`, `apps/traffic-news/test/` and `apps/music-trend/test/`. The suite uses in-memory SQLite + fixtures, so it runs offline without a Supabase connection.
+185 tests across 10 files under `apps/mark-six/test/`, `apps/traffic-news/test/` and `apps/music-trend/test/`. The suite uses in-memory SQLite + fixtures, so it runs offline without a Supabase connection.
 
 ---
 
