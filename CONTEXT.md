@@ -85,6 +85,7 @@ git rev-parse --short '@{u}'
 git status --porcelain
 git show HEAD:apps/<name>/index.html | Select-String 'app-ver'
 git show HEAD:apps/<name>/sw.js   # first line = CACHE_NAME
+# bus-eta-lite differs: apps/hk-bus-eta/build/, VERSION is on line 2
 ```
 
 Healthy end-state = `HEAD` equals `@{u}`, porcelain is empty, and the

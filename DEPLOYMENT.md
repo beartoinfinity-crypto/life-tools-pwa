@@ -72,7 +72,8 @@ npm install
 npm start
 # open http://localhost:3000  (dashboard)
 # open http://localhost:3000/mark-six/  (Mark Six)
-# open http://localhost:3000/bus-eta/  (HK Bus ETA)
+# open http://localhost:3000/bus-eta/  (HK Bus ETA, upstream)
+# open http://localhost:3000/bus-eta-lite/  (Bus ETA, lite)
 ```
 
 ---
@@ -132,7 +133,8 @@ HTTPS is automatic, at a URL like `https://mark-six-pwa.onrender.com`.
 
 - `https://mark-six-pwa.onrender.com/` → **dashboard** (launcher cards)
 - `https://mark-six-pwa.onrender.com/mark-six/` → **Mark Six PWA**
-- `https://mark-six-pwa.onrender.com/bus-eta/` → **HK Bus ETA** (static app committed under `apps/hk-bus-eta/build/` — no build step on the server; route data is fetched client-side)
+- `https://mark-six-pwa.onrender.com/bus-eta/` → **HK Bus ETA** (unmodified upstream build served from `apps/hk-bus-eta/build-upstream/`)
+- `https://mark-six-pwa.onrender.com/bus-eta-lite/` → **Bus ETA (lite)** (authored static app under `apps/hk-bus-eta/build/` — no build step on the server; route data is fetched client-side)
 
 ---
 

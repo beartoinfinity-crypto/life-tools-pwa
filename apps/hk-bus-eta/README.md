@@ -15,7 +15,7 @@ A mobile-first, vanilla-JS app with no build step, tuned for quick glance-and-le
 | Tab | Purpose |
 |-----|---------|
 | 路線查詢 / Route | Type a route number → direction pills → every stop with live arrival chips |
-| 車站查詢 / Stop | Match a stop **name** or its bracket **code** (e.g. `TA296`), or use 附近的站 geolocation |
+| 車站查詢 / Stop | Match a stop **name** (Chinese or English) or its bracket **code** (e.g. `TA296`), or use 附近的站 geolocation |
 | 收藏路線 / Bookmark | Bookmarked routes (★ on the route detail page) |
 | 收藏車站 / Stops | Bookmarked stops |
 
@@ -26,7 +26,7 @@ A mobile-first, vanilla-JS app with no build step, tuned for quick glance-and-le
   (including cross-operator variants via `stopMap`), sorted by route number ascending. Back returns to the route,
   preserving the selected direction. Tapping a route line inside the stop detail opens that route's own detail page;
   back returns to the stop, and further back unwinds to where the stop was opened from.
-- **Stop flow** — type a stop name or **code** (e.g. `TA296`) to find the stop; "附近的站" uses geolocation.
+- **Stop flow** — type a stop name (Chinese or English) or **code** (e.g. `TA296`) to find the stop; "附近的站" uses geolocation.
   Tapping a result opens the same stop detail — navigate to any serving route from there.
 
 ### Features
@@ -47,6 +47,8 @@ A mobile-first, vanilla-JS app with no build step, tuned for quick glance-and-le
   database loads (disabled under `prefers-reduced-motion`).
 - **Touch targets >= 48px** — header/tab/detail buttons, direction pills and list rows are sized for tapping on
   a moving bus.
+- **Versioning** — in-page badge (`v1.3 build <UTC>`) plus SW cache `buseta-lite-v21`; the badge build equals the
+  pinned commit time and the SW bump ships in the same commit (see `CONTEXT.md`).
 - **EN/ZH toggle**, and batching (incremental rendering) for long stop lists.
 
 ## What's in this folder

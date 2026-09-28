@@ -230,7 +230,7 @@ A mobile-first, vanilla-JS re-implementation tuned for quick glance-and-leave us
 | Tab | Purpose |
 |-----|---------|
 | 路線查詢 / Route | Type a route number (e.g. `1A`, `286X`, `A12`) → direction pills → every stop with live arrival chips; **tap a stop** to see *all routes via it*, and **tap a route** in that list to jump to its own detail |
-| 車站查詢 / Stop | Fuzzy-like match on stop **name** *or* **code** (e.g. `TA296`) — the code in the bracket is searchable; "附近的站" geolocation also available |
+| 車站查詢 / Stop | Fuzzy-like match on stop **name** (ZH or EN) *or* **code** (e.g. `TA296`) — the code in the bracket is searchable; "附近的站" geolocation also available |
 | 收藏路線 / Bookmark | All bookmarked routes (★ on the route detail page) |
 | 收藏車站 / Stops | All bookmarked stops |
 
