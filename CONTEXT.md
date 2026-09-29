@@ -18,7 +18,7 @@ URL path. Shared infra lives at the repo root:
 ## Apps (current build state at HEAD)
 
 Each app is an authored PWA with its own `index.html`, `styles.css`,
-`sw.js`, service worker, and manifest, cached offline.
+`sw.js` (service worker) and `manifest.json`, cached offline.
 
 | App dir              | SW cache          | In-page badge (build)      |
 |-----------------------|-------------------|----------------------------|
@@ -45,14 +45,15 @@ Every authored app shows its own version + build number inside the
 
 Rules:
 1. Version tracks the app's shipped feature batch (`v1.0`, `v1.3`, ...).
-2. Build number is the **app-specific pinned UTC timestamp** of the
-   commit that ships that app's badge (format `yyyyMMddHHmm`, UTC).
-3. Each app has its **own** build number. Apps are committed at
-   different times, so the numbers are naturally different — they are
-   deliberately **not** synchronized across apps.
-4. The build number in the badge must equal the **commit UTC time**
-   of that app's own commit (byte-for-byte), because the SW precaches
-   the HTML the badge lives in.
+2. Build number is the **pinned UTC timestamp** of the commit that ships
+   that app's badge (format `yyyyMMddHHmm`, UTC), set via
+   `$env:GIT_AUTHOR_DATE` / `$env:GIT_COMMITTER_DATE` so the badge and
+   the commit agree byte-for-byte.
+3. All five apps ship together in one commit, so they share **one build
+   number per release**. The `-vN` cache versions advance independently
+   per app, whenever that app's shell changes.
+4. The SW precaches `index.html` (where the badge lives), so the badge
+   build and the `-vN` bump must land in the same commit (see below).
 
 ## Service worker cache bump rule (must be same commit as badge)
 

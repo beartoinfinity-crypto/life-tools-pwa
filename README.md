@@ -71,7 +71,7 @@ Open `http://localhost:3000` — visit `/` for the dashboard, `/mark-six/`, `/bu
 │   └── mark-six/         # Mark Six PWA (mounted at /mark-six/)
 │       ├── server.js          # Express app (module) + ensureInitialData()
 │       ├── supabase-db.js     # Supabase client + store operations
-│       ├── supabase-schema.sql # SQL: draws/meta/traffic_news tables + RLS (run in Supabase SQL editor)
+│       ├── supabase-schema.sql # SQL: draws/meta/traffic_news/music_trend/music_user_playlists tables + RLS (run in Supabase SQL editor)
 │       ├── supabase-revert.sql # SQL: drops everything the schema creates (undo an accidental run)
 │       ├── parsers.js         # HTML/JSON parsers for data sources
 │       ├── api.js             # Modular Express app (used by tests)
@@ -84,7 +84,7 @@ Open `http://localhost:3000` — visit `/` for the dashboard, `/mark-six/`, `/bu
 │       ├── manifest.json      # PWA manifest (scope /mark-six/)
 │       ├── sw.js              # Service worker (offline caching)
 │       ├── icons/             # icon-192.png + icon-512.png (PWA icons)
-│       └── test/              # Vitest suite (55 tests) + fixtures
+│       └── test/              # Vitest suite (77 tests) + fixtures
 │   └── hk-bus-eta/        # HK Bus ETA apps (mounted at /bus-eta/, /bus-eta-lite/)
 │       ├── build/             # Lite ETA UI (served at /bus-eta-lite/): app.js + bundled hk-bus-eta library
 │       ├── build-upstream/    # Archived upstream PWA (served at /bus-eta/, not from this dir)
