@@ -941,4 +941,84 @@ describe('music-trend playback transitions', () => {
     expect(root.hasAttribute('data-theme')).toBe(false);
     expect(window.localStorage.getItem('music-theme')).toBe('auto');
   });
+
+  it('holds the spot while offline and resumes the exact song when online fires', async () => {
+    const { window, players, main } = await startAndSettle({
+      shuffle: false,
+      watch: { stallMs: 60, bufferSkipMs: 60000 },
+    });
+    await flush();
+    const loadsBefore = main.loadCalls || 0;
+
+    Object.defineProperty(window.navigator, 'onLine', { value: false, configurable: true });
+    window.dispatchEvent(new window.Event('offline'));
+    // Spot captured synchronously: ⏳ "waiting for signal", nothing loaded yet.
+    expect(window.document.getElementById('playPauseBtn').textContent).toBe('⏳');
+    expect(main.loadCalls || 0).toBe(loadsBefore);
+
+    // Stall watchdog fires while the radio is still down — must NOT consume the spot.
+    main.setState(3); // BUFFERING arms the 60ms stall watch
+    await new Promise((r) => setTimeout(r, 200));
+    await flush();
+    await flush();
+    expect(main.loadCalls || 0).toBe(loadsBefore);
+
+    // Signal returns and the browser announces it: same song reloads and plays.
+    Object.defineProperty(window.navigator, 'onLine', { value: true, configurable: true });
+    window.dispatchEvent(new window.Event('online'));
+    await flush();
+    await flush();
+    expect((main.loadCalls || 0)).toBeGreaterThan(loadsBefore);
+    expect(main.videoId).toBe('vid00000001');
+    expect(playingVideoIds(players)).toContain('vid00000001');
+    expect(window.document.getElementById('playPauseBtn').textContent).toBe('❚❚');
+  });
+
+  it('keeps poking after a silent reconnect (offline pokes never burn the spot)', async () => {
+    const { window, players, main } = await startAndSettle({
+      shuffle: false,
+      watch: { stallMs: 60000, bufferSkipMs: 60000, resumeRetryMs: 40, resumeBudgetMs: 150 },
+    });
+    await flush();
+    const loadsBefore = main.loadCalls || 0;
+
+    Object.defineProperty(window.navigator, 'onLine', { value: false, configurable: true });
+    window.dispatchEvent(new window.Event('offline'));
+    // Retry pokes tick every 40ms while the radio is down — none may consume the
+    // spot, and the 150ms "go quiet" budget must not burn down offline either.
+    await new Promise((r) => setTimeout(r, 300));
+    await flush();
+    expect(main.loadCalls || 0).toBe(loadsBefore);
+
+    // Radio quietly comes back — the 'online' event never fires. Next poke resumes.
+    Object.defineProperty(window.navigator, 'onLine', { value: true, configurable: true });
+    await new Promise((r) => setTimeout(r, 120));
+    await flush();
+    await flush();
+    expect((main.loadCalls || 0)).toBeGreaterThan(loadsBefore);
+    expect(playingVideoIds(players)).toContain('vid00000001');
+  });
+
+  it('consumes a stranded spot when the app comes to the foreground', async () => {
+    const { window, players, main } = await startAndSettle({ shuffle: false });
+    await flush();
+    const loadsBefore = main.loadCalls || 0;
+
+    // Signal drop captures the spot, then the retry budget expires with no
+    // 'online' event (stranded resumeInfo). Foregrounding must still recover:
+    // resumeIfVisible consumes the spot instead of a bare playVideo() kick.
+    Object.defineProperty(window.navigator, 'onLine', { value: false, configurable: true });
+    window.dispatchEvent(new window.Event('offline'));
+    expect(window.document.getElementById('playPauseBtn').textContent).toBe('⏳');
+    Object.defineProperty(window.navigator, 'onLine', { value: true, configurable: true });
+
+    harness.setHidden(true);
+    await flush();
+    harness.setHidden(false);
+    await flush();
+    await flush();
+    expect((main.loadCalls || 0)).toBeGreaterThan(loadsBefore);
+    expect(main.videoId).toBe('vid00000001');
+    expect(playingVideoIds(players)).toContain('vid00000001');
+  });
 });

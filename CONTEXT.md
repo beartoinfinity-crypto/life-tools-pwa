@@ -25,7 +25,7 @@ Each app is an authored PWA with its own `index.html`, `styles.css`,
 | public/ (hub)         | life-tool-hub-v1  | v1.1 build 202609280705    |
 | apps/traffic-news     | traffic-news-v9   | v1.2 build 202609280614    |
 | apps/mark-six         | mark-six-v9       | v1.1 build 202609280639    |
-| apps/music-trend      | music-trend-v31   | v1.3 build 202609280140    |
+| apps/music-trend      | music-trend-v32   | v1.4 build 202609290949    |
 | apps/hk-bus-eta/build | buseta-lite-v23   | v1.3 build 202609280300    |
 
 > `apps/hk-bus-eta/` holds both: `build-upstream/` and `LICENSE` are

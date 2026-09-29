@@ -349,11 +349,12 @@
   // ----- second opinion: reconnect retry loop ---------------------------------
   // The browser fires 'online' when it sees the signal come back, but on a weak
   // or flaky signal it sometimes DOESN'T fire the event even though the network
-  // is usable again. So we keep a tamer "second opinion": every ~15s for up to
-  // ~2 min (only while we actually want audio and have a spot captured) we try
-  // finishResume() as a nudge. If the radio quietly comes back, the resume then
-  // just works without any taps. After ~2 min we go quiet so WhatsApp only gets
-  // the taps when there's a real signal, not a dead net we keep poking.
+  // is usable again. So we keep a tamer "second opinion": every ~15s (only while
+  // we actually want audio and have a spot captured) we try finishResume() as a
+  // nudge. The ~2 min "go quiet" budget only ticks while the radio is actually
+  // back — a poke can't succeed offline, so a >2 min tunnel still gets its full
+  // ~2 min of retries after the signal returns. Then we go quiet so WhatsApp
+  // only gets the taps when there's a real signal, not a dead net we keep poking.
 
   var resumeRetryTimer = null;     // setInterval handle for the reconnect loop
   var resumeRetryStart = 0;        // when we started poking, so we can go quiet
@@ -363,9 +364,13 @@
     resumeRetryStart = Date.now();
     resumeRetryTimer = setInterval(function () {
       if (!resumeInfo || !wantPlaying) { clearResumeRetry(); return; }  // nothing to resume
-      if (Date.now() - resumeRetryStart > 120000) { clearResumeRetry(); return; }  // gone quiet
+      if (!navigator.onLine) { // still offline: every poke would fail —
+        resumeRetryStart = Date.now();           // hold the budget and try again
+        return;
+      }
+      if (Date.now() - resumeRetryStart > watchMs('resumeBudgetMs', 120000)) { clearResumeRetry(); return; }  // gone quiet
       finishResume();                            // nudge: exact song/position, no taps
-    }, 15000);
+    }, watchMs('resumeRetryMs', 15000));
   }
 
   function clearResumeRetry() {
@@ -400,6 +405,10 @@
 
   function finishResume() {
     if (!resumeInfo) return;
+    // Never consume the spot while the radio is down: a loadVideoById here can't
+    // succeed — it would burn the saved position (and onError could even skip the
+    // track). The 'online' event and the retry loop both re-enter once signal's back.
+    if (!navigator.onLine) return;
     var r = resumeInfo;
     resumeInfo = null;
 
@@ -909,10 +918,10 @@
    * have cleared nothing thanks to userPauseIntent — either way play again. */
   function resumeIfVisible() {
     if (document.visibilityState && document.visibilityState !== 'visible') return;
-    if (!wantPlaying || !ytReady || !ytPlayer) return;
+    if (!wantPlaying) return;
     // ENDED held back until the tab was shown: promote next, don't restart dead track.
     try {
-      if (ytPlayer.getPlayerState && ytPlayer.getPlayerState() === YT.PlayerState.ENDED) {
+      if (ytPlayer && ytPlayer.getPlayerState && ytPlayer.getPlayerState() === YT.PlayerState.ENDED) {
         forceAdvance();
         return;
       }
@@ -923,6 +932,16 @@
       forceAdvance();
       return;
     }
+    // A pending signal-drop spot outranks the generic kick: it restores the exact
+    // song + position (and reloads a player the drop killed) — a plain playVideo()
+    // can do neither. Re-arm the nudge loop too, so a spot stranded by an expired
+    // budget gets another full ~2 min of retries even when 'online' never fires.
+    if (resumeInfo) {
+      finishResume();
+      armResumeRetryIfNeeded();
+      return;
+    }
+    if (!ytReady || !ytPlayer) return;
     try { ytPlayer.playVideo(); } catch (e) {}
     forceLowQuality();
     requestWakeLock();

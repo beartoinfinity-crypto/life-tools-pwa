@@ -382,7 +382,11 @@ gate by country (`CANTO_COUNTRIES` = `{hk}` and `MANDO_COUNTRIES` = `{hk,tw,cn,s
 - **Car-signal auto-resume** — a parked song during a network drop does NOT skip tracks. A stall watchdog
   (BUFFERING > ~10 s) and the `offline` event remember the exact song + position; the moment `online` fires, the
   player resumes the same song where it stalled — zero taps. `onError` only skips a genuinely unplayable video,
-  never a transient signal blip.
+  never a transient signal blip. The saved spot is never consumed while the radio is down (no doomed
+  `loadVideoById` can burn it or trip a skip), the ~15 s retry poke's 2 min "go quiet" budget pauses until
+  signal returns — so a >2 min tunnel still gets its full retries even if the browser never fires `online` —
+  and foregrounding the app (`focus`/`pageshow`/`visibilitychange`) resumes a stranded spot via an exact
+  song+position reload instead of a bare `playVideo()` kick.
 - **In-page YouTube playback, audio-first** — no Apple Music account needed. Each song is resolved to a YouTube
   video id (`apps/music-trend/youtube.js`, search-scrape, no API key; ids cached in Supabase per country and
   reused, rolling window of ~20 new resolutions per refresh run). Two-pass official MV search: first tries
@@ -435,7 +439,8 @@ gate by country (`CANTO_COUNTRIES` = `{hk}` and `MANDO_COUNTRIES` = `{hk,tw,cn,s
   stall watch reloads the same song immediately instead of waiting for
   `online`/the 15s resume poll; `playSong` clears any leftover resume/stall
   state so an advancing track is never yanked backward. Thresholds are
-  overridable via `window.__MT_WATCH` for tests.
+  overridable via `window.__MT_WATCH` for tests (`stallMs`, `bufferSkipMs`,
+  `resumeRetryMs`, `resumeBudgetMs`).
 - **Classification + per-country gating** — `apps/music-trend/parser.js` (`buildPlaylists`/`isCantonese`/`isMandarin`/
   `feedUrl`), covered by unit tests. Apple only tags Cantonese/Mandarin on the HK & TW feeds, so the genre tag comes
   from the **title language** (Chinese characters in the title; Cantonese-only characters 嘅咗唔喺嗰啲冇… mark 廣東歌).
@@ -499,7 +504,7 @@ npm test            # Run all tests once
 npm run test:watch  # Watch mode
 ```
 
-199 tests across 11 files under `test/` (hub), `apps/mark-six/test/`, `apps/traffic-news/test/` and `apps/music-trend/test/`. The suite uses in-memory SQLite + fixtures, so it runs offline without a Supabase connection.
+202 tests across 11 files under `test/` (hub), `apps/mark-six/test/`, `apps/traffic-news/test/` and `apps/music-trend/test/`. The suite uses in-memory SQLite + fixtures, so it runs offline without a Supabase connection.
 
 ---
 
