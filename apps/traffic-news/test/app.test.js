@@ -57,6 +57,8 @@ function createHarness({
   seedSnapshot = null,
   seedFavs = null,
   userAgent = null,
+  standalone = null,
+  autoDismissMs = null,
 } = {}) {
   const dom = new JSDOM(indexHtml, {
     url,
@@ -71,6 +73,10 @@ function createHarness({
   if (userAgent) {
     Object.defineProperty(window.navigator, 'userAgent', { get: () => userAgent, configurable: true });
   }
+  if (standalone !== null) {
+    Object.defineProperty(window.navigator, 'standalone', { get: () => standalone, configurable: true });
+  }
+  if (autoDismissMs != null) window.__BANNER_AUTO_DISMISS_MS = autoDismissMs;
 
   window.fetch = vi.fn(async () => {
     if (state.fail) throw new TypeError('Network down');
@@ -466,6 +472,27 @@ describe('traffic-news app (v1.1)', () => {
     expect(banner.querySelector('p').textContent).toContain('Add to Home Screen');
     expect(banner.querySelector('.install-btn').style.display).toBe('none');
     expect(window.sessionStorage.getItem('life-tool-install-dismissed')).toBeNull();
+  });
+
+  it('stays hidden when launched from the installed home-screen app', async () => {
+    const { window } = await boot({
+      userAgent:
+        'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+      standalone: true,
+    });
+    const banner = window.document.querySelector('.install-banner');
+    expect(banner.style.display).toBe('none');
+    expect(window.sessionStorage.getItem('life-tool-install-dismissed')).toBeNull();
+  });
+
+  it('auto-hides the banner after the timeout and remembers the dismissal', async () => {
+    const { window } = await boot({ autoDismissMs: 25 });
+    const banner = window.document.querySelector('.install-banner');
+    fireInstall(window);
+    expect(banner.style.display).toBe('flex');
+    await new Promise((r) => setTimeout(r, 150));
+    expect(banner.style.display).toBe('none');
+    expect(window.sessionStorage.getItem('life-tool-install-dismissed')).toBe('1');
   });
 
   it('returns to the install mode when a real prompt later arrives', async () => {

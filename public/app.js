@@ -284,6 +284,36 @@
     return navigator.platform === 'MacIntel' && (navigator.maxTouchPoints || 0) > 1;
   }
 
+  function isInstalledMode() {
+    if (navigator.standalone === true) return true; // iOS Safari, launched from the home screen
+    var dm = window.matchMedia && window.matchMedia('(display-mode: standalone)');
+    if (dm && dm.matches) return true;
+    return false;
+  }
+
+  var BANNER_AUTO_DISMISS_MS = (function () {
+    var v = Number(window.__BANNER_AUTO_DISMISS_MS);
+    return isFinite(v) && v > 0 ? v : 10000;
+  })();
+  var bannerAutoDismissTimer = null;
+
+  function armBannerAutoDismiss() {
+    if (bannerAutoDismissTimer) window.clearTimeout(bannerAutoDismissTimer);
+    bannerAutoDismissTimer = window.setTimeout(function () {
+      bannerAutoDismissTimer = null;
+      if (installBanner.hidden) return;
+      markBannerDismissed();
+      closeBanner();
+    }, BANNER_AUTO_DISMISS_MS);
+  }
+
+  function cancelBannerAutoDismiss() {
+    if (bannerAutoDismissTimer) {
+      window.clearTimeout(bannerAutoDismissTimer);
+      bannerAutoDismissTimer = null;
+    }
+  }
+
   function setBannerMode(mode) {
     var t = BANNER_TEXTS[mode];
     if (!t) return;
@@ -310,9 +340,11 @@
     void installBanner.offsetHeight;
     installBanner.classList.remove('banner-enter');
     installBanner.classList.add('banner-enter-active');
+    armBannerAutoDismiss();
   }
 
   function closeBanner() {
+    cancelBannerAutoDismiss();
     installBanner.classList.remove('banner-enter', 'banner-enter-active');
     installBanner.classList.add('banner-exit');
     window.setTimeout(function () {
@@ -324,6 +356,7 @@
 
   function onBeforeInstallPrompt(e) {
     e.preventDefault();
+    if (isInstalledMode()) return;
     deferredPrompt = e;
     setBannerMode('install');
     if (!bannerDismissed()) openBanner();
@@ -332,10 +365,11 @@
 
   window.addEventListener('appinstalled', function () {
     deferredPrompt = null;
+    cancelBannerAutoDismiss();
     installBanner.hidden = true;
   });
 
-  if (isIOS() && !bannerDismissed()) {
+  if (isIOS() && !isInstalledMode() && !bannerDismissed()) {
     setBannerMode('ios');
     openBanner();
   }
@@ -404,6 +438,7 @@
     bannerDismissed: bannerDismissed,
     setBannerMode: setBannerMode,
     bannerMode: function () { return currentBannerMode; },
-    isIOS: isIOS
+    isIOS: isIOS,
+    isInstalledMode: isInstalledMode
   };
 })();

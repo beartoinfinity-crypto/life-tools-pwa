@@ -22,11 +22,11 @@ Each app is an authored PWA with its own `index.html`, `styles.css`,
 
 | App dir              | SW cache          | In-page badge (build)      |
 |-----------------------|-------------------|----------------------------|
-| public/ (hub)         | life-tool-hub-v3  | v1.3 build 202609291528    |
-| apps/traffic-news     | traffic-news-v12  | v1.5 build 202609291528    |
-| apps/mark-six         | mark-six-v12      | v1.4 build 202609291528    |
-| apps/music-trend      | music-trend-v35   | v1.7 build 202609291528    |
-| apps/hk-bus-eta/build | buseta-lite-v26   | v1.6 build 202609291528    |
+| public/ (hub)         | life-tool-hub-v4  | v1.4 build 202609291603    |
+| apps/traffic-news     | traffic-news-v13  | v1.6 build 202609291603    |
+| apps/mark-six         | mark-six-v13      | v1.5 build 202609291603    |
+| apps/music-trend      | music-trend-v36   | v1.8 build 202609291603    |
+| apps/hk-bus-eta/build | buseta-lite-v27   | v1.7 build 202609291603    |
 
 > `apps/hk-bus-eta/` holds both: `build-upstream/` and `LICENSE` are
 > the vendored upstream PWA (never hand-edit them), while `build/` is
@@ -40,7 +40,7 @@ Every authored app shows its own version + build number inside the
 `<h1>` header:
 
 ```html
-<h1>TITLE<span class="app-ver">v1.5 build 202609291528</span></h1>
+<h1>TITLE<span class="app-ver">v1.6 build 202609291603</span></h1>
 ```
 
 Rules:

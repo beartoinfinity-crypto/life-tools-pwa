@@ -19,7 +19,14 @@ const ALL_IDS = ['traffic-news', 'mark-six', 'bus-eta', 'bus-eta-lite', 'music-t
 const IPHONE_UA =
   'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
 
-function createHarness({ order = null, theme = null, userAgent = null, dismissed = false } = {}) {
+function createHarness({
+  order = null,
+  theme = null,
+  userAgent = null,
+  dismissed = false,
+  standalone = null,
+  autoDismissMs = null,
+} = {}) {
   const dom = new JSDOM(indexHtml, {
     url: 'https://example.test/',
     runScripts: 'outside-only',
@@ -32,6 +39,10 @@ function createHarness({ order = null, theme = null, userAgent = null, dismissed
     Object.defineProperty(window.navigator, 'userAgent', { get: () => userAgent, configurable: true });
   }
   if (dismissed) window.sessionStorage.setItem(DISMISS_KEY, '1');
+  if (standalone !== null) {
+    Object.defineProperty(window.navigator, 'standalone', { get: () => standalone, configurable: true });
+  }
+  if (autoDismissMs != null) window.__BANNER_AUTO_DISMISS_MS = autoDismissMs;
   window.eval(appJs);
   return { dom, window };
 }
@@ -251,6 +262,29 @@ describe('hub launcher (public/)', () => {
   it('stays hidden for the session when the banner was already dismissed', () => {
     const { window } = boot({ userAgent: IPHONE_UA, dismissed: true });
     expect(window.HubCore.bannerVisible()).toBe(false);
+  });
+
+  it('stays hidden when the app is already installed (iOS standalone)', () => {
+    const { window } = boot({ userAgent: IPHONE_UA, standalone: true });
+    expect(window.HubCore.isInstalledMode()).toBe(true);
+    expect(window.HubCore.bannerVisible()).toBe(false);
+  });
+
+  it('ignores beforeinstallprompt while running as an installed app', () => {
+    const { window } = boot({ standalone: true });
+    const evt = fakePrompt();
+    window.HubCore.handleBeforeInstallPrompt(evt);
+    expect(evt.preventDefaultCalled).toBe(true);
+    expect(window.HubCore.bannerVisible()).toBe(false);
+  });
+
+  it('auto-hides the banner after the timeout and remembers the dismissal', async () => {
+    const { window } = boot({ autoDismissMs: 25 });
+    window.HubCore.openBanner();
+    expect(window.HubCore.bannerVisible()).toBe(true);
+    await flush(350); // 25ms timeout + 260ms exit animation
+    expect(window.HubCore.bannerVisible()).toBe(false);
+    expect(window.HubCore.bannerDismissed()).toBe(true);
   });
 
   it('switches back to install mode when a real prompt later arrives', () => {

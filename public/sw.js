@@ -1,4 +1,4 @@
-var CACHE_NAME = 'life-tool-hub-v3';
+var CACHE_NAME = 'life-tool-hub-v4';
 var SHELL = [
   './',
   './index.html',

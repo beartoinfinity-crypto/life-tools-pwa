@@ -24,14 +24,15 @@ in `localStorage`). It is also its own little PWA:
 - **Search & category filters** — a search box (matches titles, descriptions and keywords, English or 中文) plus
   All / Transport / Lottery / Utilities filter pills (`aria-pressed` state, combined with the search query)
 - **Card badges** — status badges on cards (e.g. Traffic News shows **Live**)
-- **Install banner** — a glass slide-up "Install Life Tool" banner when the browser fires `beforeinstallprompt`
-  (dismissible for the session; the header **Simulate** button previews it). Every sub-app (mark-six,
-  traffic-news, music-trend, bus-eta-lite) ships the same banner, and they all share one `sessionStorage`
-  dismiss key (`life-tool-install-dismissed`) — dismissing it anywhere keeps it quiet everywhere for the
-  rest of the session.
-- **Offline shell** — `public/manifest.json` + `public/sw.js` (`life-tool-hub-v3`) make `/` installable and
+- **Install banner** — a glass slide-up "Install Life Tool" banner when the browser fires `beforeinstallprompt`,
+  anchored at the bottom of the screen and auto-hiding after ~10s (dismissible for the session; the header
+  **Simulate** button previews it). Every sub-app (mark-six, traffic-news, music-trend, bus-eta-lite) ships the
+  same banner, and they all share one `sessionStorage` dismiss key (`life-tool-install-dismissed`) — dismissing
+  or timing it out anywhere keeps it quiet everywhere for the rest of the session. Once the app is running as an
+  installed home-screen PWA, the banner stays hidden entirely.
+- **Offline shell** — `public/manifest.json` + `public/sw.js` (`life-tool-hub-v4`) make `/` installable and
   offline-capable; the worker only handles hub-shell paths, never the sub-apps' URLs
-- **Version badge** — `v1.3 build <timestamp>` in the header, per the per-app badge convention in CONTEXT.md
+- **Version badge** — `v1.4 build <timestamp>` in the header, per the per-app badge convention in CONTEXT.md
 
 ---
 
@@ -267,7 +268,7 @@ Other features:
   you return); the detail page keeps a persistent `更新於 HH:MM:SS` last-refresh stamp. Manual refresh re-downloads
   the route database.
 - **Offline-first** — route database cached in IndexedDB; offline banner + Retry-on-failure; service worker caches
-  the shell (`buseta-lite-v26`).
+  the shell (`buseta-lite-v27`).
 - **Loading skeletons & >=48px touch targets** — shimmer placeholders replace the blocking splash; buttons and rows
   sized for gloved/fumbling taps.
 - **EN/ZH** toggle; near-black UI in night mode with corrected chip/badge colours.
@@ -507,7 +508,7 @@ npm test            # Run all tests once
 npm run test:watch  # Watch mode
 ```
 
-221 tests across 11 files under `test/` (hub), `apps/mark-six/test/`, `apps/traffic-news/test/` and `apps/music-trend/test/`. The suite uses in-memory SQLite + fixtures, so it runs offline without a Supabase connection.
+230 tests across 11 files under `test/` (hub), `apps/mark-six/test/`, `apps/traffic-news/test/` and `apps/music-trend/test/`. The suite uses in-memory SQLite + fixtures, so it runs offline without a Supabase connection.
 
 ---
 

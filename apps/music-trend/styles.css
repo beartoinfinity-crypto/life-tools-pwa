@@ -810,14 +810,25 @@ main {
 
 /* Install banner */
 .install-banner {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 350;
   background: linear-gradient(135deg, #1565c0, #0d47a1);
   color: #fff;
-  padding: 16px 20px;
+  padding: 14px 16px calc(14px + env(safe-area-inset-bottom, 0px));
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 14px;
   font-size: 16px;
+  box-shadow: 0 -6px 24px rgba(0, 0, 0, 0.25);
+}
+
+/* sit above the sticky player bar instead of covering its controls */
+body:has(.player-bar:not(.hidden)) .install-banner {
+  bottom: calc(88px + var(--safe-bottom));
 }
 
 .install-banner p {

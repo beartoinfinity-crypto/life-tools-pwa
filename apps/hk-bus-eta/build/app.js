@@ -1031,6 +1031,30 @@ function init() {
     if (/iP(hone|ad|od)\b/.test(ua)) return true;
     return navigator.platform === "MacIntel" && (navigator.maxTouchPoints || 0) > 1;
   };
+  const isInstalledMode = () => {
+    if (navigator.standalone === true) return true; // iOS Safari, launched from the home screen
+    const dm = window.matchMedia && window.matchMedia("(display-mode: standalone)");
+    return !!(dm && dm.matches);
+  };
+  const BANNER_AUTO_DISMISS_MS = (() => {
+    const v = Number(window.__BANNER_AUTO_DISMISS_MS);
+    return isFinite(v) && v > 0 ? v : 10000;
+  })();
+  let bannerAutoDismissTimer = null;
+  const armBannerAutoDismiss = () => {
+    if (bannerAutoDismissTimer) window.clearTimeout(bannerAutoDismissTimer);
+    bannerAutoDismissTimer = window.setTimeout(() => {
+      bannerAutoDismissTimer = null;
+      markBannerDismissed();
+      closeInstallBanner();
+    }, BANNER_AUTO_DISMISS_MS);
+  };
+  const cancelBannerAutoDismiss = () => {
+    if (bannerAutoDismissTimer) {
+      window.clearTimeout(bannerAutoDismissTimer);
+      bannerAutoDismissTimer = null;
+    }
+  };
   const setBannerMode = (mode) => {
     if (mode === "install" || mode === "ios" || mode === "manual") bannerMode = mode;
   };
@@ -1050,17 +1074,22 @@ function init() {
     }
     installBanner.querySelector(".dismiss-btn").setAttribute("aria-label", T.installDismiss[state.lang]);
     installBanner.style.display = "flex";
+    armBannerAutoDismiss();
   };
-  const closeInstallBanner = () => { installBanner.style.display = "none"; };
+  const closeInstallBanner = () => {
+    cancelBannerAutoDismiss();
+    installBanner.style.display = "none";
+  };
 
   window.addEventListener("beforeinstallprompt", (e) => {
     e.preventDefault();
+    if (isInstalledMode()) return;
     deferredPrompt = e;
     setBannerMode("install");
     if (!bannerDismissed()) openInstallBanner();
   });
   window.addEventListener("appinstalled", () => { deferredPrompt = null; closeInstallBanner(); });
-  if (isIOS() && !bannerDismissed()) {
+  if (isIOS() && !isInstalledMode() && !bannerDismissed()) {
     setBannerMode("ios");
     openInstallBanner();
   }
