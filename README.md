@@ -29,9 +29,9 @@ in `localStorage`). It is also its own little PWA:
   traffic-news, music-trend, bus-eta-lite) ships the same banner, and they all share one `sessionStorage`
   dismiss key (`life-tool-install-dismissed`) — dismissing it anywhere keeps it quiet everywhere for the
   rest of the session.
-- **Offline shell** — `public/manifest.json` + `public/sw.js` (`life-tool-hub-v1`) make `/` installable and
+- **Offline shell** — `public/manifest.json` + `public/sw.js` (`life-tool-hub-v2`) make `/` installable and
   offline-capable; the worker only handles hub-shell paths, never the sub-apps' URLs
-- **Version badge** — `v1.1 build <timestamp>` in the header, per the per-app badge convention in CONTEXT.md
+- **Version badge** — `v1.2 build <timestamp>` in the header, per the per-app badge convention in CONTEXT.md
 
 ---
 
@@ -267,7 +267,7 @@ Other features:
   you return); the detail page keeps a persistent `更新於 HH:MM:SS` last-refresh stamp. Manual refresh re-downloads
   the route database.
 - **Offline-first** — route database cached in IndexedDB; offline banner + Retry-on-failure; service worker caches
-  the shell (`buseta-lite-v24`).
+  the shell (`buseta-lite-v25`).
 - **Loading skeletons & >=48px touch targets** — shimmer placeholders replace the blocking splash; buttons and rows
   sized for gloved/fumbling taps.
 - **EN/ZH** toggle; near-black UI in night mode with corrected chip/badge colours.
@@ -507,7 +507,7 @@ npm test            # Run all tests once
 npm run test:watch  # Watch mode
 ```
 
-208 tests across 11 files under `test/` (hub), `apps/mark-six/test/`, `apps/traffic-news/test/` and `apps/music-trend/test/`. The suite uses in-memory SQLite + fixtures, so it runs offline without a Supabase connection.
+221 tests across 11 files under `test/` (hub), `apps/mark-six/test/`, `apps/traffic-news/test/` and `apps/music-trend/test/`. The suite uses in-memory SQLite + fixtures, so it runs offline without a Supabase connection.
 
 ---
 

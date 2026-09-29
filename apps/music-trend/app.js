@@ -1734,15 +1734,45 @@
   function openInstallBanner() { installBanner.style.display = 'flex'; }
   function closeInstallBanner() { installBanner.style.display = 'none'; }
 
+  var bannerP = installBanner.querySelector('p');
+  var bannerBtn = installBanner.querySelector('.install-btn');
+  var currentBannerMode = 'install';
+  var BANNER_TEXTS = {
+    install: { text: 'Add Music Trend to your home screen?', btn: 'Install' },
+    ios: { text: 'Tap the Share button, then choose "Add to Home Screen".', btn: '' },
+    manual: { text: 'Open your browser menu and choose "Install app" or "Add to Home Screen".', btn: '' }
+  };
+
+  function isIOS() {
+    var ua = navigator.userAgent || '';
+    if (/iP(hone|ad|od)\b/.test(ua)) return true;
+    return navigator.platform === 'MacIntel' && (navigator.maxTouchPoints || 0) > 1;
+  }
+
+  function setBannerMode(mode) {
+    var t = BANNER_TEXTS[mode];
+    if (!t) return;
+    currentBannerMode = mode;
+    bannerP.textContent = t.text;
+    bannerBtn.textContent = t.btn;
+    bannerBtn.style.display = t.btn ? '' : 'none';
+  }
+
   window.addEventListener('beforeinstallprompt', function (e) {
     e.preventDefault();
     deferredPrompt = e;
+    setBannerMode('install');
     if (!bannerDismissed()) openInstallBanner();
   });
   window.addEventListener('appinstalled', function () {
     deferredPrompt = null;
     closeInstallBanner();
   });
+
+  if (isIOS() && !bannerDismissed()) {
+    setBannerMode('ios');
+    openInstallBanner();
+  }
 
   installBanner.querySelector('.install-btn').addEventListener('click', function () {
     var pe = deferredPrompt;
@@ -1753,7 +1783,10 @@
         pe.userChoice.then(function () { markBannerDismissed(); closeInstallBanner(); },
                            function () { closeInstallBanner(); });
       } else { closeInstallBanner(); }
-    } else { closeInstallBanner(); }
+    } else {
+      setBannerMode('manual');
+      openInstallBanner();
+    }
   });
   installBanner.querySelector('.dismiss-btn').addEventListener('click', function () {
     markBannerDismissed();

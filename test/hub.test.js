@@ -16,7 +16,10 @@ const DISMISS_KEY = 'life-tool-install-dismissed';
 
 const ALL_IDS = ['traffic-news', 'mark-six', 'bus-eta', 'bus-eta-lite', 'music-trend'];
 
-function createHarness({ order = null, theme = null } = {}) {
+const IPHONE_UA =
+  'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
+
+function createHarness({ order = null, theme = null, userAgent = null, dismissed = false } = {}) {
   const dom = new JSDOM(indexHtml, {
     url: 'https://example.test/',
     runScripts: 'outside-only',
@@ -25,6 +28,10 @@ function createHarness({ order = null, theme = null } = {}) {
   const { window } = dom;
   if (order) window.localStorage.setItem(ORDER_KEY, JSON.stringify(order));
   if (theme) window.localStorage.setItem(THEME_KEY, theme);
+  if (userAgent) {
+    Object.defineProperty(window.navigator, 'userAgent', { get: () => userAgent, configurable: true });
+  }
+  if (dismissed) window.sessionStorage.setItem(DISMISS_KEY, '1');
   window.eval(appJs);
   return { dom, window };
 }
@@ -218,6 +225,46 @@ describe('hub launcher (public/)', () => {
     expect(window.HubCore.bannerDismissed()).toBe(true);
   });
 
+  it('falls back to on-page instructions when Install is clicked with no deferred prompt', () => {
+    const { window } = boot();
+    // beforeinstallprompt never fired (unsupported browser or preview mode) - the
+    // click must do something useful instead of silently closing the banner.
+    click(window, window.document.getElementById('bannerInstall'));
+    expect(window.HubCore.bannerMode()).toBe('manual');
+    expect(window.HubCore.bannerVisible()).toBe(true);
+    expect(window.HubCore.bannerDismissed()).toBe(false);
+    const btn = window.document.getElementById('bannerInstall');
+    expect(btn.style.display).toBe('none');
+    expect(window.document.querySelector('.banner-text p').textContent).toContain('browser menu');
+  });
+
+  it('auto-shows the iOS how-to banner once per session on iPhone Safari', () => {
+    const { window } = boot({ userAgent: IPHONE_UA });
+    expect(window.HubCore.bannerVisible()).toBe(true);
+    expect(window.HubCore.bannerMode()).toBe('ios');
+    const btn = window.document.getElementById('bannerInstall');
+    expect(btn.style.display).toBe('none');
+    expect(window.document.querySelector('.banner-text p').textContent).toContain('Add to Home Screen');
+    expect(window.HubCore.bannerDismissed()).toBe(false);
+  });
+
+  it('stays hidden for the session when the banner was already dismissed', () => {
+    const { window } = boot({ userAgent: IPHONE_UA, dismissed: true });
+    expect(window.HubCore.bannerVisible()).toBe(false);
+  });
+
+  it('switches back to install mode when a real prompt later arrives', () => {
+    const { window } = boot();
+    click(window, window.document.getElementById('bannerInstall'));
+    expect(window.HubCore.bannerMode()).toBe('manual');
+    window.HubCore.handleBeforeInstallPrompt(fakePrompt());
+    expect(window.HubCore.bannerMode()).toBe('install');
+    const btn = window.document.getElementById('bannerInstall');
+    expect(btn.style.display).toBe('');
+    expect(btn.textContent).toBe('Install');
+    expect(window.HubCore.bannerVisible()).toBe(true);
+  });
+
   // ---- Feature 3: manifest integration ----
 
   it('links a valid manifest scoped to the hub root', () => {
@@ -226,6 +273,10 @@ describe('hub launcher (public/)', () => {
     expect(manifest.scope).toBe('/');
     expect(manifest.display).toBe('standalone');
     expect(manifest.icons.length).toBeGreaterThan(0);
+    // installability needs raster icons (192 + 512), not just SVG
+    const pngs = manifest.icons.filter((i) => i.type === 'image/png');
+    expect(pngs.map((i) => i.sizes)).toEqual(['192x192', '512x512']);
+    expect(indexHtml).toMatch(/<link rel="apple-touch-icon" href="icon-192\.png"/);
   });
 
   it('exposes a matches() helper for query/category logic', () => {

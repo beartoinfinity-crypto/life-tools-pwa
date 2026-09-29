@@ -1,10 +1,12 @@
-var CACHE_NAME = 'life-tool-hub-v1';
+var CACHE_NAME = 'life-tool-hub-v2';
 var SHELL = [
   './',
   './index.html',
   './styles.css',
   './app.js',
   './manifest.json',
+  './icon-192.png',
+  './icon-512.png',
   './icon-light.svg',
   './icon-dark.svg'
 ];
@@ -19,6 +21,8 @@ var SHELL_PATHS = [
   '/styles.css',
   '/app.js',
   '/manifest.json',
+  '/icon-192.png',
+  '/icon-512.png',
   '/icon-light.svg',
   '/icon-dark.svg'
 ];

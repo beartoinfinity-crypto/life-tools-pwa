@@ -21,7 +21,7 @@ function defaultDraws() {
   ];
 }
 
-function createHarness({ draws = defaultDraws(), fail = false, seedTickets = null } = {}) {
+function createHarness({ draws = defaultDraws(), fail = false, seedTickets = null, userAgent = null } = {}) {
   const dom = new JSDOM(indexHtml, {
     url: 'https://example.test/mark-six/',
     runScripts: 'outside-only',
@@ -31,6 +31,9 @@ function createHarness({ draws = defaultDraws(), fail = false, seedTickets = nul
   const state = { fail, draws };
 
   if (seedTickets) window.localStorage.setItem(TICKETS_KEY, JSON.stringify(seedTickets));
+  if (userAgent) {
+    Object.defineProperty(window.navigator, 'userAgent', { get: () => userAgent, configurable: true });
+  }
 
   window.fetch = vi.fn(async () => {
     if (state.fail) throw new TypeError('Network down');
@@ -344,5 +347,39 @@ describe('mark-six app (v1.1)', () => {
     await flush();
     expect(banner.style.display).toBe('none');
     expect(window.sessionStorage.getItem('life-tool-install-dismissed')).toBe('1');
+  });
+
+  it('shows manual instructions when Install is clicked with no deferred prompt', async () => {
+    const { window } = await boot();
+    const banner = window.document.querySelector('.install-banner');
+    click(window, banner.querySelector('.install-btn'));
+    expect(banner.style.display).toBe('flex');
+    expect(banner.querySelector('p').textContent).toContain('browser menu');
+    expect(banner.querySelector('.install-btn').style.display).toBe('none');
+    expect(window.sessionStorage.getItem('life-tool-install-dismissed')).toBeNull();
+  });
+
+  it('auto-shows iOS instructions on iPhone Safari (no beforeinstallprompt there)', async () => {
+    const { window } = await boot({
+      userAgent:
+        'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+    });
+    const banner = window.document.querySelector('.install-banner');
+    expect(banner.style.display).toBe('flex');
+    expect(banner.querySelector('p').textContent).toContain('Add to Home Screen');
+    expect(banner.querySelector('.install-btn').style.display).toBe('none');
+    expect(window.sessionStorage.getItem('life-tool-install-dismissed')).toBeNull();
+  });
+
+  it('returns to the install mode when a real prompt later arrives', async () => {
+    const { window } = await boot();
+    const banner = window.document.querySelector('.install-banner');
+    click(window, banner.querySelector('.install-btn'));
+    expect(banner.querySelector('p').textContent).toContain('browser menu');
+
+    fireInstall(window);
+    expect(banner.querySelector('p').textContent).toBe('Add Mark Six to your home screen?');
+    expect(banner.querySelector('.install-btn').style.display).toBe('');
+    expect(banner.style.display).toBe('flex');
   });
 });

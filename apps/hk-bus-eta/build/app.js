@@ -40,6 +40,8 @@ const T = {
   installTitle: { zh: "將「巴士預報」加到主畫面？", en: "Add Bus ETA to your home screen?" },
   installBtn: { zh: "安裝", en: "Install" },
   installDismiss: { zh: "關閉", en: "Dismiss" },
+  installIos: { zh: "點一下「分享」按鈕，再選擇「加入主畫面」。", en: "Tap the Share button, then choose \"Add to Home Screen\"." },
+  installManual: { zh: "開啟瀏覽器選單，選擇「安裝應用程式」或「加入主畫面」。", en: "Open your browser menu and choose \"Install app\" or \"Add to Home Screen\"." },
 };
 
 /* ---------------- state ---------------- */
@@ -1023,9 +1025,29 @@ function init() {
   const markBannerDismissed = () => {
     try { sessionStorage.setItem(INSTALL_DISMISS_KEY, "1"); } catch (e) {}
   };
+  let bannerMode = "install";
+  const isIOS = () => {
+    const ua = navigator.userAgent || "";
+    if (/iP(hone|ad|od)\b/.test(ua)) return true;
+    return navigator.platform === "MacIntel" && (navigator.maxTouchPoints || 0) > 1;
+  };
+  const setBannerMode = (mode) => {
+    if (mode === "install" || mode === "ios" || mode === "manual") bannerMode = mode;
+  };
   const openInstallBanner = () => {
-    installBanner.querySelector(".install-title").textContent = T.installTitle[state.lang];
-    installBanner.querySelector(".install-btn").textContent = T.installBtn[state.lang];
+    const titleEl = installBanner.querySelector(".install-title");
+    const btnEl = installBanner.querySelector(".install-btn");
+    if (bannerMode === "ios") {
+      titleEl.textContent = T.installIos[state.lang];
+      btnEl.style.display = "none";
+    } else if (bannerMode === "manual") {
+      titleEl.textContent = T.installManual[state.lang];
+      btnEl.style.display = "none";
+    } else {
+      titleEl.textContent = T.installTitle[state.lang];
+      btnEl.textContent = T.installBtn[state.lang];
+      btnEl.style.display = "";
+    }
     installBanner.querySelector(".dismiss-btn").setAttribute("aria-label", T.installDismiss[state.lang]);
     installBanner.style.display = "flex";
   };
@@ -1034,9 +1056,14 @@ function init() {
   window.addEventListener("beforeinstallprompt", (e) => {
     e.preventDefault();
     deferredPrompt = e;
+    setBannerMode("install");
     if (!bannerDismissed()) openInstallBanner();
   });
   window.addEventListener("appinstalled", () => { deferredPrompt = null; closeInstallBanner(); });
+  if (isIOS() && !bannerDismissed()) {
+    setBannerMode("ios");
+    openInstallBanner();
+  }
   installBanner.querySelector(".install-btn").addEventListener("click", () => {
     const pe = deferredPrompt;
     deferredPrompt = null;
@@ -1046,7 +1073,10 @@ function init() {
         pe.userChoice.then(() => { markBannerDismissed(); closeInstallBanner(); },
                            () => { closeInstallBanner(); });
       } else { closeInstallBanner(); }
-    } else { closeInstallBanner(); }
+    } else {
+      setBannerMode("manual");
+      openInstallBanner();
+    }
   });
   installBanner.querySelector(".dismiss-btn").addEventListener("click", () => {
     markBannerDismissed();

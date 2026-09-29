@@ -1,10 +1,12 @@
-var CACHE_NAME = 'traffic-news-v10';
+var CACHE_NAME = 'traffic-news-v11';
 var ASSETS = [
   './',
   './index.html',
   './styles.css',
   './app.js',
   './manifest.json',
+  './icons/icon-192.png',
+  './icons/icon-512.png',
   './icons/icon.svg'
 ];
 

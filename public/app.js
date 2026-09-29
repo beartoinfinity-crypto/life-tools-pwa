@@ -256,6 +256,46 @@
   applyTheme(theme(), false);
 
   /* --- PWA install prompt banner --- */
+  var bannerStrong = installBanner.querySelector('.banner-text strong');
+  var bannerP = installBanner.querySelector('.banner-text p');
+  var currentBannerMode = 'install';
+
+  var BANNER_TEXTS = {
+    install: {
+      title: 'Install Life Tool',
+      body: 'Add the hub to your home screen for quick access.',
+      btn: 'Install'
+    },
+    ios: {
+      title: 'Install Life Tool',
+      body: 'Tap the Share button, then choose "Add to Home Screen".',
+      btn: ''
+    },
+    manual: {
+      title: 'Install Life Tool',
+      body: 'Open your browser menu and choose "Install app" or "Add to Home Screen".',
+      btn: ''
+    }
+  };
+
+  function isIOS() {
+    var ua = (navigator.userAgent || '');
+    if (/iP(hone|ad|od)\b/.test(ua)) return true;
+    return navigator.platform === 'MacIntel' && (navigator.maxTouchPoints || 0) > 1;
+  }
+
+  function setBannerMode(mode) {
+    var t = BANNER_TEXTS[mode];
+    if (!t) return;
+    currentBannerMode = mode;
+    if (bannerStrong) bannerStrong.textContent = t.title;
+    if (bannerP) bannerP.textContent = t.body;
+    if (bannerInstall) {
+      bannerInstall.textContent = t.btn;
+      bannerInstall.style.display = t.btn ? '' : 'none';
+    }
+  }
+
   function bannerDismissed() {
     try { return sessionStorage.getItem(INSTALL_DISMISS_KEY) === '1'; } catch (e) { return false; }
   }
@@ -285,6 +325,7 @@
   function onBeforeInstallPrompt(e) {
     e.preventDefault();
     deferredPrompt = e;
+    setBannerMode('install');
     if (!bannerDismissed()) openBanner();
   }
   window.addEventListener('beforeinstallprompt', onBeforeInstallPrompt);
@@ -293,6 +334,11 @@
     deferredPrompt = null;
     installBanner.hidden = true;
   });
+
+  if (isIOS() && !bannerDismissed()) {
+    setBannerMode('ios');
+    openBanner();
+  }
 
   if (bannerInstall) {
     bannerInstall.addEventListener('click', function () {
@@ -309,7 +355,8 @@
           closeBanner();
         }
       } else {
-        closeBanner();
+        setBannerMode('manual');
+        openBanner();
       }
     });
   }
@@ -354,6 +401,9 @@
     handleBeforeInstallPrompt: onBeforeInstallPrompt,
     setDeferredPrompt: function (p) { deferredPrompt = p; },
     bannerVisible: function () { return !installBanner.hidden; },
-    bannerDismissed: bannerDismissed
+    bannerDismissed: bannerDismissed,
+    setBannerMode: setBannerMode,
+    bannerMode: function () { return currentBannerMode; },
+    isIOS: isIOS
   };
 })();
