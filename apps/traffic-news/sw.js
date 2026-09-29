@@ -1,4 +1,4 @@
-var CACHE_NAME = 'traffic-news-v11';
+var CACHE_NAME = 'traffic-news-v12';
 var ASSETS = [
   './',
   './index.html',
@@ -6,8 +6,7 @@ var ASSETS = [
   './app.js',
   './manifest.json',
   './icons/icon-192.png',
-  './icons/icon-512.png',
-  './icons/icon.svg'
+  './icons/icon-512.png'
 ];
 
 self.addEventListener('install', function (event) {

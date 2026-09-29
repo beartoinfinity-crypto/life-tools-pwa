@@ -29,9 +29,9 @@ in `localStorage`). It is also its own little PWA:
   traffic-news, music-trend, bus-eta-lite) ships the same banner, and they all share one `sessionStorage`
   dismiss key (`life-tool-install-dismissed`) — dismissing it anywhere keeps it quiet everywhere for the
   rest of the session.
-- **Offline shell** — `public/manifest.json` + `public/sw.js` (`life-tool-hub-v2`) make `/` installable and
+- **Offline shell** — `public/manifest.json` + `public/sw.js` (`life-tool-hub-v3`) make `/` installable and
   offline-capable; the worker only handles hub-shell paths, never the sub-apps' URLs
-- **Version badge** — `v1.2 build <timestamp>` in the header, per the per-app badge convention in CONTEXT.md
+- **Version badge** — `v1.3 build <timestamp>` in the header, per the per-app badge convention in CONTEXT.md
 
 ---
 
@@ -82,7 +82,7 @@ Open `http://localhost:3000` — visit `/` for the dashboard, `/mark-six/`, `/bu
 │       ├── styles.css
 │       ├── manifest.json      # PWA manifest (scope /mark-six/)
 │       ├── sw.js              # Service worker (offline caching)
-│       ├── icons/icon.svg
+│       ├── icons/             # icon-192.png + icon-512.png (PWA icons)
 │       └── test/              # Vitest suite (55 tests) + fixtures
 │   └── hk-bus-eta/        # HK Bus ETA apps (mounted at /bus-eta/, /bus-eta-lite/)
 │       ├── build/             # Lite ETA UI (served at /bus-eta-lite/): app.js + bundled hk-bus-eta library
@@ -267,7 +267,7 @@ Other features:
   you return); the detail page keeps a persistent `更新於 HH:MM:SS` last-refresh stamp. Manual refresh re-downloads
   the route database.
 - **Offline-first** — route database cached in IndexedDB; offline banner + Retry-on-failure; service worker caches
-  the shell (`buseta-lite-v25`).
+  the shell (`buseta-lite-v26`).
 - **Loading skeletons & >=48px touch targets** — shimmer placeholders replace the blocking splash; buttons and rows
   sized for gloved/fumbling taps.
 - **EN/ZH** toggle; near-black UI in night mode with corrected chip/badge colours.
