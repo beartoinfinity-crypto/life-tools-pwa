@@ -37,6 +37,9 @@ const T = {
   offBanner: { zh: "網絡連線中斷，正顯示快取資料", en: "Network offline — showing cached data" },
   onlineBack: { zh: "已恢復連線", en: "Back online" },
   lastUpdate: { zh: "更新於", en: "Updated" },
+  installTitle: { zh: "將「巴士預報」加到主畫面？", en: "Add Bus ETA to your home screen?" },
+  installBtn: { zh: "安裝", en: "Install" },
+  installDismiss: { zh: "關閉", en: "Dismiss" },
 };
 
 /* ---------------- state ---------------- */
@@ -1000,6 +1003,55 @@ function init() {
     if (state.view === "detail") refreshVisibleEtas(true);
   });
   updateNetBanner();
+  // ---- PWA install banner (shares the hub's dismiss key) ----
+  const INSTALL_DISMISS_KEY = "life-tool-install-dismissed";
+  let deferredPrompt = null;
+  const installBanner = document.createElement("div");
+  installBanner.className = "install-banner";
+  installBanner.style.display = "none";
+  installBanner.setAttribute("role", "region");
+  installBanner.setAttribute("aria-label", "Install app");
+  installBanner.innerHTML =
+    '<p class="install-title"></p>' +
+    '<button class="install-btn" type="button"></button>' +
+    '<button class="dismiss-btn" type="button">&times;</button>';
+  document.body.insertBefore(installBanner, document.body.firstChild);
+
+  const bannerDismissed = () => {
+    try { return sessionStorage.getItem(INSTALL_DISMISS_KEY) === "1"; } catch (e) { return false; }
+  };
+  const markBannerDismissed = () => {
+    try { sessionStorage.setItem(INSTALL_DISMISS_KEY, "1"); } catch (e) {}
+  };
+  const openInstallBanner = () => {
+    installBanner.querySelector(".install-title").textContent = T.installTitle[state.lang];
+    installBanner.querySelector(".install-btn").textContent = T.installBtn[state.lang];
+    installBanner.querySelector(".dismiss-btn").setAttribute("aria-label", T.installDismiss[state.lang]);
+    installBanner.style.display = "flex";
+  };
+  const closeInstallBanner = () => { installBanner.style.display = "none"; };
+
+  window.addEventListener("beforeinstallprompt", (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    if (!bannerDismissed()) openInstallBanner();
+  });
+  window.addEventListener("appinstalled", () => { deferredPrompt = null; closeInstallBanner(); });
+  installBanner.querySelector(".install-btn").addEventListener("click", () => {
+    const pe = deferredPrompt;
+    deferredPrompt = null;
+    if (pe && typeof pe.prompt === "function") {
+      try { pe.prompt(); } catch (e) {}
+      if (pe.userChoice && typeof pe.userChoice.then === "function") {
+        pe.userChoice.then(() => { markBannerDismissed(); closeInstallBanner(); },
+                           () => { closeInstallBanner(); });
+      } else { closeInstallBanner(); }
+    } else { closeInstallBanner(); }
+  });
+  installBanner.querySelector(".dismiss-btn").addEventListener("click", () => {
+    markBannerDismissed();
+    closeInstallBanner();
+  });
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("/bus-eta-lite/sw.js").catch(() => {});
   }

@@ -399,4 +399,46 @@ describe('traffic-news app (v1.1)', () => {
     expect(ids(window)).toEqual(['x1']);
     expect(window.location.search).toContain('r=other');
   });
+
+  // ---- PWA install banner ----
+
+  function fireInstall(window, prompt = vi.fn()) {
+    const evt = new window.Event('beforeinstallprompt', { cancelable: true });
+    evt.prompt = prompt;
+    evt.userChoice = Promise.resolve({ outcome: 'accepted' });
+    window.dispatchEvent(evt);
+    return evt;
+  }
+
+  it('shows the install banner until dismissed, and remembers the dismissal', async () => {
+    const { window } = await boot();
+    const banner = window.document.querySelector('.install-banner');
+    expect(banner).toBeTruthy();
+    expect(banner.style.display).toBe('none');
+
+    fireInstall(window);
+    expect(banner.style.display).toBe('flex');
+
+    click(window, banner.querySelector('.dismiss-btn'));
+    expect(banner.style.display).toBe('none');
+    expect(window.sessionStorage.getItem('life-tool-install-dismissed')).toBe('1');
+
+    // dismissed for the rest of the session (shared key with the hub)
+    fireInstall(window);
+    expect(banner.style.display).toBe('none');
+  });
+
+  it('calls the deferred prompt and hides the banner once a choice lands', async () => {
+    const { window } = await boot();
+    const banner = window.document.querySelector('.install-banner');
+    const prompt = vi.fn();
+    fireInstall(window, prompt);
+    expect(banner.style.display).toBe('flex');
+
+    click(window, banner.querySelector('.install-btn'));
+    expect(prompt).toHaveBeenCalledTimes(1);
+    await flush();
+    expect(banner.style.display).toBe('none');
+    expect(window.sessionStorage.getItem('life-tool-install-dismissed')).toBe('1');
+  });
 });

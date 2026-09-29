@@ -527,32 +527,49 @@
     navigator.serviceWorker.register('./sw.js').catch(function () {});
   }
 
+  /* ---- PWA install banner (shares the hub's dismiss key) ---- */
+  var INSTALL_DISMISS_KEY = 'life-tool-install-dismissed';
   var deferredPrompt = null;
   var installBanner = document.createElement('div');
   installBanner.className = 'install-banner';
   installBanner.style.display = 'none';
+  installBanner.setAttribute('role', 'region');
+  installBanner.setAttribute('aria-label', 'Install app');
   installBanner.innerHTML =
     '<p>Add Mark Six to your home screen?</p>' +
-    '<button class="install-btn" id="installBtn">Install</button>' +
-    '<button class="dismiss-btn" id="dismissBtn">&times;</button>';
+    '<button class="install-btn" type="button">Install</button>' +
+    '<button class="dismiss-btn" type="button" aria-label="Dismiss">&times;</button>';
+  document.body.insertBefore(installBanner, document.body.firstChild);
+
+  function bannerDismissed() { try { return sessionStorage.getItem(INSTALL_DISMISS_KEY) === '1'; } catch (e) { return false; } }
+  function markBannerDismissed() { try { sessionStorage.setItem(INSTALL_DISMISS_KEY, '1'); } catch (e) {} }
+  function openInstallBanner() { installBanner.style.display = 'flex'; }
+  function closeInstallBanner() { installBanner.style.display = 'none'; }
 
   window.addEventListener('beforeinstallprompt', function (e) {
     e.preventDefault();
     deferredPrompt = e;
-    document.body.insertBefore(installBanner, document.body.firstChild.nextSibling);
-    installBanner.style.display = 'flex';
+    if (!bannerDismissed()) openInstallBanner();
+  });
+  window.addEventListener('appinstalled', function () {
+    deferredPrompt = null;
+    closeInstallBanner();
+  });
 
-    document.getElementById('installBtn').addEventListener('click', function () {
-      deferredPrompt.prompt();
-      deferredPrompt.userChoice.then(function () {
-        deferredPrompt = null;
-        installBanner.style.display = 'none';
-      });
-    });
-
-    document.getElementById('dismissBtn').addEventListener('click', function () {
-      installBanner.style.display = 'none';
-    });
+  installBanner.querySelector('.install-btn').addEventListener('click', function () {
+    var pe = deferredPrompt;
+    deferredPrompt = null;
+    if (pe && typeof pe.prompt === 'function') {
+      try { pe.prompt(); } catch (e) {}
+      if (pe.userChoice && typeof pe.userChoice.then === 'function') {
+        pe.userChoice.then(function () { markBannerDismissed(); closeInstallBanner(); },
+                           function () { closeInstallBanner(); });
+      } else { closeInstallBanner(); }
+    } else { closeInstallBanner(); }
+  });
+  installBanner.querySelector('.dismiss-btn').addEventListener('click', function () {
+    markBannerDismissed();
+    closeInstallBanner();
   });
 
   // Pure-logic test hooks (no DOM dependency).

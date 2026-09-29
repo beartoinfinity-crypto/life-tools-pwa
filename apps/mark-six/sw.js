@@ -1,4 +1,4 @@
-var CACHE_NAME = 'mark-six-v9';
+var CACHE_NAME = 'mark-six-v10';
 var ASSETS = [
   './',
   './index.html',

@@ -319,3 +319,48 @@ body {
 :root[data-theme="night"] .route-line:hover { background: rgba(255, 255, 255, 0.05); }
 :root[data-theme="night"] .stop-card:hover .stop-name .zh { color: #7fe0b0; }
 :root[data-theme="night"] .stop-card:hover .stop-more { color: #7fe0b0; }
+
+/* Install banner */
+.install-banner {
+  background: linear-gradient(135deg, #1565c0, #0d47a1);
+  color: #fff;
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  font-size: 16px;
+}
+
+.install-banner p {
+  flex: 1;
+  line-height: 1.4;
+}
+
+.install-btn {
+  background: #fff;
+  color: #1565c0;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 24px;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.15s;
+}
+
+.install-btn:active {
+  transform: scale(0.95);
+}
+
+.dismiss-btn {
+  background: transparent;
+  color: rgba(255,255,255,0.7);
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  padding: 8px;
+  line-height: 1;
+}
