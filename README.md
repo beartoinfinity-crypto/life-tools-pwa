@@ -84,7 +84,7 @@ Open `http://localhost:3000` — visit `/` for the dashboard, `/mark-six/`, `/bu
 │       ├── manifest.json      # PWA manifest (scope /mark-six/)
 │       ├── sw.js              # Service worker (offline caching)
 │       ├── icons/             # icon-192.png + icon-512.png (PWA icons)
-│       └── test/              # Vitest suite (77 tests) + fixtures
+│       └── test/              # Vitest suite (81 tests) + fixtures
 │   └── hk-bus-eta/        # HK Bus ETA apps (mounted at /bus-eta/, /bus-eta-lite/)
 │       ├── build/             # Lite ETA UI (served at /bus-eta-lite/): app.js + bundled hk-bus-eta library
 │       ├── build-upstream/    # Archived upstream PWA (served at /bus-eta/, not from this dir)
@@ -218,8 +218,11 @@ Response shape:
 - Auto-refresh at midnight on draw days only (Tue/Thu/Sat)
 - Manual refresh button scrapes a fresh copy of the latest draws
 - 6 main numbers + 1 **special number** (rendered with a `+` and red ring)
-- **Next-draw countdown** — next draw date + live ticking countdown to the 21:15 HKT sales
-  cutoff (Tue/Thu/Sat), computed client-side from the clock (no backend change)
+- **Next-draw countdown** — anchored to the newest draw actually fetched from the source,
+  not a fixed weekday rule: the next draw is the first Tue/Thu/Sat strictly after it at the
+  21:15 HKT sales cutoff, so schedule gaps (holiday blackouts, missed draws) are never
+  counted down to. When the cutoff passes, the app refreshes once to pick up the fresh
+  result and re-anchors; if no draw day is in range it says "awaiting" instead of guessing.
 - **Ticket checker** — save 6-number single tickets (localStorage); each is re-evaluated
   against the latest draw and shown with its prize division (1st–7th / No prize)
 - **Hot/cold statistics** — appearance counts for the last 20/50/100 draws, six coldest
@@ -508,7 +511,7 @@ npm test            # Run all tests once
 npm run test:watch  # Watch mode
 ```
 
-230 tests across 11 files under `test/` (hub), `apps/mark-six/test/`, `apps/traffic-news/test/` and `apps/music-trend/test/`. The suite uses in-memory SQLite + fixtures, so it runs offline without a Supabase connection.
+234 tests across 11 files under `test/` (hub), `apps/mark-six/test/`, `apps/traffic-news/test/` and `apps/music-trend/test/`. The suite uses in-memory SQLite + fixtures, so it runs offline without a Supabase connection.
 
 ---
 

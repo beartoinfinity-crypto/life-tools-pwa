@@ -179,6 +179,50 @@ describe('mark-six app (v1.1)', () => {
     expect(cutoff.textContent).toMatch(/^\d{2} hrs : \d{2} mins : \d{2} secs$/);
   });
 
+  it('anchors the next draw to the newest real draw (a missed draw day is skipped)', async () => {
+    const { window } = await boot();
+    // newest real draw = Sat 2026-09-26; it is now Wed 30/09 20:00 HKT, so
+    // Tue 29/09 came and went with no draw -> the next real draw is Thu 01/10
+    const next = window.MarksixCore.nextDrawCutoff(Date.parse('2026-09-30T12:00:00Z'), '2026-09-26');
+    expect(next.dateIso).toBe('2026-10-01');
+    expect(next.dayName).toBe('Thu');
+    expect(new Date(next.cutoffMs).toISOString()).toBe('2026-10-01T13:15:00.000Z');
+  });
+
+  it('never proposes a draw date at or before the anchor draw', async () => {
+    const { window } = await boot();
+    // anchor = Tue 2026-09-29 itself, same day before its cutoff: the next
+    // draw is Thursday, not the anchor draw being counted past
+    const next = window.MarksixCore.nextDrawCutoff(Date.parse('2026-09-29T12:00:00Z'), '2026-09-29');
+    expect(next.dateIso).toBe('2026-10-01');
+    expect(next.dayName).toBe('Thu');
+  });
+
+  it('shows an honest awaiting state when no draw day is in range', async () => {
+    const { window } = await boot();
+    // stale anchor (Sat 2026-09-26) two weeks on: every candidate has passed
+    expect(window.MarksixCore.nextDrawCutoff(Date.parse('2026-10-10T12:00:00Z'), '2026-09-26')).toBe(null);
+    window.MarksixCore.tickCountdown(Date.parse('2026-10-10T12:00:00Z'));
+    expect(window.document.getElementById('ndDate').textContent).toBe('Awaiting next draw date');
+    expect(window.document.getElementById('ndCutoff').textContent).toBe('--');
+    expect(window.document.getElementById('ndCutoff').getAttribute('datetime')).toBeNull();
+  });
+
+  it('refreshes once when the countdown target expires, then re-anchors', async () => {
+    const { window } = await boot();
+    // newest fixture draw is Sat 2026-09-26 -> lock onto Tue 29/09 21:15 HKT
+    window.MarksixCore.tickCountdown(Date.parse('2026-09-29T12:00:00Z'));
+    // the cutoff passes -> the app pulls the fresh draw
+    window.MarksixCore.tickCountdown(Date.parse('2026-09-29T14:00:00Z'));
+    const refreshes = () => window.fetch.mock.calls.filter((c) => String(c[0]).includes('/refresh')).length;
+    expect(refreshes()).toBe(1);
+    // it does not refire while counting to the new target
+    window.MarksixCore.tickCountdown(Date.parse('2026-09-29T15:00:00Z'));
+    expect(refreshes()).toBe(1);
+    // and the widget now counts to Thursday
+    expect(window.document.getElementById('ndDate').textContent).toBe('2026-10-01 (Thu)');
+  });
+
   it('boots from the cached read (no forced scrape) and fetches stats history', async () => {
     const { window } = await boot();
     const urls = window.fetch.mock.calls.map((c) => String(c[0]));

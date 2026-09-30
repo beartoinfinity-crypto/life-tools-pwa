@@ -223,17 +223,36 @@
     }
   }
 
-  // ---- next draw countdown (mirrors draw-day.js: Tue/Thu/Sat, 21:15 HKT) ----
+  // ---- next draw countdown ----
+  // Mark Six normally draws Tue/Thu/Sat at 21:15 HKT, but the real schedule
+  // drifts (holiday blackouts, missed draws), so a fixed weekday rule counts
+  // down to draws that never happen. The target is therefore anchored to the
+  // newest draw actually fetched from the source: the next draw is the first
+  // Tue/Thu/Sat strictly after it. Without data yet it falls back to the
+  // calendar rule.
   var DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   var CUTOFF_UTC_HOURS = 13; // 21:15 HKT == 13:15 UTC (HKT has no DST)
 
   function isDrawDayUTC(day) { return day === 2 || day === 4 || day === 6; }
 
-  /** Next sales cutoff at/after nowMs: draw day (Tue/Thu/Sat) at 21:15 HKT. */
-  function nextDrawCutoff(nowMs) {
+  function dateToUtcMs(iso) {
+    var p = String(iso).slice(0, 10).split('-');
+    return Date.UTC(+p[0], +p[1] - 1, +p[2]);
+  }
+
+  /**
+   * Next sales cutoff at/after nowMs. latestDrawIso ('YYYY-MM-DD...') is the
+   * newest real draw; candidates are draw days strictly after it (and after
+   * now). Returns null when no draw day falls within the horizon, so the UI
+   * can say "awaiting" instead of inventing a date.
+   */
+  function nextDrawCutoff(nowMs, latestDrawIso) {
     var hkt = new Date(nowMs + 8 * 3600 * 1000); // HKT calendar date via UTC getters
-    for (var i = 0; i < 8; i++) {
-      var guess = new Date(Date.UTC(hkt.getUTCFullYear(), hkt.getUTCMonth(), hkt.getUTCDate() + i));
+    var anchorIso = latestDrawIso ? String(latestDrawIso).slice(0, 10) : hkt.toISOString().slice(0, 10);
+    var startOffset = latestDrawIso ? 1 : 0; // a same-day draw is only valid before any data lands
+
+    for (var i = startOffset; i <= 8; i++) {
+      var guess = new Date(dateToUtcMs(anchorIso) + i * 86400000);
       if (!isDrawDayUTC(guess.getUTCDay())) continue;
       var cutoff = Date.UTC(guess.getUTCFullYear(), guess.getUTCMonth(), guess.getUTCDate(), CUTOFF_UTC_HOURS, 15, 0);
       if (cutoff > nowMs) {
@@ -249,9 +268,34 @@
 
   function pad2(n) { return (n < 10 ? '0' : '') + n; }
 
+  function latestDrawIso() {
+    var d = allDraws[0];
+    return d && d.drawDate ? String(d.drawDate).slice(0, 10) : null;
+  }
+
+  var countdownTarget = null;  // the cutoff we are currently counting to
+  var refreshInFlight = false; // one auto-refresh per expired target
+
   function tickCountdown(nowMs) {
-    var next = nextDrawCutoff(nowMs);
-    if (!next) return;
+    var next = nextDrawCutoff(nowMs, latestDrawIso());
+    if (!next) {
+      if (ndDateEl) ndDateEl.textContent = 'Awaiting next draw date';
+      if (ndCutoffEl) {
+        ndCutoffEl.textContent = '--';
+        ndCutoffEl.removeAttribute('datetime');
+      }
+      countdownTarget = null;
+      return;
+    }
+
+    // The cutoff we were counting to has passed, so the draw has happened:
+    // pull the fresh result once; the list re-anchors on the next tick.
+    if (countdownTarget !== null && nowMs > countdownTarget && !refreshInFlight) {
+      refreshInFlight = true;
+      loadInitial(true).finally(function () { refreshInFlight = false; });
+    }
+    countdownTarget = next.cutoffMs;
+
     var totalSec = Math.floor((next.cutoffMs - nowMs) / 1000);
     var hrs = Math.floor(totalSec / 3600);
     var mins = Math.floor((totalSec % 3600) / 60);
@@ -516,7 +560,8 @@
   }
 
   // Boot: cache-first read (documented behaviour — no scraping on page load);
-  // the refresh button and the draw-day midnight schedule still force one.
+  // the refresh button, the draw-day midnight schedule and the countdown
+  // expiry (to pick up a draw that just happened) still force one.
   tickCountdown(Date.now());
   setInterval(function () { tickCountdown(Date.now()); }, 1000);
   loadInitial(false);

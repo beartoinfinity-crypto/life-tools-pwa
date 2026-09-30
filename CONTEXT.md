@@ -24,7 +24,7 @@ Each app is an authored PWA with its own `index.html`, `styles.css`,
 |-----------------------|-------------------|----------------------------|
 | public/ (hub)         | life-tool-hub-v4  | v1.4 build 202609291603    |
 | apps/traffic-news     | traffic-news-v13  | v1.6 build 202609291603    |
-| apps/mark-six         | mark-six-v13      | v1.5 build 202609291603    |
+| apps/mark-six         | mark-six-v14      | v1.6 build 202609301604    |
 | apps/music-trend      | music-trend-v36   | v1.8 build 202609291603    |
 | apps/hk-bus-eta/build | buseta-lite-v27   | v1.7 build 202609291603    |
 
@@ -49,9 +49,10 @@ Rules:
    that app's badge (format `yyyyMMddHHmm`, UTC), set via
    `$env:GIT_AUTHOR_DATE` / `$env:GIT_COMMITTER_DATE` so the badge and
    the commit agree byte-for-byte.
-3. All five apps ship together in one commit, so they share **one build
-   number per release**. The `-vN` cache versions advance independently
-   per app, whenever that app's shell changes.
+3. Apps that ship together in one commit share one build number; an app
+   shipped on its own gets the commit's time to itself, and untouched
+   apps keep their previous build. The `-vN` cache versions advance
+   independently per app, whenever that app's shell changes.
 4. The SW precaches `index.html` (where the badge lives), so the badge
    build and the `-vN` bump must land in the same commit (see below).
 
