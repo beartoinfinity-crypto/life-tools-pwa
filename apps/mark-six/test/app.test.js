@@ -558,16 +558,37 @@ describe('mark-six Smart Pick generator', () => {
     return harness;
   }
 
-  it('sits directly below the Number frequency panel with the five strategies', async () => {
+  it('sits directly below the Number frequency panel with the six strategies', async () => {
     const { window } = await boot();
     const stats = window.document.getElementById('statsPanel');
     const smart = window.document.getElementById('smartPickPanel');
     expect(stats.compareDocumentPosition(smart) & window.Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(window.document.getElementById('smartPickHeading').textContent).toBe('Smart Pick Generator');
     const strategies = [...window.document.querySelectorAll('#strategySelect option')].map((o) => o.value);
-    expect(strategies).toEqual(['balanced', 'hot_streak', 'cold_recovery', 'markov_chain', 'monte_carlo']);
+    expect(strategies).toEqual(['balanced', 'hot_streak', 'cold_recovery', 'markov_chain', 'monte_carlo', 'contrarian']);
     expect(window.document.getElementById('generateBtn').textContent).toBe('Generate Ticket');
     expect(window.document.getElementById('generate5Btn').textContent).toBe('Generate 5 Lines');
+  });
+
+  it('shows a collapsed honesty disclaimer directly under the generator buttons', async () => {
+    const { window } = await boot();
+    const details = window.document.querySelector('#smartPickPanel details.smart-why');
+    expect(details).toBeTruthy();
+    expect(details.open).toBe(false);
+    expect(details.querySelector('summary').textContent).toMatch(/cannot improve your odds/i);
+
+    const actions = window.document.querySelector('#smartPickPanel .smart-actions');
+    expect(actions.nextElementSibling).toBe(details);
+
+    const body = details.textContent;
+    expect(body).toContain('1 in 13,983,816');
+    expect(body).toMatch(/independent/i);
+    expect(body).toMatch(/gambler/i);                 // cold-due fallacy named
+    expect(body).toMatch(/hot-hand/i);                // hot-streak fallacy named
+    expect(body).toContain('Law of Large Numbers');
+    expect(body).toContain('1-2-3-4-5-6');
+    expect(body).toMatch(/expectation management/i);
+    expect(body).toMatch(/does not change your chance/i);
   });
 
   it('generates a ticket with balls, score and breakdown', async () => {
@@ -682,5 +703,36 @@ describe('mark-six Smart Pick generator', () => {
     const { window } = await boot();
     const values = [...window.document.querySelectorAll('input[name="oeRatio"]')].map((r) => r.value);
     expect(values).toEqual(['balanced', 'any', 'odd_heavy', 'even_heavy']);
+  });
+
+  it('generates lines with the contrarian strategy selected', async () => {
+    const { window } = await boot();
+    window.document.getElementById('strategySelect').value = 'contrarian';
+    await window.MarksixCore.generateSmartLines(1);
+    await flush();
+    const line = window.document.querySelector('.smart-line');
+    expect(line).toBeTruthy();
+    expect(line.querySelectorAll('.ball')).toHaveLength(6);
+    expect(line.querySelector('.smart-score').textContent).toMatch(/^Score: \d+%$/);
+    expect(line.querySelector('.smart-breakdown').textContent).toMatch(/Breakdown: Sum \d+/);
+  });
+
+  it('recomputes the backtest when switching to contrarian', async () => {
+    const { window } = await boot({ draws: makeDraws(30) });
+    const sel = window.document.getElementById('strategySelect');
+    sel.value = 'contrarian';
+    sel.dispatchEvent(new window.Event('change', { bubbles: true }));
+    await new Promise((r) => setTimeout(r, 320)); // 250 ms debounce
+    await flush();
+    expect(window.document.getElementById('backtestBadge').textContent)
+      .toMatch(/^Strategy hit rate \(3\+ numbers\): \d+% in last 20 draws\.$/);
+  });
+
+  it('generates contrarian lines offline from stored history', async () => {
+    const { window } = await boot({ fail: true, seedHistory: makeDraws(30) });
+    window.document.getElementById('strategySelect').value = 'contrarian';
+    await window.MarksixCore.generateSmartLines(1);
+    await flush();
+    expect(window.document.querySelector('.smart-line')).toBeTruthy();
   });
 });

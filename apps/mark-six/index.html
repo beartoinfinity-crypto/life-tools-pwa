@@ -21,7 +21,7 @@
         <circle cx="18" cy="18" r="15" fill="#d32f2f" />
         <text x="18" y="24" text-anchor="middle" fill="#fff" font-size="16" font-weight="bold">6</text>
       </svg>
-      <h1>Mark Six<span class="app-ver">v1.7 build 202610050727</span></h1>
+      <h1>Mark Six<span class="app-ver">v1.8 build 202610050754</span></h1>
       <button id="refreshBtn" class="refresh-btn" title="Refresh">
         <svg class="refresh-icon" viewBox="0 0 24 24" width="24" height="24">
           <path d="M17.65 6.35A7.958 7.958 0 0012 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0112 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z" fill="currentColor"/>
@@ -90,6 +90,7 @@
           <option value="cold_recovery">Cold Recovery (Overdue)</option>
           <option value="markov_chain">Markov Chain</option>
           <option value="monte_carlo">Monte Carlo Simulation</option>
+          <option value="contrarian">Contrarian (Avoid Popular Picks)</option>
         </select>
       </div>
 
@@ -126,6 +127,25 @@
         <button type="button" id="generateBtn" class="smart-generate">Generate Ticket</button>
         <button type="button" id="generate5Btn" class="smart-generate secondary">Generate 5 Lines</button>
       </div>
+
+      <details class="smart-why">
+        <summary>Why this cannot improve your odds</summary>
+        <div class="smart-why-body">
+          <p>Every draw is independent (memoryless): past results never change future
+            draws. Each specific 6-number combination has odds of 1 in 13,983,816 every
+            time - even a number drawn ten times in a row stays at 6/49 next draw.</p>
+          <p>Both common beliefs are fallacies here: "cold numbers are due" (the
+            gambler's fallacy) and "hot numbers keep hitting" (the hot-hand fallacy).
+            The Law of Large Numbers only describes long-run frequencies - it is not a
+            short-term correction mechanism.</p>
+          <p>The only strategy with a mathematical basis is expectation management:
+            avoid popular picks (birthday numbers 1-31, bet-slip lines and patterns,
+            sequences like 1-2-3-4-5-6) - that reduces prize splitting when you win and
+            raises your expected prize. It does not change your chance of winning.</p>
+          <p>Smart Pick strategies are heuristics over your stored history, shown for
+            entertainment. They cannot change the physics of the draw.</p>
+        </div>
+      </details>
 
       <p id="backtestBadge" class="backtest-badge" hidden="hidden"></p>
       <p id="smartStatus" class="smart-status" role="status" hidden="hidden"></p>

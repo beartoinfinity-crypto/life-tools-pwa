@@ -23,8 +23,9 @@
   var HOT_LAMBDA = Math.log(2) / HOT_HALF_LIFE;
   var MIN_SIGMA = 0.5;          // avoids divide-by-zero in cold_recovery
   var MAX_Z = 10;
+  var PATTERN_RETRY_ATTEMPTS = 30; // contrarian: bounded retries for a clean ticket
 
-  var STRATEGIES = ['balanced', 'hot_streak', 'cold_recovery', 'monte_carlo', 'markov_chain'];
+  var STRATEGIES = ['balanced', 'hot_streak', 'cold_recovery', 'monte_carlo', 'markov_chain', 'contrarian'];
 
   var DEFAULT_CONFIG = {
     historyLimit: 100,
@@ -290,6 +291,63 @@
     return function () { return sampleWeighted(weights, PICK, rng); };
   }
 
+  // ---- contrarian (expectation management, not odds improvement) ----
+
+  var CONTRARIAN_HIGH_WEIGHT = 3; // 32-49 favoured: fewer players bet these
+
+  /**
+   * Shapes many players bet by drawing lines on the slip or reusing
+   * birthdays/sequences - sharing a jackpot when they hit. Patterns live on
+   * the whole ticket, so this checks the ticket, not individual numbers.
+   */
+  function isPopularPattern(nums) {
+    var i, tail, decade, counts = {}, decades = {}, maxCount = 0, maxDecade = 0, birthday = 0;
+    for (i = 0; i < nums.length; i++) {
+      if (nums[i] <= 31) birthday++;
+      tail = nums[i] % 10;
+      counts[tail] = (counts[tail] || 0) + 1;
+      if (counts[tail] > maxCount) maxCount = counts[tail];
+      decade = Math.floor((nums[i] - 1) / 10);
+      decades[decade] = (decades[decade] || 0) + 1;
+      if (decades[decade] > maxDecade) maxDecade = decades[decade];
+    }
+    if (birthday >= 5) return true;        // birthday-dominant ticket (1-31)
+    if (maxCount >= 5) return true;        // five or more share one last digit
+    if (maxDecade >= 5) return true;       // five or more share one decade
+    var step = nums[1] - nums[0];
+    if (step <= 0) return true;
+    for (i = 2; i < nums.length; i++) {
+      if (nums[i] - nums[i - 1] !== step) return false;
+    }
+    return true;                           // full arithmetic run (e.g. 1-2-3-4-5-6)
+  }
+
+  /**
+   * Weighted sampler biased to numbers above 31, retrying until the ticket
+   * avoids recognisable popular-pick patterns (bounded attempts; gates are
+   * still the pipeline's contract, the pattern layer is only a preference).
+   */
+  function makeContrarianSampler(rng) {
+    var weights = [], i;
+    for (i = 1; i <= NUMBERS; i++) weights[i - 1] = i >= 32 ? CONTRARIAN_HIGH_WEIGHT : 1;
+    function raw() { return sampleWeighted(weights, PICK, rng); }
+    function sample() {
+      var best = null, a, cand;
+      for (a = 0; a < PATTERN_RETRY_ATTEMPTS; a++) {
+        cand = raw();
+        if (!isPopularPattern(cand)) return cand;
+        if (!best) best = cand;
+      }
+      return best;
+    }
+    return { sample: sample, quality: contrarianQuality };
+  }
+
+  // ~0.51 at n=1 rising to 0.9 at n=31, 1.0 for every number above 31
+  function contrarianQuality(n) {
+    return n >= 32 ? 1 : 0.5 + 0.4 * (n / 31);
+  }
+
   /**
    * Balanced: 50% hot (top quartile by frequency), 30% cold (top quartile by
    * gap, excluding hot), 20% mid-frequency pool - drawn without replacement.
@@ -495,7 +553,12 @@
 
     var ranked = null, sampler = null;
     var rankedQuality = null;
-    if (hist.length) {
+    if (strategy === 'contrarian') {
+      // history-independent: the bias is about what other players bet
+      var contra = makeContrarianSampler(rng);
+      sampler = contra.sample;
+      rankedQuality = contra.quality;
+    } else if (hist.length) {
       if (strategy === 'balanced') {
         var b = makeBalancedSampler(hist, rng);
         sampler = b.sample;
@@ -510,8 +573,7 @@
         ranked = rankMonteCarlo(hist, cfg, rng);
       }
     } else {
-      var u = uniformSampler(rng);
-      sampler = u;
+      sampler = uniformSampler(rng);
       rankedQuality = function () { return 0.5; };
     }
 

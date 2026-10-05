@@ -77,8 +77,8 @@ describe('normalizeDraw', () => {
 // ---- every strategy produces a valid ticket ----
 
 describe('generatePick - all strategies', () => {
-  it('exports the five spec strategies', () => {
-    expect(STRATEGIES).toEqual(['balanced', 'hot_streak', 'cold_recovery', 'monte_carlo', 'markov_chain']);
+  it('exports the six spec strategies', () => {
+    expect(STRATEGIES).toEqual(['balanced', 'hot_streak', 'cold_recovery', 'monte_carlo', 'markov_chain', 'contrarian']);
   });
 
   it.each(STRATEGIES)('%s returns 6 sorted unique numbers with a 0-100 score', (strategy) => {
@@ -219,6 +219,102 @@ describe('strategy behaviour', () => {
     // at least one of the 12 numbers that recur in every 5th draw
     const frequent = [1, 2, 3, 4, 5, 6];
     expect(result.numbers.some((n) => frequent.includes(n))).toBe(true);
+  });
+});
+
+// ---- contrarian (expectation management: avoid popular picks) ----
+
+describe('contrarian strategy', () => {
+  const noGates = { sumRange: null, oddEvenRatio: 'any', consecutivePairProb: false };
+
+  it('is deterministic for the same seed', () => {
+    const a = generatePick('contrarian', makeHistory(60), {}, makeRng(42));
+    const b = generatePick('contrarian', makeHistory(60), {}, makeRng(42));
+    expect(a.numbers).toEqual(b.numbers);
+    expect(a.score).toBe(b.score);
+  });
+
+  it('biases strongly toward numbers above 31 (expectation management)', () => {
+    const history = makeHistory(60);
+    const N = 400;
+    let above = 0;
+    for (let i = 0; i < N; i++) {
+      const pick = generatePick('contrarian', history, noGates, makeRng(100 + i));
+      above += pick.numbers.filter((n) => n >= 32).length;
+    }
+    const mean = above / N;
+    const uniform = (6 * 18) / 49; // baseline share of 32-49 under uniform draws
+    expect(mean).toBeGreaterThan(uniform + 0.8);
+  });
+
+  it('never emits recognisable popular-pick patterns', () => {
+    const history = makeHistory(60);
+    for (let i = 0; i < 80; i++) {
+      const nums = generatePick('contrarian', history, noGates, makeRng(500 + i)).numbers;
+      const step = nums[1] - nums[0];
+      const arithmetic = nums.every((n, k) => k === 0 || n - nums[k - 1] === step);
+      const tails = {};
+      const decades = {};
+      nums.forEach((n) => {
+        const t = n % 10; tails[t] = (tails[t] || 0) + 1;
+        const d = Math.floor((n - 1) / 10); decades[d] = (decades[d] || 0) + 1;
+      });
+      const birthdayHeavy = nums.filter((n) => n <= 31).length >= 5;
+      expect(birthdayHeavy).toBe(false);                    // 5+ birthday-range numbers
+      expect(Math.max(...Object.values(tails)) >= 5).toBe(false);   // one last digit
+      expect(Math.max(...Object.values(decades)) >= 5).toBe(false); // one decade
+      expect(arithmetic).toBe(false);                       // 1-2-3-4-5-6 style run
+    }
+  });
+
+  it('honours the default gates without relaxing (common case)', () => {
+    for (let i = 0; i < 10; i++) {
+      const p = generatePick('contrarian', makeHistory(100), {}, makeRng(70 + i));
+      expect(p.degraded ?? null).toBe(null);
+      expect(sum(p.numbers)).toBeGreaterThanOrEqual(140);
+      expect(sum(p.numbers)).toBeLessThanOrEqual(210);
+      expect(oddCount(p.numbers)).toBeGreaterThanOrEqual(2);
+      expect(oddCount(p.numbers)).toBeLessThanOrEqual(4);
+    }
+  });
+
+  it('honours the consecutive-pair gate when enabled', () => {
+    const result = generatePick('contrarian', makeHistory(100), { consecutivePairProb: true }, makeRng(15));
+    expect(hasConsecutive(result.numbers)).toBe(true);
+    expect(result.degraded ?? null).toBe(null);
+  });
+
+  it('honours odd_heavy and even_heavy ratios', () => {
+    const oddHeavy = generatePick('contrarian', makeHistory(100), { oddEvenRatio: 'odd_heavy' }, makeRng(13));
+    expect(oddCount(oddHeavy.numbers)).toBeGreaterThanOrEqual(3);
+    expect(oddCount(oddHeavy.numbers)).toBeLessThanOrEqual(5);
+    const evenHeavy = generatePick('contrarian', makeHistory(100), { oddEvenRatio: 'even_heavy' }, makeRng(14));
+    expect(oddCount(evenHeavy.numbers)).toBeGreaterThanOrEqual(1);
+    expect(oddCount(evenHeavy.numbers)).toBeLessThanOrEqual(3);
+  });
+
+  it('still returns a valid ticket when filters are impossible (degrades)', () => {
+    const result = generatePick('contrarian', makeHistory(100), { sumRange: [1, 2] }, makeRng(19));
+    assertValidTicket(result.numbers);
+    expect(result.degraded).toBe('gates_relaxed');
+  });
+
+  it('degrades the same way as other strategies without history', () => {
+    const none = generatePick('contrarian', [], {}, makeRng(1));
+    assertValidTicket(none.numbers);
+    expect(none.degraded).toBe('no_history');
+    const short = generatePick('contrarian', makeHistory(5), {}, makeRng(1));
+    assertValidTicket(short.numbers);
+    expect(short.degraded).toBe('short_history');
+  });
+
+  it('backtests like the other strategies', () => {
+    const bt = backtest('contrarian', makeHistory(30), {}, { rng: makeRng(3) });
+    expect(bt.evaluated).toBe(20);
+    expect(bt.window).toBe(20);
+    expect(Number.isInteger(bt.hitRate)).toBe(true);
+    expect(bt.hitRate).toBeGreaterThanOrEqual(0);
+    expect(bt.hitRate).toBeLessThanOrEqual(100);
   });
 });
 

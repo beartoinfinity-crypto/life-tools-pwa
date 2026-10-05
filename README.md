@@ -86,7 +86,7 @@ Open `http://localhost:3000` — visit `/` for the dashboard, `/mark-six/`, `/bu
 │       ├── manifest.json      # PWA manifest (scope /mark-six/)
 │       ├── sw.js              # Service worker (offline caching)
 │       ├── icons/             # icon-192.png + icon-512.png (PWA icons)
-│       └── test/              # Vitest suite (156 tests) + fixtures
+│       └── test/              # Vitest suite (172 tests) + fixtures
 │   └── hk-bus-eta/        # HK Bus ETA apps (mounted at /bus-eta/, /bus-eta-lite/)
 │       ├── build/             # Lite ETA UI (served at /bus-eta-lite/): app.js + bundled hk-bus-eta library
 │       ├── build-upstream/    # Archived upstream PWA (served at /bus-eta/, not from this dir)
@@ -234,15 +234,23 @@ Response shape:
   numbers ranked by draws-since-last-seen, and an odd/even split bar, all computed in the
   browser from `/mark-six/api/marksix/history` and merged into locally stored history
   (`m6_history`, capped at 1,000 draws) so stats survive offline
-- **Smart Pick generator** — `prediction-engine.js` runs five strategies over stored history
-  (`balanced`, `hot_streak`, `cold_recovery`, `monte_carlo`, `markov_chain`): candidate draws are
-  filtered through the spec's quality gates (sum 140–210, odd/even balance, consecutive pairs —
-  toggleable) with graceful degradation when history is short or no candidate passes. Each line
-  shows a 0–100 score plus a Sum/Odd-Even/Hot-Cold breakdown. A backtest badge reports
-  `Strategy hit rate (3+ numbers): N% in last 20 draws.` (needs 11+ stored draws), recomputed
-  when the strategy or filters change. Heavy Monte Carlo runs (>500 draws or >10,000 iterations)
-  go to `prediction-worker.js` (Web Worker); everything runs locally, so generating and
-  backtesting keep working offline
+- **Smart Pick generator** — `prediction-engine.js` runs six strategies over stored history
+  (`balanced`, `hot_streak`, `cold_recovery`, `monte_carlo`, `markov_chain`, `contrarian`):
+  candidate draws are filtered through the spec's quality gates (sum 140-210, odd/even balance,
+  consecutive pairs - toggleable) with graceful degradation when history is short or no candidate
+  passes. Each line shows a 0-100 score plus a Sum/Odd-Even/Hot-Cold breakdown. A backtest badge
+  reports `Strategy hit rate (3+ numbers): N% in last 20 draws.` (needs 11+ stored draws),
+  recomputed when the strategy or filters change. Heavy Monte Carlo runs (>500 draws or >10,000
+  iterations) go to `prediction-worker.js` (Web Worker); everything runs locally, so generating
+  and backtesting keep working offline
+- **Honesty disclaimer** — a collapsed "Why this cannot improve your odds" disclosure under the
+  generator states the maths plainly: draws are memoryless (1 in 13,983,816 per combination),
+  both cold-due and hot-momentum beliefs are fallacies, the Law of Large Numbers is long-run
+  convergence rather than short-term correction, and expectation management is the only
+  strategy with a mathematical basis - it reduces prize splitting, never the chance of winning.
+  The `contrarian` strategy applies that idea: it biases lines away from birthday numbers
+  (1-31), arithmetic sequences, single-tail and decade clusters toward irregular tickets with
+  more numbers above 31, while still obeying the quality gates
 - **Accessible markup** — each draw is a `<section aria-labelledby>` with an `<h2>` and a
   machine-readable `<time datetime>`; balls carry colour-name aria labels
 
@@ -526,7 +534,7 @@ npm test            # Run all tests once
 npm run test:watch  # Watch mode
 ```
 
-309 tests across 13 files under `test/` (hub), `apps/mark-six/test/`, `apps/traffic-news/test/` and `apps/music-trend/test/`. The suite uses in-memory SQLite + fixtures, so it runs offline without a Supabase connection.
+325 tests across 13 files under `test/` (hub), `apps/mark-six/test/`, `apps/traffic-news/test/` and `apps/music-trend/test/`. The suite uses in-memory SQLite + fixtures, so it runs offline without a Supabase connection.
 
 ---
 

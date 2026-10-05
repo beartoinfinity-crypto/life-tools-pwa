@@ -864,3 +864,52 @@ footer {
   font-size: 13px;
   color: var(--text-secondary);
 }
+
+.smart-why {
+  margin: 12px 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card-bg);
+}
+
+.smart-why summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  padding: 10px 12px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  cursor: pointer;
+  list-style: none;
+}
+
+.smart-why summary::-webkit-details-marker {
+  display: none;
+}
+
+.smart-why summary::after {
+  content: "+";
+  margin-left: auto;
+  font-weight: 800;
+  color: var(--primary);
+}
+
+.smart-why[open] summary::after {
+  content: "-";
+}
+
+.smart-why-body {
+  padding: 0 12px 12px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+}
+
+.smart-why-body p {
+  margin: 0 0 10px;
+}
+
+.smart-why-body p:last-child {
+  margin-bottom: 0;
+}

@@ -24,7 +24,7 @@ Each app is an authored PWA with its own `index.html`, `styles.css`,
 |-----------------------|-------------------|----------------------------|
 | public/ (hub)         | life-tool-hub-v4  | v1.4 build 202609291603    |
 | apps/traffic-news     | traffic-news-v13  | v1.6 build 202609291603    |
-| apps/mark-six         | mark-six-v15      | v1.7 build 202610050727    |
+| apps/mark-six         | mark-six-v16      | v1.8 build 202610050754    |
 | apps/music-trend      | music-trend-v36   | v1.8 build 202609291603    |
 | apps/hk-bus-eta/build | buseta-lite-v27   | v1.7 build 202609291603    |
 
