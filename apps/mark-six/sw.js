@@ -1,9 +1,11 @@
-var CACHE_NAME = 'mark-six-v14';
+var CACHE_NAME = 'mark-six-v15';
 var ASSETS = [
   './',
   './index.html',
   './styles.css',
   './app.js',
+  './prediction-engine.js',
+  './prediction-worker.js',
   './manifest.json',
   './icons/icon-192.png',
   './icons/icon-512.png'

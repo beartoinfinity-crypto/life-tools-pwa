@@ -77,10 +77,48 @@ function toResponseDate(iso) {
   return iso + '+08:00';
 }
 
+/**
+ * HKJC's own published draw schedule (their Sitecore "MarksixFixtures"
+ * GraphQL response). Returns every normal draw date as a sorted
+ * 'YYYY-MM-DD' list. Snowball draws are a subset of these dates, so the
+ * countdown does not need them separately.
+ */
+function parseHKJCFixtures(json) {
+  const out = [];
+  const years = json && json.data && json.data.item && json.data.item.years;
+  if (!Array.isArray(years)) return out;
+  for (const y of years) {
+    const year = y.year;
+    if (!year) continue;
+    for (const mo of y.months || []) {
+      const mm = mo.month && mo.month.value;
+      const dates = mo.dates && mo.dates.date;
+      if (!mm || !Array.isArray(dates)) continue;
+      for (const d of dates) {
+        if (!d || !d.value) continue;
+        const iso = `${year}-${String(mm).padStart(2, '0')}-${String(d.value).padStart(2, '0')}`;
+        if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) out.push(iso);
+      }
+    }
+  }
+  return out.sort();
+}
+
+/**
+ * The schedule dates HKJC has published from today (HKT) onward, capped so the
+ * API payload stays small. Callers still apply the 21:15 HKT cutoff client-side.
+ */
+function upcomingDrawDates(dates, nowMs, limit) {
+  const todayIso = new Date(nowMs + 8 * 3600 * 1000).toISOString().slice(0, 10);
+  return (dates || []).filter((d) => d >= todayIso).slice(0, limit || 8);
+}
+
 module.exports = {
   parseLotteryExtreme,
   parseLotteryHk,
   parseGitHubData,
   toISODate,
   toResponseDate,
+  parseHKJCFixtures,
+  upcomingDrawDates,
 };

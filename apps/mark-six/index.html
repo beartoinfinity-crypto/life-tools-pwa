@@ -21,7 +21,7 @@
         <circle cx="18" cy="18" r="15" fill="#d32f2f" />
         <text x="18" y="24" text-anchor="middle" fill="#fff" font-size="16" font-weight="bold">6</text>
       </svg>
-      <h1>Mark Six<span class="app-ver">v1.6 build 202609301604</span></h1>
+      <h1>Mark Six<span class="app-ver">v1.7 build 202610050727</span></h1>
       <button id="refreshBtn" class="refresh-btn" title="Refresh">
         <svg class="refresh-icon" viewBox="0 0 24 24" width="24" height="24">
           <path d="M17.65 6.35A7.958 7.958 0 0012 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0112 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z" fill="currentColor"/>
@@ -78,6 +78,60 @@
       <p class="stats-note">Hot counts are appearances; cold counts are draws since last drawn ( &gt; means not in the fetched history ).</p>
     </section>
 
+    <section id="smartPickPanel" class="panel" aria-labelledby="smartPickHeading">
+      <h2 id="smartPickHeading">Smart Pick Generator</h2>
+      <p class="smart-note">Pattern-based suggestions from stored past draws - no outcome is ever guaranteed. Play responsibly.</p>
+
+      <div class="smart-field">
+        <label for="strategySelect">Strategy</label>
+        <select id="strategySelect">
+          <option value="balanced">Balanced (Recommended)</option>
+          <option value="hot_streak">Hot Streak Momentum</option>
+          <option value="cold_recovery">Cold Recovery (Overdue)</option>
+          <option value="markov_chain">Markov Chain</option>
+          <option value="monte_carlo">Monte Carlo Simulation</option>
+        </select>
+      </div>
+
+      <div class="smart-field">
+        <label for="historySelect">History</label>
+        <select id="historySelect">
+          <option value="50">Last 50 draws</option>
+          <option value="100" selected="selected">Last 100 draws</option>
+          <option value="500">Last 500 draws</option>
+          <option value="all">All draws</option>
+        </select>
+      </div>
+
+      <fieldset class="smart-filters">
+        <legend>Filters &amp; constraints</legend>
+        <label class="smart-check">
+          <input type="checkbox" id="sumRangeChk" checked="checked" />
+          Enforce sum range (140-210)
+        </label>
+        <label class="smart-check">
+          <input type="checkbox" id="consecutiveChk" />
+          Require a consecutive pair
+        </label>
+        <div class="smart-radios" role="radiogroup" aria-label="Odd/Even ratio">
+          <span class="smart-radios-label">Odd/Even ratio:</span>
+          <label><input type="radio" name="oeRatio" value="balanced" checked="checked" /> Balanced (2:4 to 4:2)</label>
+          <label><input type="radio" name="oeRatio" value="any" /> Any</label>
+          <label><input type="radio" name="oeRatio" value="odd_heavy" /> Odd heavy (3-5)</label>
+          <label><input type="radio" name="oeRatio" value="even_heavy" /> Even heavy (1-3)</label>
+        </div>
+      </fieldset>
+
+      <div class="smart-actions">
+        <button type="button" id="generateBtn" class="smart-generate">Generate Ticket</button>
+        <button type="button" id="generate5Btn" class="smart-generate secondary">Generate 5 Lines</button>
+      </div>
+
+      <p id="backtestBadge" class="backtest-badge" hidden="hidden"></p>
+      <p id="smartStatus" class="smart-status" role="status" hidden="hidden"></p>
+      <div id="smartLines" class="smart-lines" aria-live="polite"></div>
+    </section>
+
     <section id="ticketPanel" class="panel" aria-labelledby="ticketHeading">
       <h2 id="ticketHeading">Check your ticket</h2>
       <div class="ticket-form">
@@ -98,6 +152,7 @@
   </main>
 
 
+  <script src="prediction-engine.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

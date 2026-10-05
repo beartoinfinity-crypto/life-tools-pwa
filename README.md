@@ -11,7 +11,7 @@ A hub of handy Progressive Web Apps (PWAs), served by one Express app and deploy
 
 | App | URL | Description |
 |-----|-----|-------------|
-| **Mark Six** | `/mark-six/` | Hong Kong Mark Six lottery results: latest draws, full history, special numbers, daily auto-refresh |
+| **Mark Six** | `/mark-six/` | Hong Kong Mark Six lottery results: latest draws, full history, special numbers, official-schedule countdown, Smart Pick generator, daily auto-refresh |
 | **HK Bus ETA (original)** | `/bus-eta/` | Archived upstream PWA (hkbus/hk-independent-bus-eta) — full-featured, mounted unmodified |
 | **Bus ETA (lite)** | `/bus-eta-lite/` | Home-grown simple ETA UI — route & stop search, bookmarks, day/night theme, operator-coloured badges; data via the bundled [hk-bus-eta](https://www.npmjs.com/package/hk-bus-eta) library (GPL-3.0) |
 | **Traffic News** | `/traffic-news/` | Latest HK traffic incidents from Routejam (路暢), cached in Supabase and refreshed every minute |
@@ -80,11 +80,13 @@ Open `http://localhost:3000` — visit `/` for the dashboard, `/mark-six/`, `/bu
 │       ├── draw-day.js        # Draw-day logic (Tue/Thu/Sat)
 │       ├── index.html         # App page
 │       ├── app.js             # Client-side logic
+│       ├── prediction-engine.js  # Smart Pick: strategies, quality gates, backtest (pure)
+│       ├── prediction-worker.js  # Web Worker wrapper (heavy Monte Carlo off the UI thread)
 │       ├── styles.css
 │       ├── manifest.json      # PWA manifest (scope /mark-six/)
 │       ├── sw.js              # Service worker (offline caching)
 │       ├── icons/             # icon-192.png + icon-512.png (PWA icons)
-│       └── test/              # Vitest suite (81 tests) + fixtures
+│       └── test/              # Vitest suite (156 tests) + fixtures
 │   └── hk-bus-eta/        # HK Bus ETA apps (mounted at /bus-eta/, /bus-eta-lite/)
 │       ├── build/             # Lite ETA UI (served at /bus-eta-lite/): app.js + bundled hk-bus-eta library
 │       ├── build-upstream/    # Archived upstream PWA (served at /bus-eta/, not from this dir)
@@ -181,6 +183,7 @@ tables and their policies.
 | lotteryextreme.com | Latest ~20 draws | Daily refresh (append-only), incl. special numbers |
 | GitHub JSON | 1993–2025 (~4,288 draws) | Initial / historical backfill when empty |
 | lottery.hk | All years | Historical backfill (bounded to current/previous year) |
+| HKJC graph API (`consvc.hkjc.com`) | Upcoming ~132 draw dates | Official next-draw schedule for the countdown (server-side, cached in meta) |
 
 ### API endpoints (mounted under `/mark-six`)
 
@@ -206,6 +209,7 @@ Response shape:
       }
     ]
   },
+  "drawSchedule": ["2026-10-03", "2026-10-06", "2026-10-08"],
   "source": "database",
   "totalCached": 4308,
   "lastRefresh": "2026-09-09T09:26:42.277Z"
@@ -215,19 +219,30 @@ Response shape:
 ### Client behaviour
 
 - First visit loads from cache (`/mark-six/api/marksix`) — no scraping on page load
-- Auto-refresh at midnight on draw days only (Tue/Thu/Sat)
-- Manual refresh button scrapes a fresh copy of the latest draws
+- Auto-refresh at midnight on scheduled draw days (from the official HKJC schedule)
+- Manual refresh button scrapes a fresh copy of the latest draws (and re-checks the schedule)
 - 6 main numbers + 1 **special number** (rendered with a `+` and red ring)
-- **Next-draw countdown** — anchored to the newest draw actually fetched from the source,
-  not a fixed weekday rule: the next draw is the first Tue/Thu/Sat strictly after it at the
-  21:15 HKT sales cutoff, so schedule gaps (holiday blackouts, missed draws) are never
-  counted down to. When the cutoff passes, the app refreshes once to pick up the fresh
-  result and re-anchors; if no draw day is in range it says "awaiting" instead of guessing.
+- **Next-draw countdown** — driven by HKJC's published draw schedule: the server fetches the
+  upcoming draw dates from HKJC's graph API (`parseHKJCFixtures`/`scrapeHKJCFixtures`), caches
+  them in meta as `drawSchedule`, and returns them with the draws; the client counts down to the
+  first scheduled date still ahead of now at the 21:15 HKT sales cutoff. Holidays and gaps are
+  never counted down to. If the schedule is unavailable it falls back to an anchored Tue/Thu/Sat
+  walk from the newest draw, and says "awaiting" when no draw day is in range.
 - **Ticket checker** — save 6-number single tickets (localStorage); each is re-evaluated
   against the latest draw and shown with its prize division (1st–7th / No prize)
 - **Hot/cold statistics** — appearance counts for the last 20/50/100 draws, six coldest
   numbers ranked by draws-since-last-seen, and an odd/even split bar, all computed in the
-  browser from `/mark-six/api/marksix/history`
+  browser from `/mark-six/api/marksix/history` and merged into locally stored history
+  (`m6_history`, capped at 1,000 draws) so stats survive offline
+- **Smart Pick generator** — `prediction-engine.js` runs five strategies over stored history
+  (`balanced`, `hot_streak`, `cold_recovery`, `monte_carlo`, `markov_chain`): candidate draws are
+  filtered through the spec's quality gates (sum 140–210, odd/even balance, consecutive pairs —
+  toggleable) with graceful degradation when history is short or no candidate passes. Each line
+  shows a 0–100 score plus a Sum/Odd-Even/Hot-Cold breakdown. A backtest badge reports
+  `Strategy hit rate (3+ numbers): N% in last 20 draws.` (needs 11+ stored draws), recomputed
+  when the strategy or filters change. Heavy Monte Carlo runs (>500 draws or >10,000 iterations)
+  go to `prediction-worker.js` (Web Worker); everything runs locally, so generating and
+  backtesting keep working offline
 - **Accessible markup** — each draw is a `<section aria-labelledby>` with an `<h2>` and a
   machine-readable `<time datetime>`; balls carry colour-name aria labels
 
@@ -511,7 +526,7 @@ npm test            # Run all tests once
 npm run test:watch  # Watch mode
 ```
 
-234 tests across 11 files under `test/` (hub), `apps/mark-six/test/`, `apps/traffic-news/test/` and `apps/music-trend/test/`. The suite uses in-memory SQLite + fixtures, so it runs offline without a Supabase connection.
+309 tests across 13 files under `test/` (hub), `apps/mark-six/test/`, `apps/traffic-news/test/` and `apps/music-trend/test/`. The suite uses in-memory SQLite + fixtures, so it runs offline without a Supabase connection.
 
 ---
 

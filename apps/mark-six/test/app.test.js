@@ -6,9 +6,11 @@ import { JSDOM } from 'jsdom';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const appJs = readFileSync(join(__dirname, '..', 'app.js'), 'utf8');
+const engineJs = readFileSync(join(__dirname, '..', 'prediction-engine.js'), 'utf8');
 const indexHtml = readFileSync(join(__dirname, '..', 'index.html'), 'utf8');
 
 const TICKETS_KEY = 'saved_tickets';
+const HISTORY_KEY = 'm6_history';
 
 function draw(id, numbers, special, date) {
   return { id, drawDate: date, drawResult: { drawnNo: numbers, xDrawnNo: special } };
@@ -21,6 +23,22 @@ function defaultDraws() {
   ];
 }
 
+/** n deterministic draws with strictly descending dates (newest first). */
+function makeDraws(n) {
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const nums = new Set();
+    let x = (i * 2654435761 + 12345) >>> 0;
+    while (nums.size < 6) {
+      x = (x * 1664525 + 1013904223) >>> 0;
+      nums.add((x % 49) + 1);
+    }
+    const iso = new Date(Date.UTC(2026, 8, 26) - i * 86400000).toISOString().slice(0, 10);
+    out.push(draw(`26/${100 - i}`, [...nums].sort((a, b) => a - b), ((i * 7) % 49) + 1, iso + '+08:00'));
+  }
+  return out;
+}
+
 function createHarness({
   draws = defaultDraws(),
   fail = false,
@@ -28,6 +46,8 @@ function createHarness({
   userAgent = null,
   standalone = null,
   autoDismissMs = null,
+  drawSchedule = [],
+  seedHistory = null,
 } = {}) {
   const dom = new JSDOM(indexHtml, {
     url: 'https://example.test/mark-six/',
@@ -35,9 +55,10 @@ function createHarness({
     pretendToBeVisual: true,
   });
   const { window } = dom;
-  const state = { fail, draws };
+  const state = { fail, draws, drawSchedule };
 
   if (seedTickets) window.localStorage.setItem(TICKETS_KEY, JSON.stringify(seedTickets));
+  if (seedHistory) window.localStorage.setItem(HISTORY_KEY, JSON.stringify(seedHistory));
   if (userAgent) {
     Object.defineProperty(window.navigator, 'userAgent', { get: () => userAgent, configurable: true });
   }
@@ -57,10 +78,12 @@ function createHarness({
         totalCached: state.draws.length,
         returned: state.draws.length,
         lastRefresh: new Date().toISOString(),
+        drawSchedule: state.drawSchedule.slice(),
       }),
     };
   });
 
+  window.eval(engineJs);
   window.eval(appJs);
   return { dom, window, state };
 }
@@ -183,7 +206,7 @@ describe('mark-six app (v1.1)', () => {
     const { window } = await boot();
     // newest real draw = Sat 2026-09-26; it is now Wed 30/09 20:00 HKT, so
     // Tue 29/09 came and went with no draw -> the next real draw is Thu 01/10
-    const next = window.MarksixCore.nextDrawCutoff(Date.parse('2026-09-30T12:00:00Z'), '2026-09-26');
+    const next = window.MarksixCore.nextDrawCutoff(Date.parse('2026-09-30T12:00:00Z'), null, '2026-09-26');
     expect(next.dateIso).toBe('2026-10-01');
     expect(next.dayName).toBe('Thu');
     expect(new Date(next.cutoffMs).toISOString()).toBe('2026-10-01T13:15:00.000Z');
@@ -193,7 +216,7 @@ describe('mark-six app (v1.1)', () => {
     const { window } = await boot();
     // anchor = Tue 2026-09-29 itself, same day before its cutoff: the next
     // draw is Thursday, not the anchor draw being counted past
-    const next = window.MarksixCore.nextDrawCutoff(Date.parse('2026-09-29T12:00:00Z'), '2026-09-29');
+    const next = window.MarksixCore.nextDrawCutoff(Date.parse('2026-09-29T12:00:00Z'), null, '2026-09-29');
     expect(next.dateIso).toBe('2026-10-01');
     expect(next.dayName).toBe('Thu');
   });
@@ -201,11 +224,67 @@ describe('mark-six app (v1.1)', () => {
   it('shows an honest awaiting state when no draw day is in range', async () => {
     const { window } = await boot();
     // stale anchor (Sat 2026-09-26) two weeks on: every candidate has passed
-    expect(window.MarksixCore.nextDrawCutoff(Date.parse('2026-10-10T12:00:00Z'), '2026-09-26')).toBe(null);
+    expect(window.MarksixCore.nextDrawCutoff(Date.parse('2026-10-10T12:00:00Z'), null, '2026-09-26')).toBe(null);
     window.MarksixCore.tickCountdown(Date.parse('2026-10-10T12:00:00Z'));
     expect(window.document.getElementById('ndDate').textContent).toBe('Awaiting next draw date');
     expect(window.document.getElementById('ndCutoff').textContent).toBe('--');
     expect(window.document.getElementById('ndCutoff').getAttribute('datetime')).toBeNull();
+  });
+
+  it('follows the server-published schedule over the weekday rule', async () => {
+    const { window } = await boot();
+    // HKJC skipped Tue 29/09 and Thu 01/10: the calendar says the next draw
+    // after Sat 26/09 is Sat 03/10, even though it is not "the next Thu"
+    const next = window.MarksixCore.nextDrawCutoff(
+      Date.parse('2026-09-30T12:00:00Z'),
+      ['2026-10-03', '2026-10-06', '2026-10-08'],
+      '2026-09-26'
+    );
+    expect(next.dateIso).toBe('2026-10-03');
+    expect(next.dayName).toBe('Sat');
+    expect(new Date(next.cutoffMs).toISOString()).toBe('2026-10-03T13:15:00.000Z');
+  });
+
+  it('counts to today\'s scheduled draw while sales are still open', async () => {
+    const { window } = await boot();
+    // 20:00 HKT on a scheduled draw day: still counting to tonight, not tomorrow
+    const next = window.MarksixCore.nextDrawCutoff(
+      Date.parse('2026-10-03T12:00:00Z'),
+      ['2026-10-03', '2026-10-06'],
+      null
+    );
+    expect(next.dateIso).toBe('2026-10-03');
+  });
+
+  it('renders the published schedule in the countdown widget', async () => {
+    const { window } = await boot({ drawSchedule: ['2026-10-03', '2026-10-06'] });
+    window.MarksixCore.tickCountdown(Date.parse('2026-09-30T12:00:00Z'));
+    expect(window.document.getElementById('ndDate').textContent).toBe('2026-10-03 (Sat)');
+    const cutoff = window.document.getElementById('ndCutoff');
+    expect(cutoff.textContent).toBe('73 hrs : 15 mins : 00 secs');
+  });
+
+  it('falls back to the weekday rule when the server sends no schedule', async () => {
+    const { window } = await boot({ drawSchedule: [] });
+    window.MarksixCore.tickCountdown(Date.parse('2026-09-30T12:00:00Z'));
+    // no published dates: anchored rule guesses Thu 01/10 from draw 26/09
+    expect(window.document.getElementById('ndDate').textContent).toBe('2026-10-01 (Thu)');
+  });
+
+  it('knows the draw days for the midnight auto-refresh (official schedule)', async () => {
+    const { window } = await boot({ drawSchedule: ['2099-01-05', '2099-01-07'] });
+    const core = window.MarksixCore;
+    // instants compared on their HKT calendar date
+    expect(core.isScheduledDrawDay(new Date('2099-01-04T16:00:00Z'))).toBe(true);  // HKT 05 Jan
+    expect(core.isScheduledDrawDay(new Date('2099-01-06T16:00:00Z'))).toBe(true);  // HKT 07 Jan
+    expect(core.isScheduledDrawDay(new Date('2099-01-05T16:00:00Z'))).toBe(false); // HKT 06 Jan, not scheduled
+  });
+
+  it('falls back to Tue/Thu/Sat for the midnight refresh when no schedule', async () => {
+    const { window } = await boot({ drawSchedule: [] });
+    const core = window.MarksixCore;
+    expect(core.isScheduledDrawDay(new Date('2026-10-02T16:00:00Z'))).toBe(true);  // HKT Sat 03 Oct
+    expect(core.isScheduledDrawDay(new Date('2026-10-04T16:00:00Z'))).toBe(false); // HKT Mon 05 Oct
   });
 
   it('refreshes once when the countdown target expires, then re-anchors', async () => {
@@ -457,5 +536,151 @@ describe('mark-six app (v1.1)', () => {
     expect(banner.querySelector('p').textContent).toBe('Add Mark Six to your home screen?');
     expect(banner.querySelector('.install-btn').style.display).toBe('');
     expect(banner.style.display).toBe('flex');
+  });
+});
+
+// ---- Feature: Smart Pick generator (prediction engine over stored history) ----
+
+describe('mark-six Smart Pick generator', () => {
+  let harness;
+
+  afterEach(() => {
+    if (harness) {
+      try { harness.dom.window.close(); } catch { /* ignore */ }
+      harness = null;
+    }
+    vi.restoreAllMocks();
+  });
+
+  async function boot(opts = {}) {
+    harness = createHarness(opts);
+    await flush();
+    return harness;
+  }
+
+  it('sits directly below the Number frequency panel with the five strategies', async () => {
+    const { window } = await boot();
+    const stats = window.document.getElementById('statsPanel');
+    const smart = window.document.getElementById('smartPickPanel');
+    expect(stats.compareDocumentPosition(smart) & window.Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(window.document.getElementById('smartPickHeading').textContent).toBe('Smart Pick Generator');
+    const strategies = [...window.document.querySelectorAll('#strategySelect option')].map((o) => o.value);
+    expect(strategies).toEqual(['balanced', 'hot_streak', 'cold_recovery', 'markov_chain', 'monte_carlo']);
+    expect(window.document.getElementById('generateBtn').textContent).toBe('Generate Ticket');
+    expect(window.document.getElementById('generate5Btn').textContent).toBe('Generate 5 Lines');
+  });
+
+  it('generates a ticket with balls, score and breakdown', async () => {
+    const { window } = await boot();
+    await window.MarksixCore.generateSmartLines(1);
+    await flush();
+    const line = window.document.querySelector('.smart-line');
+    expect(line).toBeTruthy();
+    expect(line.querySelectorAll('.ball')).toHaveLength(6);
+    expect(line.querySelector('.smart-line-label').textContent).toBe('Generated Line 1');
+    expect(line.querySelector('.smart-score').textContent).toMatch(/^Score: \d+%$/);
+    expect(line.querySelector('.smart-breakdown').textContent)
+      .toMatch(/Breakdown: Sum \d+ \| \d+ Odd \d+ Even \| \d+ Hot \/ \d+ Cold/);
+  });
+
+  it('generates five lines on one click', async () => {
+    const { window } = await boot();
+    await window.MarksixCore.generateSmartLines(5);
+    await flush();
+    const lines = window.document.querySelectorAll('.smart-line');
+    expect(lines).toHaveLength(5);
+    lines.forEach((line) => {
+      expect(line.querySelectorAll('.ball')).toHaveLength(6);
+      expect(line.querySelector('.smart-line-label').textContent).toMatch(/^Generated Line \d+$/);
+    });
+  });
+
+  it('shows a backtest badge for the selected strategy over the last 20 draws', async () => {
+    const { window } = await boot({ draws: makeDraws(30) });
+    await window.MarksixCore.runBacktest();
+    const badge = window.document.getElementById('backtestBadge');
+    expect(badge.hidden).toBe(false);
+    expect(badge.textContent).toMatch(/^Strategy hit rate \(3\+ numbers\): \d+% in last 20 draws\.$/);
+  });
+
+  it('says when there is not enough history for a backtest', async () => {
+    const { window } = await boot(); // only the 2 fixture draws
+    await window.MarksixCore.runBacktest();
+    expect(window.document.getElementById('backtestBadge').textContent)
+      .toBe('Backtest needs 11+ draws of history.');
+  });
+
+  it('recomputes the backtest when the strategy changes', async () => {
+    const { window } = await boot({ draws: makeDraws(30) });
+    const sel = window.document.getElementById('strategySelect');
+    sel.value = 'cold_recovery';
+    sel.dispatchEvent(new window.Event('change', { bubbles: true }));
+    await new Promise((r) => setTimeout(r, 320)); // 250 ms debounce
+    await flush();
+    expect(window.document.getElementById('backtestBadge').textContent)
+      .toMatch(/^Strategy hit rate \(3\+ numbers\): \d+%/);
+  });
+
+  it('works fully offline from locally stored history', async () => {
+    const { window } = await boot({ fail: true, seedHistory: makeDraws(30) });
+    expect(window.MarksixCore.historyCount()).toBe(30);
+    // stats panel still renders from the cache
+    expect(window.document.getElementById('statsPanel').style.display).toBe('block');
+
+    await window.MarksixCore.runBacktest();
+    expect(window.document.getElementById('backtestBadge').textContent)
+      .toMatch(/in last 20 draws\.$/);
+
+    await window.MarksixCore.generateSmartLines(1);
+    await flush();
+    expect(window.document.querySelector('.smart-line')).toBeTruthy();
+  });
+
+  it('notes that numbers are random when there is no history at all', async () => {
+    const { window } = await boot({ fail: true });
+    expect(window.MarksixCore.historyCount()).toBe(0);
+    await window.MarksixCore.generateSmartLines(1);
+    await flush();
+    const line = window.document.querySelector('.smart-line');
+    expect(line).toBeTruthy();
+    expect(window.document.getElementById('smartStatus').textContent)
+      .toContain('No stored history yet');
+  });
+
+  it('honours the filter switches when generating', async () => {
+    const { window } = await boot();
+    window.document.getElementById('consecutiveChk').checked = true;
+    window.document.getElementById('sumRangeChk').checked = false;
+    await window.MarksixCore.generateSmartLines(1);
+    await flush();
+    const nums = [...window.document.querySelectorAll('.smart-line .ball')].map((b) => parseInt(b.textContent, 10));
+    expect(nums).toHaveLength(6);
+    const consecutive = nums.some((n, i) => i > 0 && n === nums[i - 1] + 1);
+    expect(consecutive).toBe(true);
+  });
+
+  it('fetches a deeper history when the window widens (500, then all)', async () => {
+    const { window } = await boot();
+    const sel = window.document.getElementById('historySelect');
+    const historyLimits = () => window.fetch.mock.calls
+      .filter((c) => String(c[0]).includes('/history'))
+      .map((c) => JSON.parse(c[1].body).limit);
+    expect(historyLimits()).toContain(100); // the boot stats fetch
+
+    sel.value = '500';
+    sel.dispatchEvent(new window.Event('change', { bubbles: true }));
+    await flush();
+    expect(historyLimits()).toContain(500);
+
+    sel.value = 'all';
+    sel.dispatchEvent(new window.Event('change', { bubbles: true }));
+    await flush();
+    expect(historyLimits()).toContain(1000); // "all" is capped at MAX_STORED_DRAWS
+  });
+
+  it('exposes all four odd/even modes as radios', async () => {
+    const { window } = await boot();
+    const values = [...window.document.querySelectorAll('input[name="oeRatio"]')].map((r) => r.value);
+    expect(values).toEqual(['balanced', 'any', 'odd_heavy', 'even_heavy']);
   });
 });

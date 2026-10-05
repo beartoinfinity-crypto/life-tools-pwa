@@ -18,7 +18,7 @@ copyEntry('apps/hk-bus-eta/build', 'bus-eta-lite');
 copyEntry('apps/hk-bus-eta/build-upstream', 'bus-eta');
 
 // Mark Six static assets only (its API is served by the Express function)
-for (const f of ['index.html', 'app.js', 'styles.css', 'manifest.json', 'sw.js', 'icons']) {
+for (const f of ['index.html', 'app.js', 'styles.css', 'manifest.json', 'sw.js', 'prediction-engine.js', 'prediction-worker.js', 'icons']) {
   copyEntry(`apps/mark-six/${f}`, 'mark-six', f);
 }
 

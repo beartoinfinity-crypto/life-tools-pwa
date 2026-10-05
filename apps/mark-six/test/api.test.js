@@ -84,3 +84,36 @@ describe('GET /api/marksix/history', () => {
     expect(res.body.data.lotteryDraws.length).toBe(1);
   });
 });
+
+describe('drawSchedule (HKJC published calendar)', () => {
+  it('is an empty array when no schedule is cached', async () => {
+    app = createApp();
+    const res = await request(app).get('/api/marksix');
+    expect(res.body.drawSchedule).toEqual([]);
+  });
+
+  it('returns only dates from today onward', async () => {
+    app = createApp();
+    app._store.upsertBatch(sampleDraws);
+    app._store.metaSet('drawSchedule', JSON.stringify(['2025-12-28', '2099-01-05', '2099-01-07']));
+    const res = await request(app).get('/api/marksix');
+    expect(res.body.drawSchedule).toEqual(['2099-01-05', '2099-01-07']);
+    expect(res.body.drawSchedule).not.toContain('2025-12-28');
+  });
+
+  it('caps the served schedule at 8 dates', async () => {
+    app = createApp();
+    const dates = Array.from({ length: 12 }, (_, i) => `2099-02-${String(i + 1).padStart(2, '0')}`);
+    app._store.metaSet('drawSchedule', JSON.stringify(dates));
+    const res = await request(app).get('/api/marksix');
+    expect(res.body.drawSchedule).toHaveLength(8);
+  });
+
+  it('is returned by the empty response too', async () => {
+    app = createApp();
+    app._store.metaSet('drawSchedule', JSON.stringify(['2099-03-01']));
+    const res = await request(app).get('/api/marksix');
+    expect(res.body.source).toBe('empty');
+    expect(res.body.drawSchedule).toEqual(['2099-03-01']);
+  });
+});

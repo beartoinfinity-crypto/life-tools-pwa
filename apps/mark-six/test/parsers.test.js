@@ -6,6 +6,8 @@ const {
   parseGitHubData,
   toISODate,
   toResponseDate,
+  parseHKJCFixtures,
+  upcomingDrawDates,
 } = require('../parsers');
 
 const fixturesDir = path.join(__dirname, 'fixtures');
@@ -121,5 +123,89 @@ describe('toResponseDate', () => {
 
   it('returns empty string for empty input', () => {
     expect(toResponseDate('')).toBe('');
+  });
+});
+
+describe('parseHKJCFixtures', () => {
+  const fixture = {
+    data: {
+      item: {
+        years: [
+          {
+            year: '2026',
+            months: [
+              { month: { value: '9' }, dates: { date: [{ value: '26' }, { value: '05' }, { value: '08' }] } },
+              { month: { value: '10' }, dates: { date: [{ value: '03' }, { value: '06' }] } },
+            ],
+          },
+          { year: '2027', months: [{ month: { value: '1' }, dates: { date: [{ value: '02' }] } }] },
+        ],
+      },
+    },
+  };
+
+  it('flattens years/months into sorted YYYY-MM-DD dates', () => {
+    expect(parseHKJCFixtures(fixture)).toEqual([
+      '2026-09-05', '2026-09-08', '2026-09-26', '2026-10-03', '2026-10-06', '2027-01-02',
+    ]);
+  });
+
+  it('pads single-digit months and days', () => {
+    expect(parseHKJCFixtures(fixture)).toContain('2027-01-02');
+    expect(parseHKJCFixtures(fixture)).toContain('2026-10-06');
+  });
+
+  it('skips malformed months and dates', () => {
+    const messy = {
+      data: {
+        item: {
+          years: [
+            {
+              year: '2026',
+              months: [
+                { month: { value: '9' }, dates: { date: [{ value: '10' }, { value: 'xx' }, null] } },
+                { month: { value: '9' }, dates: null },
+                { month: null, dates: { date: [{ value: '11' }] } },
+                {},
+              ],
+            },
+            {},
+          ],
+        },
+      },
+    };
+    expect(parseHKJCFixtures(messy)).toEqual(['2026-09-10']);
+  });
+
+  it('returns [] for missing or empty payloads', () => {
+    expect(parseHKJCFixtures(null)).toEqual([]);
+    expect(parseHKJCFixtures({})).toEqual([]);
+    expect(parseHKJCFixtures({ data: {} })).toEqual([]);
+    expect(parseHKJCFixtures({ data: { item: { years: [] } } })).toEqual([]);
+  });
+});
+
+describe('upcomingDrawDates', () => {
+  const nowMs = Date.parse('2026-09-30T04:00:00Z'); // 12:00 HKT
+
+  it('drops past dates and keeps today or later', () => {
+    expect(upcomingDrawDates(['2026-09-26', '2026-09-30', '2026-10-03'], nowMs))
+      .toEqual(['2026-09-30', '2026-10-03']);
+  });
+
+  it('caps the result at the limit', () => {
+    const dates = Array.from({ length: 12 }, (_, i) => `2026-10-${String(i + 1).padStart(2, '0')}`);
+    expect(upcomingDrawDates(dates, nowMs, 3)).toEqual(['2026-10-01', '2026-10-02', '2026-10-03']);
+  });
+
+  it('defaults to 8 entries', () => {
+    const dates = Array.from({ length: 12 }, (_, i) => `2026-10-${String(i + 1).padStart(2, '0')}`);
+    expect(upcomingDrawDates(dates, nowMs)).toHaveLength(8);
+  });
+
+  it('handles missing input', () => {
+    expect(upcomingDrawDates(undefined, nowMs)).toEqual([]);
+    expect(upcomingDrawDates(null, nowMs)).toEqual([]);
+    expect(upcomingDrawDates([], nowMs)).toEqual([]);
   });
 });

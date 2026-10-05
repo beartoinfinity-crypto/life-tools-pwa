@@ -4,7 +4,8 @@ const http = require('http');
 const path = require('path');
 
 const { createDB } = require('./supabase-db');
-const { parseLotteryExtreme, parseLotteryHk, parseGitHubData, toISODate } = require('./parsers');
+const { parseLotteryExtreme, parseLotteryHk, parseGitHubData, toISODate, upcomingDrawDates } = require('./parsers');
+const { scrapeHKJCFixtures } = require('./scrapers');
 
 const app = express();
 
@@ -132,6 +133,15 @@ async function refreshData() {
 
   const after = await db.count();
   await db.metaSet('lastRefresh', new Date().toISOString());
+
+  // HKJC's published draw calendar — the only source of *future* draw dates.
+  try {
+    const fixtures = await scrapeHKJCFixtures();
+    if (fixtures.length > 0) await db.metaSet('drawSchedule', JSON.stringify(fixtures));
+  } catch (e) {
+    console.log('HKJC fixtures failed:', e.message);
+  }
+
   console.log(`Refresh done: ${before} -> ${after} draws (+${after - before} new)`);
   return after;
 }
@@ -157,6 +167,8 @@ function toResponse(draws) {
 async function sendDraws(res, body) {
   const { lastNDraw = 10 } = body;
   const total = await db.count();
+  const schedule = await db.metaGet('drawSchedule');
+  const drawSchedule = schedule ? upcomingDrawDates(JSON.parse(schedule), Date.now()) : [];
 
   if (total > 0) {
     const draws = await db.getDraws(lastNDraw);
@@ -165,6 +177,7 @@ async function sendDraws(res, body) {
       data: { lotteryDraws: toResponse(draws) },
       source: 'database',
       totalCached: total,
+      drawSchedule,
       lastRefresh: await db.metaGet('lastRefresh')
     });
   }
@@ -173,6 +186,7 @@ async function sendDraws(res, body) {
     data: { lotteryDraws: [] },
     source: 'empty',
     totalCached: 0,
+    drawSchedule,
     message: 'No data yet. Call POST /api/marksix/refresh first.'
   });
 }
@@ -190,10 +204,12 @@ app.post('/api/marksix/refresh', async (req, res) => {
     await refreshData();
     const total = await db.count();
     const draws = await db.getDraws(req.body.lastNDraw || 10);
+    const schedule = await db.metaGet('drawSchedule');
     return res.json({
       data: { lotteryDraws: toResponse(draws) },
       source: 'refreshed',
       totalCached: total,
+      drawSchedule: schedule ? upcomingDrawDates(JSON.parse(schedule), Date.now()) : [],
       lastRefresh: await db.metaGet('lastRefresh')
     });
   } catch (e) {
@@ -233,6 +249,16 @@ async function ensureInitialData() {
   try {
     const count = await db.count();
     console.log(`Mark Six DB has ${count} draws (last refresh: ${await db.metaGet('lastRefresh') || 'never'})`);
+
+    // The draw calendar is independent of the results table, so fetch it on
+    // the first request regardless of whether draws already exist.
+    if (!(await db.metaGet('drawSchedule'))) {
+      const fixtures = await scrapeHKJCFixtures();
+      if (fixtures.length > 0) {
+        await db.metaSet('drawSchedule', JSON.stringify(fixtures));
+        console.log(`Draw schedule loaded: ${fixtures.length} dates`);
+      }
+    }
 
     if (count === 0) {
       console.log('Mark Six DB empty, building initial history from GitHub...');

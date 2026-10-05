@@ -679,3 +679,188 @@ footer {
   white-space: nowrap;
   border: 0;
 }
+
+/* ---- Smart Pick generator ---- */
+.smart-note {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin: -4px 0 14px;
+}
+
+.smart-field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.smart-field > label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  width: 64px;
+  flex-shrink: 0;
+}
+
+.smart-field select {
+  flex: 1;
+  min-width: 0;
+  min-height: 42px;
+  padding: 8px 12px;
+  font-size: 15px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card-bg);
+  color: var(--text);
+}
+
+.smart-filters {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px 12px;
+  margin: 12px 0;
+}
+
+.smart-filters legend {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+  padding: 0 4px;
+}
+
+.smart-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  font-size: 14px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.smart-check input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--primary);
+}
+
+.smart-radios {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  margin-top: 6px;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.smart-radios-label {
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.smart-radios label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.smart-radios input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--primary);
+}
+
+.smart-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.smart-generate {
+  flex: 1;
+  min-height: 44px;
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  padding: 12px 14px;
+  font-size: 15px;
+  font-weight: 700;
+  border-radius: 10px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.smart-generate.secondary {
+  background: var(--card-bg);
+  color: var(--primary);
+  border: 1px solid var(--primary);
+}
+
+.smart-generate:active {
+  transform: scale(0.97);
+}
+
+.backtest-badge {
+  display: inline-block;
+  margin-top: 12px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: var(--primary-bg);
+  color: var(--primary);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.smart-status {
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.backtest-badge[hidden],
+.smart-status[hidden] {
+  display: none;
+}
+
+.smart-lines {
+  margin-top: 12px;
+}
+
+.smart-line {
+  padding: 10px 0;
+}
+
+.smart-line + .smart-line {
+  border-top: 1px solid var(--border);
+}
+
+.smart-line-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.smart-line-label {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.smart-score {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--primary);
+}
+
+.smart-breakdown {
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}

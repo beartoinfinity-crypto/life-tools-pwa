@@ -1,7 +1,8 @@
 const express = require('express');
 const path = require('path');
 const { createDB } = require('./db');
-const { parseLotteryExtreme, parseLotteryHk, parseGitHubData, toISODate, toResponseDate } = require('./parsers');
+const { parseLotteryExtreme, parseLotteryHk, parseGitHubData, toISODate, toResponseDate, upcomingDrawDates } = require('./parsers');
+const { scrapeHKJCFixtures } = require('./scrapers');
 
 function createApp(dbPath) {
   const app = express();
@@ -24,6 +25,8 @@ function createApp(dbPath) {
   app.get('/api/marksix', (req, res) => {
     const lastNDraw = parseInt(req.query.lastNDraw) || 10;
     const total = store.count();
+    const schedule = store.metaGet('drawSchedule');
+    const drawSchedule = schedule ? upcomingDrawDates(JSON.parse(schedule), Date.now()) : [];
 
     if (total > 0) {
       const draws = store.getDraws(lastNDraw);
@@ -31,6 +34,7 @@ function createApp(dbPath) {
         data: { lotteryDraws: toResponse(draws) },
         source: 'database',
         totalCached: total,
+        drawSchedule,
         lastRefresh: store.metaGet('lastRefresh')
       });
     }
@@ -39,6 +43,7 @@ function createApp(dbPath) {
       data: { lotteryDraws: [] },
       source: 'empty',
       totalCached: 0,
+      drawSchedule,
       message: 'No data yet. Call POST /api/marksix/refresh first.'
     });
   });
@@ -74,23 +79,33 @@ function createApp(dbPath) {
           ? latest.filter(d => d.draw > maxDraw.draw)
           : latest;
 
-        if (newDraws.length > 0) {
-          store.upsertBatch(newDraws.map(d => ({
-            ...d,
-            date: toISODate(d.date),
-          })));
-        }
+      if (newDraws.length > 0) {
+        store.upsertBatch(newDraws.map(d => ({
+          ...d,
+          date: toISODate(d.date),
+        })));
       }
+    }
 
-      store.metaSet('lastRefresh', new Date().toISOString());
-      const total = store.count();
-      const draws = store.getDraws(parseInt(req.body.lastNDraw) || 10);
-      return res.json({
-        data: { lotteryDraws: toResponse(draws) },
-        source: 'refreshed',
-        totalCached: total,
-        lastRefresh: store.metaGet('lastRefresh')
-      });
+    // Refresh HKJC's published draw calendar alongside the results.
+    try {
+      const fixtures = await scrapeHKJCFixtures();
+      if (fixtures.length > 0) store.metaSet('drawSchedule', JSON.stringify(fixtures));
+    } catch (e) {
+      console.log('HKJC fixtures failed:', e.message);
+    }
+
+    store.metaSet('lastRefresh', new Date().toISOString());
+    const total = store.count();
+    const draws = store.getDraws(parseInt(req.body.lastNDraw) || 10);
+    const schedule = store.metaGet('drawSchedule');
+    return res.json({
+      data: { lotteryDraws: toResponse(draws) },
+      source: 'refreshed',
+      totalCached: total,
+      drawSchedule: schedule ? upcomingDrawDates(JSON.parse(schedule), Date.now()) : [],
+      lastRefresh: store.metaGet('lastRefresh')
+    });
     } catch (e) {
       res.status(500).json({ error: e.message });
     }

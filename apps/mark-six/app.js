@@ -180,6 +180,8 @@
       if (!draws || draws.length === 0) throw new Error('No results found');
 
       renderInitial(draws, json.totalCached || draws.length, json.source || 'unknown');
+      drawSchedule = Array.isArray(json.drawSchedule) ? json.drawSchedule : [];
+      tickCountdown(Date.now());
       lastRefreshDate = new Date();
 
     } catch (err) {
@@ -224,16 +226,28 @@
   }
 
   // ---- next draw countdown ----
-  // Mark Six normally draws Tue/Thu/Sat at 21:15 HKT, but the real schedule
-  // drifts (holiday blackouts, missed draws), so a fixed weekday rule counts
-  // down to draws that never happen. The target is therefore anchored to the
-  // newest draw actually fetched from the source: the next draw is the first
-  // Tue/Thu/Sat strictly after it. Without data yet it falls back to the
-  // calendar rule.
+  // The authoritative source is HKJC's own published draw calendar, fetched
+  // by the server and returned as drawSchedule (upcoming 'YYYY-MM-DD' dates).
+  // Only when it is unavailable do we estimate: the cadence is normally
+  // Tue/Thu/Sat, so the estimate is the first Tue/Thu/Sat after the newest
+  // real draw. The real schedule skips draws around holidays and for
+  // maintenance, so the estimate is a fallback, never the primary.
   var DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   var CUTOFF_UTC_HOURS = 13; // 21:15 HKT == 13:15 UTC (HKT has no DST)
+  var drawSchedule = [];
 
   function isDrawDayUTC(day) { return day === 2 || day === 4 || day === 6; }
+
+  function cutoffForDateIso(iso) {
+    var p = String(iso).slice(0, 10).split('-');
+    return Date.UTC(+p[0], +p[1] - 1, +p[2], CUTOFF_UTC_HOURS, 15, 0);
+  }
+
+  function makeTarget(iso, cutoff) {
+    var p = String(iso).slice(0, 10).split('-');
+    var d = new Date(Date.UTC(+p[0], +p[1] - 1, +p[2]));
+    return { cutoffMs: cutoff, dateIso: iso, dayName: DAY_NAMES[d.getUTCDay()] };
+  }
 
   function dateToUtcMs(iso) {
     var p = String(iso).slice(0, 10).split('-');
@@ -241,23 +255,31 @@
   }
 
   /**
-   * Next sales cutoff at/after nowMs. latestDrawIso ('YYYY-MM-DD...') is the
-   * newest real draw; candidates are draw days strictly after it (and after
-   * now). Returns null when no draw day falls within the horizon, so the UI
-   * can say "awaiting" instead of inventing a date.
+   * Next sales cutoff at/after nowMs.
+   *   drawDates     - HKJC's published schedule (authoritative) when we have it
+   *   latestDrawIso - newest real draw, used to anchor the fallback estimate
+   * Returns null when nothing better than a guess is available.
    */
-  function nextDrawCutoff(nowMs, latestDrawIso) {
+  function nextDrawCutoff(nowMs, drawDates, latestDrawIso) {
+    if (drawDates && drawDates.length) {
+      for (var i = 0; i < drawDates.length; i++) {
+        var cutoff = cutoffForDateIso(drawDates[i]);
+        if (cutoff > nowMs) return makeTarget(drawDates[i], cutoff);
+      }
+      return null; // schedule not published that far ahead yet
+    }
+
     var hkt = new Date(nowMs + 8 * 3600 * 1000); // HKT calendar date via UTC getters
     var anchorIso = latestDrawIso ? String(latestDrawIso).slice(0, 10) : hkt.toISOString().slice(0, 10);
     var startOffset = latestDrawIso ? 1 : 0; // a same-day draw is only valid before any data lands
 
-    for (var i = startOffset; i <= 8; i++) {
-      var guess = new Date(dateToUtcMs(anchorIso) + i * 86400000);
+    for (var j = startOffset; j <= 8; j++) {
+      var guess = new Date(dateToUtcMs(anchorIso) + j * 86400000);
       if (!isDrawDayUTC(guess.getUTCDay())) continue;
-      var cutoff = Date.UTC(guess.getUTCFullYear(), guess.getUTCMonth(), guess.getUTCDate(), CUTOFF_UTC_HOURS, 15, 0);
-      if (cutoff > nowMs) {
+      var guessCut = Date.UTC(guess.getUTCFullYear(), guess.getUTCMonth(), guess.getUTCDate(), CUTOFF_UTC_HOURS, 15, 0);
+      if (guessCut > nowMs) {
         return {
-          cutoffMs: cutoff,
+          cutoffMs: guessCut,
           dateIso: guess.toISOString().slice(0, 10),
           dayName: DAY_NAMES[guess.getUTCDay()]
         };
@@ -277,7 +299,7 @@
   var refreshInFlight = false; // one auto-refresh per expired target
 
   function tickCountdown(nowMs) {
-    var next = nextDrawCutoff(nowMs, latestDrawIso());
+    var next = nextDrawCutoff(nowMs, drawSchedule, latestDrawIso());
     if (!next) {
       if (ndDateEl) ndDateEl.textContent = 'Awaiting next draw date';
       if (ndCutoffEl) {
@@ -383,6 +405,51 @@
     statsPanel.style.display = 'block';
   }
 
+  // ---- shared draw history (stats + Smart Pick, persisted for offline) ----
+  var HISTORY_KEY = 'm6_history';
+  var MAX_STORED_DRAWS = 1000;
+  var historyDraws = [];    // newest-first response-shaped draws, merged
+  var historyRequested = 0; // largest /history limit already fetched
+
+  function loadHistoryCache() {
+    try {
+      var a = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+      return Array.isArray(a) ? a : [];
+    } catch (e) { return []; }
+  }
+
+  function persistHistoryCache() {
+    try {
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(historyDraws.slice(0, MAX_STORED_DRAWS)));
+    } catch (e) {}
+  }
+
+  function mergeHistory(existing, incoming) {
+    var combined = existing.concat(incoming || []);
+    combined.sort(function (a, b) {
+      return String(b.drawDate || '').localeCompare(String(a.drawDate || ''));
+    });
+    var seen = {}, out = [], i, d, key;
+    for (i = 0; i < combined.length; i++) {
+      d = combined[i];
+      key = d.id || d.drawDate;
+      if (!key || seen[key]) continue;
+      seen[key] = true;
+      out.push(d);
+      if (out.length >= MAX_STORED_DRAWS) break;
+    }
+    return out;
+  }
+
+  /** Newly fetched draws feed the store, the frequency panel and Smart Pick. */
+  function applyHistory(draws) {
+    historyDraws = mergeHistory(historyDraws, draws);
+    statsDraws = historyDraws;
+    persistHistoryCache();
+    if (statsDraws.length) renderStats();
+    scheduleBacktest();
+  }
+
   async function fetchStats() {
     try {
       var resp = await fetch(API_BASE + '/marksix/history', {
@@ -395,11 +462,213 @@
       var json = await resp.json();
       var draws = json.data && json.data.lotteryDraws;
       if (!draws || !draws.length) throw new Error('No data');
-      statsDraws = draws;
-      renderStats();
+      historyRequested = 100;
+      applyHistory(draws);
     } catch (e) {
       // stats are best-effort; keep the panel hidden when history is unavailable
-      if (statsPanel) statsPanel.style.display = 'none';
+      if (!statsDraws.length && statsPanel) statsPanel.style.display = 'none';
+      scheduleBacktest(); // locally stored history may still feed Smart Pick
+    }
+  }
+
+  // ---- Smart Pick generator (prediction engine over stored history) ----
+  var strategySelect = document.getElementById('strategySelect');
+  var historySelect = document.getElementById('historySelect');
+  var sumRangeChk = document.getElementById('sumRangeChk');
+  var consecutiveChk = document.getElementById('consecutiveChk');
+  var generateBtn = document.getElementById('generateBtn');
+  var generate5Btn = document.getElementById('generate5Btn');
+  var backtestBadge = document.getElementById('backtestBadge');
+  var smartStatus = document.getElementById('smartStatus');
+  var smartLines = document.getElementById('smartLines');
+  var backtestTimer = null;
+  var historyNote = ''; // set when a deeper-history fetch fails; survives status updates
+
+  function showSmartStatus(msg) {
+    if (!smartStatus) return;
+    smartStatus.textContent = msg || '';
+    smartStatus.hidden = !msg;
+  }
+
+  function engineHistory() {
+    return historyDraws.map(function (d) { return window.MarksixEngine.normalizeDraw(d); });
+  }
+
+  function targetHistoryLimit() {
+    if (!historySelect) return 100;
+    if (historySelect.value === 'all') return Math.max(totalCached || 0, MAX_STORED_DRAWS);
+    return parseInt(historySelect.value, 10) || 100;
+  }
+
+  /** Fetch a deeper history when the selected window is wider than what we hold. */
+  async function ensureHistory() {
+    var limit = targetHistoryLimit();
+    if (historyRequested >= limit && historyDraws.length) return historyDraws;
+    try {
+      var resp = await fetch(API_BASE + '/marksix/history', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ limit: limit }),
+        cache: 'no-store'
+      });
+      if (!resp.ok) throw new Error('Server returned ' + resp.status);
+      var json = await resp.json();
+      var draws = json.data && json.data.lotteryDraws;
+      if (draws && draws.length) {
+        historyRequested = Math.max(historyRequested, limit);
+        applyHistory(draws);
+      }
+      historyNote = '';
+      return historyDraws;
+    } catch (e) {
+      historyNote = 'History unavailable - using stored draws.';
+      showSmartStatus(historyNote);
+      return historyDraws;
+    }
+  }
+
+  function currentEngineConfig() {
+    var oe = document.querySelector('input[name="oeRatio"]:checked');
+    return {
+      historyLimit: historySelect && historySelect.value === 'all'
+        ? null
+        : (parseInt(historySelect ? historySelect.value : '100', 10) || 100),
+      sumRange: sumRangeChk && sumRangeChk.checked ? [140, 210] : null,
+      oddEvenRatio: oe ? oe.value : 'balanced',
+      consecutivePairProb: !!(consecutiveChk && consecutiveChk.checked),
+      iterations: 10000
+    };
+  }
+
+  /**
+   * Run the engine, offloading to the Web Worker when the spec thresholds
+   * hit: more than 500 draws analysed, or Monte Carlo above 10,000 loops.
+   */
+  function runEngine(mode, strategy, draws, config, backtestOpts) {
+    var Engine = window.MarksixEngine;
+    var heavy = draws.length > 500 || (strategy === 'monte_carlo' && config.iterations > 10000);
+    if (typeof Worker === 'undefined' || !heavy) {
+      if (mode === 'backtest') {
+        return Promise.resolve({ backtest: Engine.backtest(strategy, draws, config, backtestOpts) });
+      }
+      return Promise.resolve({ result: Engine.generatePick(strategy, draws, config) });
+    }
+    return new Promise(function (resolve, reject) {
+      var worker = new Worker('prediction-worker.js');
+      var timer = setTimeout(function () {
+        worker.terminate();
+        reject(new Error('Calculation timed out'));
+      }, 10000);
+      worker.onmessage = function (e) {
+        clearTimeout(timer);
+        worker.terminate();
+        if (e.data && e.data.ok) resolve(e.data);
+        else reject(new Error((e.data && e.data.error) || 'Engine failed'));
+      };
+      worker.onerror = function () {
+        clearTimeout(timer);
+        worker.terminate();
+        reject(new Error('Engine failed'));
+      };
+      worker.postMessage({
+        id: Date.now(),
+        strategy: strategy,
+        draws: draws,
+        config: config,
+        wantBacktest: mode === 'backtest',
+        backtestOpts: backtestOpts || null
+      });
+    });
+  }
+
+  function renderSmartLines(picks) {
+    if (!smartLines) return;
+    var html = '', i, j, p, balls;
+    for (i = 0; i < picks.length; i++) {
+      p = picks[i];
+      balls = '';
+      for (j = 0; j < p.numbers.length; j++) balls += ballHtml(p.numbers[j], { sm: true });
+      html += '<div class="smart-line">' +
+        '<div class="smart-line-head">' +
+          '<span class="smart-line-label">Generated Line ' + (i + 1) + '</span>' +
+          '<span class="smart-score">Score: ' + p.score + '%</span>' +
+        '</div>' +
+        '<div class="ticket-balls" role="group" aria-label="Generated line ' + (i + 1) + ' numbers">' + balls + '</div>' +
+        '<div class="smart-breakdown">Breakdown: Sum ' + p.breakdown.sum +
+          ' | ' + p.breakdown.oddEven +
+          ' | ' + p.breakdown.hotCount + ' Hot / ' + p.breakdown.coldCount + ' Cold</div>' +
+      '</div>';
+    }
+    smartLines.innerHTML = html;
+  }
+
+  function reportDegraded(picks) {
+    var seen = {}, notes = [];
+    picks.forEach(function (p) {
+      if (!p.degraded || seen[p.degraded]) return;
+      seen[p.degraded] = true;
+      if (p.degraded === 'no_history') notes.push('No stored history yet - numbers are random.');
+      else if (p.degraded === 'short_history') notes.push('Under 10 stored draws - predictions are weak.');
+      else if (p.degraded === 'gates_relaxed') notes.push('A filter was too tight and was relaxed.');
+    });
+    // degradation notes win, but never wipe the offline/history note
+    showSmartStatus(notes.join(' ') || historyNote);
+  }
+
+  async function generateSmartLines(count) {
+    showSmartStatus(historyNote);
+    if (!window.MarksixEngine) {
+      showSmartStatus('Prediction engine unavailable.');
+      return;
+    }
+    if (generateBtn) generateBtn.disabled = true;
+    if (generate5Btn) generate5Btn.disabled = true;
+    try {
+      await ensureHistory();
+      var cfg = currentEngineConfig();
+      var strategy = strategySelect ? strategySelect.value : 'balanced';
+      var draws = engineHistory();
+      var picks = [], i, out;
+      for (i = 0; i < count; i++) {
+        out = await runEngine('generate', strategy, draws, cfg);
+        picks.push(out.result);
+      }
+      renderSmartLines(picks);
+      reportDegraded(picks);
+    } catch (e) {
+      showSmartStatus('Could not generate: ' + (e.message || e));
+    } finally {
+      if (generateBtn) generateBtn.disabled = false;
+      if (generate5Btn) generate5Btn.disabled = false;
+    }
+  }
+
+  function scheduleBacktest() {
+    if (!backtestBadge) return;
+    if (backtestTimer) clearTimeout(backtestTimer);
+    backtestTimer = setTimeout(function () {
+      backtestTimer = null;
+      runBacktest();
+    }, 250);
+  }
+
+  async function runBacktest() {
+    if (!backtestBadge || !window.MarksixEngine) return;
+    backtestBadge.hidden = false;
+    backtestBadge.textContent = 'Computing backtest...';
+    var cfg = currentEngineConfig();
+    if (strategySelect && strategySelect.value === 'monte_carlo') cfg.iterations = 1000; // keep badges quick
+    try {
+      var draws = engineHistory();
+      var strategy = strategySelect ? strategySelect.value : 'balanced';
+      var out = await runEngine('backtest', strategy, draws, cfg, { window: 20, minHits: 3 });
+      var bt = out.backtest;
+      backtestBadge.textContent = bt.evaluated
+        ? 'Strategy hit rate (3+ numbers): ' + bt.hitRate + '% in last ' +
+          bt.evaluated + (bt.evaluated === 1 ? ' draw' : ' draws') + '.'
+        : 'Backtest needs 11+ draws of history.';
+    } catch (e) {
+      backtestBadge.textContent = 'Backtest unavailable.';
     }
   }
 
@@ -522,14 +791,41 @@
     midnight.setHours(24, 0, 0, 0);
     var msUntilMidnight = midnight - now;
     setTimeout(function () {
-      loadInitial(true);
+      if (isScheduledDrawDay(new Date())) loadInitial(true);
       scheduleMidnightRefresh();
     }, msUntilMidnight);
+  }
+
+  /**
+   * True when `now` falls on a draw day in Hong Kong: the official schedule
+   * when we have it, otherwise the classic Tue/Thu/Sat rule.
+   */
+  function isScheduledDrawDay(now) {
+    var hkt = new Date(now.getTime() + 8 * 3600 * 1000); // UTC fields = HKT calendar
+    var iso = hkt.toISOString().slice(0, 10);
+    if (drawSchedule.length) return drawSchedule.indexOf(iso) !== -1;
+    var day = hkt.getUTCDay();
+    return day === 2 || day === 4 || day === 6;
   }
 
   refreshBtn.addEventListener('click', function () { loadInitial(true); });
   retryBtn.addEventListener('click', function () { loadInitial(true); });
   loadOlderBtn.addEventListener('click', loadOlder);
+
+  if (generateBtn) generateBtn.addEventListener('click', function () { generateSmartLines(1); });
+  if (generate5Btn) generate5Btn.addEventListener('click', function () { generateSmartLines(5); });
+  if (strategySelect) strategySelect.addEventListener('change', scheduleBacktest);
+  if (historySelect) {
+    historySelect.addEventListener('change', function () {
+      ensureHistory().then(function () { scheduleBacktest(); });
+    });
+  }
+  [sumRangeChk, consecutiveChk].forEach(function (el) {
+    if (el) el.addEventListener('change', scheduleBacktest);
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('input[name="oeRatio"]'), function (el) {
+    el.addEventListener('change', scheduleBacktest);
+  });
 
   saveTicketBtn.addEventListener('click', saveTicket);
   ticketInput.addEventListener('keydown', function (e) {
@@ -559,9 +855,17 @@
     });
   }
 
-  // Boot: cache-first read (documented behaviour — no scraping on page load);
+  // Boot: cache-first read (documented behaviour - no scraping on page load);
   // the refresh button, the draw-day midnight schedule and the countdown
   // expiry (to pick up a draw that just happened) still force one.
+  // Stored history seeds stats and Smart Pick before any network answer, so
+  // both keep working offline.
+  historyDraws = loadHistoryCache();
+  if (historyDraws.length) {
+    statsDraws = historyDraws;
+    renderStats();
+    scheduleBacktest();
+  }
   tickCountdown(Date.now());
   setInterval(function () { tickCountdown(Date.now()); }, 1000);
   loadInitial(false);
@@ -695,6 +999,10 @@
     nextDrawCutoff: nextDrawCutoff,
     computeStats: computeStats,
     fmtDrawDate: fmtDrawDate,
-    tickCountdown: tickCountdown
+    tickCountdown: tickCountdown,
+    generateSmartLines: generateSmartLines,
+    runBacktest: runBacktest,
+    isScheduledDrawDay: isScheduledDrawDay,
+    historyCount: function () { return historyDraws.length; }
   };
 })();
