@@ -22,6 +22,9 @@ A mobile-first, vanilla-JS app with no build step, tuned for quick glance-and-le
 ### Flows
 
 - **Route flow** — search `271` → pick a direction → each stop shows live arrival chips that refresh every 30 s.
+  Search results are grouped per operator family: joint 九巴/城巴 routes stay in one row (e.g. 101), while a number
+  operated by unrelated companies splits into separate rows (e.g. 71A = a 九巴 row and a 綠van row), and each row
+  opens only that operator's directions.
   Tapping a stop opens the **stop detail** ("all buses via"), listing every route serving that physical stop
   (including cross-operator variants via `stopMap`), sorted by route number ascending. Back returns to the route,
   preserving the selected direction. Tapping a route line inside the stop detail opens that route's own detail page;
@@ -31,8 +34,8 @@ A mobile-first, vanilla-JS app with no build step, tuned for quick glance-and-le
 
 ### Features
 
-- **Operator-coloured badges** — 九巴 red / 城巴 yellow-on-red / 嶼巴 blue / 綠Van green / NWFB orange; a route served
-  by several operators (e.g. 170 = 九巴+城巴) gets a mixed **violet** badge, and unknown operators fall back to the
+- **Operator-coloured badges** — 九巴 red / 城巴 yellow-on-red / 嶼巴 blue / 綠Van green / NWFB orange; a joint
+  九巴/城巴 route (e.g. 170 = 九巴+城巴) gets a mixed **violet** badge, and unknown operators fall back to the
   neutral badge. The same palette colours the operator tags, the direction pills, and each stop row's operator chip.
 - **Day / Night toggle** — header button, persisted in `localStorage` (`buseta-theme`); defaults to and live-follows
   `prefers-color-scheme` until the user picks a theme manually.
@@ -43,13 +46,13 @@ A mobile-first, vanilla-JS app with no build step, tuned for quick glance-and-le
   pages keep a persistent **last-refresh stamp** in their note line (`更新於 HH:MM:SS` / `Updated HH:MM:SS`) that
   advances with every fetch cycle — including silent background refreshes.
 - **Offline-first** — the ~8 MB route database is cached in IndexedDB (`bus-eta-lite` / `kv`); the service worker
-  caches the app shell (`buseta-lite-v27`) so the app opens instantly after the first visit. Losing the network
+  caches the app shell (`buseta-lite-v28`) so the app opens instantly after the first visit. Losing the network
   shows a persistent banner (and a Retry button if the database itself could not load); regaining it re-fetches.
 - **Loading skeletons** — the old blocking splash spinner was replaced by shimmering skeleton cards while the
   database loads (disabled under `prefers-reduced-motion`).
 - **Touch targets >= 48px** — header/tab/detail buttons, direction pills and list rows are sized for tapping on
   a moving bus.
-- **Versioning** — in-page badge (`v1.7 build <UTC>`) plus SW cache `buseta-lite-v27`; the badge build equals the
+- **Versioning** — in-page badge (`v1.8 build <UTC>`) plus SW cache `buseta-lite-v28`; the badge build equals the
   pinned commit time and the SW bump ships in the same commit (see `CONTEXT.md`).
 - **EN/ZH toggle**, and batching (incremental rendering) for long stop lists.
 

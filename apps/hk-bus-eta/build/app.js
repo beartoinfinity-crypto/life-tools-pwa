@@ -186,7 +186,7 @@ function applyDb(db) {
   state.db = db;
   buildIndexes();
   if (state.view === "detail" && state.detail) {
-    if (state.detail.kind === "route") openRoute(state.detail.routeNo, true);
+    if (state.detail.kind === "route") openRoute(state.detail.routeNo, true, null, null, state.detail.ops);
     else openStop(state.detail.stopId, true);
   } else {
     renderCurrentList();
@@ -351,14 +351,34 @@ function etaRace(rows) {
 }
 
 /* ---------------- route grouping ---------------- */
+const ROAD_OPS = new Set(["kmb", "ctb"]);
+function entryOps(e) {
+  return Object.keys(e.stops || {});
+}
+function opsBucket(ops) {
+  return ops.length && ops.every((o) => ROAD_OPS.has(o)) ? "kmb-ctb" : [...ops].sort().join("+");
+}
+function routeCardsOf(no) {
+  const map = new Map();
+  for (const e of state.routeNoIndex.get(no) || []) {
+    const b = opsBucket(entryOps(e));
+    if (!map.has(b)) map.set(b, []);
+    map.get(b).push(e);
+  }
+  return [...map.entries()].map(([ops, entries]) => ({ ops, entries }));
+}
+function scopedEntries(no, ops) {
+  const all = state.routeNoIndex.get(no) || [];
+  if (!ops) return all;
+  return all.filter((e) => opsBucket(entryOps(e)) === ops);
+}
 function pickEntry(group) {
   return group.entries.find((e) => e.serviceType === "1") || group.entries[0];
 }
 function entryStopsCo(entry) {
   return Object.keys(entry.stops).find((c) => Array.isArray(entry.stops[c]) && entry.stops[c].length);
 }
-function groupByDirection(no) {
-  const entries = state.routeNoIndex.get(no) || [];
+function groupByDirection(entries) {
   const map = new Map();
   for (const e of entries) {
     const key = (e.orig.en || "") + "\u0001" + (e.dest.en || "");
@@ -446,54 +466,48 @@ function renderRouteResults(q) {
   });
   keys = keys.slice(0, 25);
   if (!keys.length) { box.innerHTML = `<div class="msg">${T.noRoute[state.lang]}</div>`; return; }
-  keys.forEach((no) => appendRouteRow(box, no));
+  keys.forEach((no) => routeCardsOf(no).forEach((scoped) => appendRouteRow(box, no, undefined, scoped)));
 }
 function coBadgeClass(co) {
   return "co-" + String(co || "").toLowerCase();
 }
-function routeOperators(no) {
-  const entries = state.routeNoIndex.get(String(no).toUpperCase()) || [];
-  const set = new Set();
-  for (const e of entries) Object.keys(e.stops || {}).forEach((co) => set.add(co));
-  return [...set];
-}
-function routeBadgeClass(no) {
-  const ops = routeOperators(no);
+function routeBadgeClass(ops) {
   return ops.length === 1 ? coBadgeClass(ops[0]) : "co-mixed";
 }
 function groupOpsClass(g) {
   const ops = [...new Set(g.entries.flatMap((en) => Object.keys(en.stops || {})))];
   return ops.length === 1 ? coBadgeClass(ops[0]) : ops.length > 1 ? "co-mixed" : "";
 }
-function appendRouteRow(box, no, dir) {
-  const group = groupByDirection(no);
+function appendRouteRow(box, no, dir, scoped) {
+  const entries = scoped.entries;
+  const group = groupByDirection(entries);
   if (!group.length) return;
   const dirs = group.slice(0, 3).map((g) => pickEntry(g).dest[state.lang]).filter(Boolean);
-  const cos = [...new Set(group.flatMap((g) => Object.keys(pickEntry(g).stops || {})))];
+  const cos = [...new Set(entries.flatMap(entryOps))];
   const card = document.createElement("div");
   card.className = "card tappable route-row";
   card.innerHTML = `
-    <div class="route-no ${routeBadgeClass(no)}">${esc(no)}</div>
+    <div class="route-no ${routeBadgeClass(cos)}">${esc(no)}</div>
     <div class="route-dir">
       <div class="rd">${esc(dirs.join(" · "))}</div>
       <div class="rmeta">${esc(group.length + " " + T.services[state.lang])}
         ${cos.map((c) => `<span class="tag ${coBadgeClass(c)}">${esc(coTag(c))}</span>`).join("")}</div>
     </div>`;
-  card.addEventListener("click", () => openRoute(no, false, null, dir));
+  card.addEventListener("click", () => openRoute(no, false, null, dir, scoped.ops));
   box.appendChild(card);
 }
 
 /* ---------------- route detail ---------------- */
-function openRoute(no, silent, from, dir) {
+function openRoute(no, silent, from, dir, ops) {
   state.view = "detail";
   state.lastEtaAt = null;
-  const groups = groupByDirection(no);
+  const groups = groupByDirection(scopedEntries(no, ops));
   let sel = 0;
   if (dir) {
     const i = groups.findIndex((g) => g.key === dir);
     if (i >= 0) sel = i;
   }
-  state.detail = { kind: "route", routeNo: no, groups, sel, from: from || null };
+  state.detail = { kind: "route", routeNo: no, groups, sel, from: from || null, ops: ops || null };
   renderDetail();
   if (!silent) renderCurrentList();
 }
@@ -501,7 +515,7 @@ function renderDetail() {
   const { sel, groups } = state.detail;
   const g = groups[sel];
   const e = pickEntry(g);
-  const ops = routeOperators(state.detail.routeNo);
+  const ops = [...new Set(groups.flatMap((g) => g.entries.flatMap(entryOps)))];
   const opTags = ops.map((c) => `<span class="tag ${coBadgeClass(c)}">${esc(coTag(c))}</span>`).join("");
   el.viewHome.classList.add("hidden");
   el.viewDetail.classList.remove("hidden");
@@ -526,7 +540,7 @@ function renderDetail() {
     if (f && f.kind === "stop") {
       openStop(f.stopId, true, f.from || null);
     } else if (f && f.kind === "route" && typeof f.sel === "number") {
-      state.detail = { kind: "route", routeNo: f.routeNo, groups: groupByDirection(f.routeNo), sel: f.sel, from: f.from || null };
+      state.detail = { kind: "route", routeNo: f.routeNo, groups: groupByDirection(scopedEntries(f.routeNo, f.ops)), sel: f.sel, from: f.from || null, ops: f.ops || null };
       renderDetail();
     } else {
       goHome();
@@ -575,7 +589,7 @@ function renderRouteStops(group) {
       <div class="eta-chips"><span class="skeleton"></span><span class="skeleton"></span><span class="skeleton"></span></div>
       <div class="stop-more">›</div>`;
     card.addEventListener("click", () =>
-      openStop(ref, false, { kind: "route", routeNo: state.detail.routeNo, sel: state.detail.sel })
+      openStop(ref, false, { kind: "route", routeNo: state.detail.routeNo, sel: state.detail.sel, ops: state.detail.ops })
     );
     cards.push(card);
   });
@@ -623,7 +637,10 @@ function renderRouteBook() {
   box.innerHTML = "";
   const list = bookRoutes();
   if (!list.length) { box.innerHTML = `<div class="msg">${T.bookEmptyR[state.lang]}</div>`; return; }
-  list.forEach((b) => appendRouteRow(box, String(b.no).toUpperCase(), b.dir));
+  list.forEach((b) => {
+    const no = String(b.no).toUpperCase();
+    routeCardsOf(no).forEach((scoped) => appendRouteRow(box, no, b.dir, scoped));
+  });
 }
 function renderStopBook() {
   const box = el.stopBookResults;
@@ -745,7 +762,7 @@ function openStop(ref, silent, from) {
   el.detailTop.querySelector("#backBtn").addEventListener("click", () => {
     const f = state.detail.from;
     if (f && f.kind === "route") {
-      openRoute(f.routeNo, true);
+      openRoute(f.routeNo, true, null, null, f.ops || null);
       if (typeof f.sel === "number") {
         state.detail.sel = f.sel;
         renderDetail();
@@ -818,7 +835,8 @@ function appendStopRow(listEl, r) {
     <div class="eta-chips"></div>`;
   line.addEventListener("click", () => {
     const stopFrom = state.detail.from;
-    openRoute(String(e.route), true, { kind: "stop", stopId: state.detail.stopId, from: stopFrom || null });
+    openRoute(String(e.route), true, { kind: "stop", stopId: state.detail.stopId, from: stopFrom || null },
+      null, opsBucket(entryOps(e)));
   });
   listEl.appendChild(line);
   state.etaRows.set(rowkey, { etas: null });
@@ -927,7 +945,7 @@ function renderCurrentList() {
 }
 function applyLangToCurrent() {
   if (state.view === "detail") {
-    if (state.detail.kind === "route") openRoute(state.detail.routeNo, true);
+    if (state.detail.kind === "route") openRoute(state.detail.routeNo, true, null, null, state.detail.ops);
     else openStop(state.detail.stopId, true);
   } else {
     renderCurrentList();

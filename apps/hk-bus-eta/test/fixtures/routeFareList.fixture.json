@@ -1,0 +1,102 @@
+{
+  "routeList": {
+    "gmb-71a-cts-kam": {
+      "route": "71A",
+      "orig": { "zh": "長莆村", "en": "Cheung Po Tsuen" },
+      "dest": { "zh": "錦上路運輸交匯處", "en": "Kam Sheung Road Public Transport Interchange" },
+      "serviceType": "1",
+      "co": "gmb",
+      "stops": { "gmb": ["g1", "g2"] }
+    },
+    "gmb-71a-kam-cts": {
+      "route": "71A",
+      "orig": { "zh": "錦上路運輸交匯處", "en": "Kam Sheung Road Public Transport Interchange" },
+      "dest": { "zh": "長莆村", "en": "Cheung Po Tsuen" },
+      "serviceType": "1",
+      "co": "gmb",
+      "stops": { "gmb": ["g2", "g1"] }
+    },
+    "gmb-71a-potat-lamtin": {
+      "route": "71A",
+      "orig": { "zh": "寶達邨", "en": "Po Tat Estate" },
+      "dest": { "zh": "藍田站 (循環線)", "en": "Lam Tin Station (Circular)" },
+      "serviceType": "1",
+      "co": "gmb",
+      "stops": { "gmb": ["g3", "g4"] }
+    },
+    "kmb-71a-fuheng-market": {
+      "route": "71A",
+      "orig": { "zh": "大埔(富亨)", "en": "TAI PO (FU HENG)" },
+      "dest": { "zh": "大埔墟站", "en": "TAI PO MARKET STATION" },
+      "serviceType": "1",
+      "co": "kmb",
+      "stops": { "kmb": ["k1", "k2"] }
+    },
+    "kmb-71a-market-fuheng": {
+      "route": "71A",
+      "orig": { "zh": "大埔墟站", "en": "TAI PO MARKET STATION" },
+      "dest": { "zh": "大埔(富亨)", "en": "TAI PO (FU HENG)" },
+      "serviceType": "1",
+      "co": "kmb",
+      "stops": { "kmb": ["k2", "k1"] }
+    },
+    "joint-101-kennedy-town": {
+      "route": "101",
+      "orig": { "zh": "堅尼地城", "en": "Kennedy Town" },
+      "dest": { "zh": "觀塘(裕民坊)", "en": "Kwun Tong (Yuen Man Fong)" },
+      "serviceType": "1",
+      "co": "ctb",
+      "stops": { "ctb": ["c1", "c2"], "kmb": ["k3", "k4"] }
+    },
+    "joint-101-kwun-tong": {
+      "route": "101",
+      "orig": { "zh": "觀塘(裕民坊)", "en": "Kwun Tong (Yuen Man Fong)" },
+      "dest": { "zh": "堅尼地城", "en": "Kennedy Town" },
+      "serviceType": "1",
+      "co": "ctb",
+      "stops": { "ctb": ["c2", "c1"], "kmb": ["k4", "k3"] }
+    },
+    "ctb-101-exp": {
+      "route": "101",
+      "orig": { "zh": "觀塘 (裕民坊)", "en": "Kwun Tong (Yuen Man Fong)" },
+      "dest": { "zh": "聯邦新樓, 卑路乍街", "en": "United Bldg, Belcher's Street" },
+      "serviceType": "1",
+      "co": "ctb",
+      "stops": { "ctb": ["c2", "c5"] }
+    },
+    "kmb-171a": {
+      "route": "171A",
+      "orig": { "zh": "海怡半島", "en": "South Horizons" },
+      "dest": { "zh": "中港碼頭", "en": "China Hong Kong City" },
+      "serviceType": "1",
+      "co": "kmb",
+      "stops": { "kmb": ["k5", "k6"] }
+    },
+    "kmb-271a": {
+      "route": "271A",
+      "orig": { "zh": "富蝶總站", "en": "Wo Yi Hop Terminus" },
+      "dest": { "zh": "尖沙咀東", "en": "Tsim Sha Tsui East" },
+      "serviceType": "1",
+      "co": "kmb",
+      "stops": { "kmb": ["k7", "k8"] }
+    }
+  },
+  "stopList": {
+    "g1": { "name": { "zh": "長莆村", "en": "Cheung Po Tsuen" }, "location": { "lat": 22.37, "lng": 114.12 } },
+    "g2": { "name": { "zh": "錦上路運輸交匯處", "en": "Kam Sheung Road Public Transport Interchange" }, "location": { "lat": 22.43, "lng": 114.06 } },
+    "g3": { "name": { "zh": "寶達邨", "en": "Po Tat Estate" }, "location": { "lat": 22.32, "lng": 114.23 } },
+    "g4": { "name": { "zh": "藍田站", "en": "Lam Tin Station" }, "location": { "lat": 22.31, "lng": 114.23 } },
+    "k1": { "name": { "zh": "大埔(富亨)", "en": "TAI PO (FU HENG)" }, "location": { "lat": 22.45, "lng": 114.17 } },
+    "k2": { "name": { "zh": "大埔墟站", "en": "TAI PO MARKET STATION" }, "location": { "lat": 22.44, "lng": 114.17 } },
+    "k3": { "name": { "zh": "海底隧道", "en": "Cross-Harbour Tunnel" }, "location": { "lat": 22.30, "lng": 114.17 } },
+    "k4": { "name": { "zh": "創紀之城", "en": "Kwun Tong Pier" }, "location": { "lat": 22.31, "lng": 114.23 } },
+    "k5": { "name": { "zh": "海怡半島", "en": "South Horizons" }, "location": { "lat": 22.24, "lng": 114.13 } },
+    "k6": { "name": { "zh": "中港碼頭", "en": "China Hong Kong City" }, "location": { "lat": 22.30, "lng": 114.16 } },
+    "k7": { "name": { "zh": "富蝶總站", "en": "Wo Yi Hop Terminus" }, "location": { "lat": 22.37, "lng": 114.14 } },
+    "k8": { "name": { "zh": "尖沙咀東", "en": "Tsim Sha Tsui East" }, "location": { "lat": 22.30, "lng": 114.17 } },
+    "c1": { "name": { "zh": "堅尼地城", "en": "Kennedy Town" }, "location": { "lat": 22.28, "lng": 114.13 } },
+    "c2": { "name": { "zh": "觀塘裕民坊", "en": "Kwun Tong Yuen Man Fong" }, "location": { "lat": 22.31, "lng": 114.23 } },
+    "c5": { "name": { "zh": "卑路乍街", "en": "Belcher's Street" }, "location": { "lat": 22.28, "lng": 114.13 } }
+  },
+  "stopMap": {}
+}
