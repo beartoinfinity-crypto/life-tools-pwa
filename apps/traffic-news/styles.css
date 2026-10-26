@@ -295,10 +295,51 @@ main {
   text-align: center;
 }
 
+/* Active-incident summary band (only rendered while any 最新情況 item exists) */
+.summary-band {
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.5;
+  border-radius: 10px;
+  background: #fbe9e7;
+  border: 1px solid #ffab91;
+  color: #bf360c;
+}
+
+.summary-band .sb-l3 { color: #c9312b; }
+.summary-band .sb-l2 { color: #e65100; }
+.summary-band .sb-l1 { color: #546e7a; }
+
 :root[data-theme="night"] .offline-banner {
   background: #3e2723;
   border-color: #8d6e63;
   color: #ffcc80;
+}
+
+:root[data-theme="night"] .summary-band {
+  background: #3e2723;
+  border-color: #8d6e63;
+  color: #ffcc80;
+}
+
+/* Merged-incident secondary details (shown only when a group has >1 source) */
+.ni-merged {
+  margin-top: 8px;
+  border-top: 1px dashed var(--border);
+  padding-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ni-mrow {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-secondary);
 }
 
 /* Severity accent (active items only): L3 red, L2 amber, L1 slate */

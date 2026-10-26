@@ -174,8 +174,8 @@ describe('traffic-news app (v1.1)', () => {
     expect(time.getAttribute('datetime')).toBeTruthy();
     expect(window.document.getElementById('lastUpdate').getAttribute('role')).toBe('status');
     expect(window.document.getElementById('lastUpdate').textContent).toContain('updated');
-    // live region attached only after the first paint
-    expect(window.document.getElementById('newsList').getAttribute('aria-live')).toBe('polite');
+    // live region lives on the status line (role=status), NOT the whole list
+    expect(window.document.getElementById('newsList').getAttribute('aria-live')).toBeNull();
   });
 
   // ---- expand / keyboard ----
@@ -204,19 +204,20 @@ describe('traffic-news app (v1.1)', () => {
 
   it('keeps an expanded card open across a refresh', async () => {
     const { window, state } = await boot();
-    const head = window.document.querySelector('.news-head');
+    const head = window.document.querySelector('.news-item[data-id="urgent1"] .news-head');
+    expect(head).toBeTruthy();
     click(window, head);
     expect(head.getAttribute('aria-expanded')).toBe('true');
 
     // new payload arrives (one more item) -> rebuild must re-apply expansion
-    state.items = [...state.items, item({ id: 'extra1' })];
+    state.items = [...state.items, item({ id: 'extra1', location: '獅子山隧道' })];
     click(window, window.document.getElementById('refreshBtn'));
     await flush();
 
     expect(ids(window)).toContain('extra1');
-    const firstHead = window.document.querySelector('.news-item').querySelector('.news-head');
-    expect(firstHead.getAttribute('aria-expanded')).toBe('true');
-    expect(firstHead.closest('.news-item').classList.contains('open')).toBe(true);
+    const keptHead = window.document.querySelector('.news-item[data-id="urgent1"] .news-head');
+    expect(keptHead.getAttribute('aria-expanded')).toBe('true');
+    expect(keptHead.closest('.news-item').classList.contains('open')).toBe(true);
   });
 
   // ---- filter chips + URL params ----
@@ -247,12 +248,15 @@ describe('traffic-news app (v1.1)', () => {
   it('filters by search text and syncs ?q=', async () => {
     const { window } = await boot();
     type(window, '屯門公路');
+    await new Promise((r) => setTimeout(r, 180)); // debounced render
     expect(ids(window)).toEqual(['warn1']);
     expect(window.location.search).toContain('q=');
     type(window, 'zzz-no-match');
+    await new Promise((r) => setTimeout(r, 180));
     expect(cards(window).length).toBe(0);
     expect(window.document.querySelector('.news-empty').textContent).toBe('No matches.');
     type(window, '');
+    await new Promise((r) => setTimeout(r, 180));
     expect(ids(window).length).toBe(5);
   });
 
@@ -505,5 +509,113 @@ describe('traffic-news app (v1.1)', () => {
     expect(banner.querySelector('p').textContent).toBe('Add Traffic News to your home screen?');
     expect(banner.querySelector('.install-btn').style.display).toBe('');
     expect(banner.style.display).toBe('flex');
+  });
+});
+
+describe('traffic-news v1.7: incident grouping, summary band, debounce, live region', () => {
+  let harness;
+
+  afterEach(() => {
+    if (harness) {
+      try { harness.dom.window.close(); } catch { /* ignore */ }
+      harness = null;
+    }
+    vi.restoreAllMocks();
+  });
+
+  async function boot(opts = {}) {
+    harness = createHarness(opts);
+    await flush();
+    return harness;
+  }
+
+  function mergeItems(now = Date.now()) {
+    return [
+      item({
+        id: 'r1', category: '道路事故-交通意外', status: '最新情況',
+        location: '西九龍公路,奧運港鐵站 [往西隧]', detail: '交通意外，車路通行延誤',
+        source: 'routejam', posted_at: new Date(now - 60 * 1000).toISOString(),
+      }),
+      item({
+        id: 'r2', category: '道路事故-交通意外', status: '最新情況',
+        location: '西九龍公路', detail: '車輛排隊，請預留時間',
+        source: '881903', posted_at: new Date(now - 5 * 60 * 1000).toISOString(),
+      }),
+    ];
+  }
+
+  it('merges the same incident from two sources into one card with both badges', async () => {
+    const { window } = await boot({ items: mergeItems() });
+    expect(ids(window)).toEqual(['r1']);
+    const card = cards(window)[0];
+    const srcs = [...card.querySelectorAll('.ni-src')].map((s) => s.textContent);
+    expect(srcs).toContain('Routejam');
+    expect(srcs).toContain('881903');
+  });
+
+  it('uses the newest member for status (resolved wins over stale active)', async () => {
+    const now = Date.now();
+    const { window } = await boot({
+      items: [
+        item({ id: 'c1', category: '道路事故-交通意外', status: '已清理',
+          location: '西九龍公路', detail: '現場已清理', source: '881903',
+          posted_at: new Date(now - 60 * 1000).toISOString() }),
+        item({ id: 'c2', category: '道路事故-交通意外', status: '最新情況',
+          location: '西九龍公路', detail: '交通意外', source: 'routejam',
+          posted_at: new Date(now - 10 * 60 * 1000).toISOString() }),
+      ],
+    });
+    expect(ids(window)).toEqual(['c1']);
+    expect(cards(window)[0].querySelector('.ni-status').textContent).toBe('已清理');
+  });
+
+  it('does not merge same-location incidents hours apart', async () => {
+    const now = Date.now();
+    const { window } = await boot({
+      items: [
+        item({ id: 'e1', location: '西九龍公路', posted_at: new Date(now - 60 * 1000).toISOString() }),
+        item({ id: 'e2', location: '西九龍公路', posted_at: new Date(now - 2 * 60 * 60 * 1000).toISOString() }),
+      ],
+    });
+    expect(ids(window).sort()).toEqual(['e1', 'e2']);
+  });
+
+  it('does not merge same-location items of different categories', async () => {
+    const now = Date.now();
+    const { window } = await boot({
+      items: [
+        item({ id: 'd1', category: '道路事故-交通意外', location: '西九龍公路', posted_at: new Date(now - 60 * 1000).toISOString() }),
+        item({ id: 'd2', category: '道路工程-改道', location: '西九龍公路', posted_at: new Date(now - 5 * 60 * 1000).toISOString() }),
+      ],
+    });
+    expect(ids(window).sort()).toEqual(['d1', 'd2']);
+  });
+
+  it('keeps a merged member\'s detail searchable', async () => {
+    const { window } = await boot({ items: mergeItems() });
+    type(window, '預留時間');
+    await new Promise((r) => setTimeout(r, 180));
+    expect(ids(window)).toEqual(['r1']);
+    expect(cards(window).length).toBe(1);
+  });
+
+  it('shows an active-incident summary band and hides it when all cleared', async () => {
+    const { window } = await boot();
+    const band = window.document.getElementById('summaryBand');
+    expect(band.hidden).toBe(false);
+    expect(band.textContent).toContain('宗緊急');
+    const w2 = (await boot({ items: [item({ id: 'cl', status: '完結', location: '西九龍公路' })] })).window;
+    const b2 = w2.document.getElementById('summaryBand');
+    expect(b2.hidden).toBe(true);
+    await w2.close();
+  });
+
+  it('debounces the search input before re-rendering', async () => {
+    const { window } = await boot();
+    expect(ids(window).length).toBe(5);
+    type(window, '屯門公路');
+    expect(ids(window).length).toBe(5); // not yet applied
+    await new Promise((r) => setTimeout(r, 180));
+    expect(ids(window)).toEqual(['warn1']);
   });
 });

@@ -322,12 +322,20 @@ upserted into Supabase, so page loads stay fast and routejam is hit at most once
 last **12 hours** of incidents with 最新/完結 badges, HK-time + relative timestamps, tap-to-expand details, a
 manual refresh button and a 1-minute auto-poll; installable like the other apps (manifest + service worker).
 
-- **Filter & search** — a search box (matches category/location/detail text) plus data-driven category chips
+- **Filter & search** — a search box (matches category/location/detail text, **debounced** at 150 ms so typing
+  never rebuilds the whole list per keystroke) plus data-driven category chips
   derived from each item's category prefix (道路事故, 擠塞信號, 惡劣天氣, ...), a 全部 chip and a 收藏 chip.
   Filter state deep-links via `?q=...&cat=...` so a view is bookmarkable/refreshable.
 - **District chips** — a second chip row filters by broad region (香港島 / 九龍 / 新界 / 大嶼山 / 其他),
   inferred from each item's location by keyword (falling back to detail/category, then 其他), data-driven to
   the regions actually present, and deep-linked via `?r=...`. Regions combine with the category/search filters.
+- **Incident merge** — routejam and 881903 (and routejam's own per-feed attributions) report the same accident as
+  separate items, so same-location/same-category items posted within 60 minutes are grouped into **one card**: the
+  newest member drives the status/time, all sources show as badges (e.g. `Routejam · 881903`), the merged members'
+  details appear in the expanded view, and every member's text stays searchable. The freshness line reports the
+  **incident count** instead of raw rows.
+- **Active-incident summary** — while any 最新情況 item exists, a band above the list shows live tallies
+  (`⚠ 1 宗緊急 · 2 宗警告 · 1 宗提示`), hidden once everything is resolved.
 - **Severity badges** — active (最新情況) items are keyword-classified and badged: **L3 緊急** (red border +
   badge — 暫停服務, 全線封閉, 八號風球, 黑色暴雨, ...), **L2 警告** (amber — 擠塞, 封閉, 交通意外, 延誤, ...)
   and **L1 提示** (slate — 改道, 臨時, 工程, ...). Completed (完結) items never get a badge.
@@ -336,9 +344,9 @@ manual refresh button and a 1-minute auto-poll; installable like the other apps 
 - **Offline resilience** — the last good payload is snapshotted to `localStorage`; when the fetch fails or the
   device is offline the snapshot is rendered behind an `⚡ Offline / ⚠ Refresh failed — showing cached news
   from Xm ago` banner and the list is never wiped. Polling pauses while offline and resumes on `online`.
-- **Accessibility** — `role="status"` freshness line, semantic `<time datetime>` stamps, cards expose
-  `role="button"` + `aria-expanded` and toggle with Enter/Space; the `aria-live="polite"` region is attached
-  only after the first paint so the initial list is not announced wholesale.
+- **Accessibility** — `role="status"` freshness line carries the polite live region (the whole list is **not**
+  announced on every refresh); semantic `<time datetime>` stamps, cards expose `role="button"` + `aria-expanded`
+  and toggle with Enter/Space.
 
 | Method | Endpoint | Request body | Description |
 |--------|----------|--------------|-------------|
@@ -540,7 +548,7 @@ npm test            # Run all tests once
 npm run test:watch  # Watch mode
 ```
 
-334 tests across 14 files under `test/` (hub), `apps/mark-six/test/`, `apps/hk-bus-eta/test/`, `apps/traffic-news/test/` and `apps/music-trend/test/`. The suite uses in-memory SQLite + fixtures, so it runs offline without a Supabase connection.
+341 tests across 14 files under `test/` (hub), `apps/mark-six/test/`, `apps/hk-bus-eta/test/`, `apps/traffic-news/test/` and `apps/music-trend/test/`. The suite uses in-memory SQLite + fixtures, so it runs offline without a Supabase connection.
 
 ---
 

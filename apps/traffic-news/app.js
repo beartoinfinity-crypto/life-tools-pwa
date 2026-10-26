@@ -15,7 +15,6 @@
   var banner = document.getElementById('offlineBanner');
 
   var renderedOnce = false;
-  var liveAttached = false;
   var lastItems = [];
   var lastSig = null;
   var chipSig = null;
@@ -23,6 +22,7 @@
   var openIds = {};
   var favs = loadFavs();
   var filterState = { cat: '', q: '', r: '' };
+  var searchT = null;
 
   // ---- severity classification (L3 urgent > L2 warning > L1 info) ----
   var SEV_L3 = ['暫停服務', '停止服務', '服務中斷', '停駛', '全線封閉', '全面封閉', '全部封閉',
@@ -115,6 +115,69 @@
     return matchRegion(n.location) || matchRegion((n.detail || '') + ' ' + (n.category || '')) || 'other';
   }
 
+  // ---- incident grouping (same location/category close in time => one card) ----
+  var MERGE_WINDOW_MS = 60 * 60 * 1000;
+  function normLoc(loc) {
+    return String(loc || '')
+      .toLowerCase()
+      .replace(/[（）()\[\]]/g, ' ')
+      .replace(/往[^\s,，;；]*/g, ' ')
+      .replace(/方向/g, ' ')
+      .replace(/[^0-9a-z\u4e00-\u9fff]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+  function locMatches(a, b) {
+    if (!a || !b) return false;
+    if (a === b) return true;
+    var short = a.length <= b.length ? a : b;
+    var long = short === a ? b : a;
+    return short.length >= 2 && long.indexOf(short) !== -1;
+  }
+  function catKey(n) { return chipPrefix(n); }
+  function sameIncident(a, b) {
+    if (!locMatches(normLoc(a.location), normLoc(b.location))) return false;
+    var ca = catKey(a), cb = catKey(b);
+    return ca === cb || ca === '其他' || cb === '其他';
+  }
+  function groupIncidents(items) {
+    var sorted = items.slice().sort(function (a, b) {
+      return new Date(b.posted_at).getTime() - new Date(a.posted_at).getTime();
+    });
+    var groups = [];
+    for (var i = 0; i < sorted.length; i++) {
+      var n = sorted[i];
+      var placed = false;
+      for (var g = 0; g < groups.length; g++) {
+        var rep = groups[g].rep;
+        if (sameIncident(n, rep) &&
+            Math.abs(new Date(n.posted_at).getTime() - new Date(rep.posted_at).getTime()) <= MERGE_WINDOW_MS) {
+          groups[g].members.push(n);
+          if (new Date(n.posted_at).getTime() > new Date(rep.posted_at).getTime()) groups[g].rep = n;
+          placed = true;
+          break;
+        }
+      }
+      if (!placed) groups.push({ rep: n, members: [n] });
+    }
+    return groups.map(function (g) {
+      var rep = g.rep;
+      var favId = null;
+      g.members.forEach(function (m) { if (favs[m.id]) favId = m.id; });
+      if (favId) rep.id = favId;
+      var seen = {};
+      rep.srcs = [];
+      g.members.forEach(function (m) {
+        var s = m.source || '';
+        if (!seen[s]) { seen[s] = 1; rep.srcs.push(s); }
+      });
+      rep._members = g.members;
+      rep._search = ((rep.category || '') + ' ' + (rep.location || '') + ' ' +
+        g.members.map(function (m) { return m.detail || ''; }).join(' ')).toLowerCase();
+      return rep;
+    });
+  }
+
   function matches(n) {
     var cat = filterState.cat;
     if (cat === FAV_CAT) {
@@ -125,7 +188,7 @@
     if (filterState.r && regionOf(n) !== filterState.r) return false;
     var q = filterState.q.trim().toLowerCase();
     if (q) {
-      var hay = ((n.category || '') + ' ' + (n.location || '') + ' ' + (n.detail || '')).toLowerCase();
+      var hay = n._search || ((n.category || '') + ' ' + (n.location || '') + ' ' + (n.detail || '')).toLowerCase();
       if (hay.indexOf(q) === -1) return false;
     }
     return true;
@@ -234,15 +297,13 @@
     }
   }
 
-  function srcBadge(n) {
-    var s = n.source;
-    if (!s) return '';
+  function srcBadgeOf(s) {
     var label, cls;
     if (s === '881903') { label = '881903'; cls = 'src-881903'; }
     else if (s === 'routejam' || s === 'Routejam') { label = 'Routejam'; cls = 'src-routejam'; }
     else {
       // attribution captured from the 資料來源 line (香港電台, data.gov.hk, ...)
-      label = s.replace(/^https?:\/\//, '').replace(/\/$/, '');
+      label = String(s || '').replace(/^https?:\/\//, '').replace(/\/$/, '');
       cls = 'src-other';
     }
     return '<span class="ni-src ' + cls + '">' + esc(label) + '</span>';
@@ -255,6 +316,17 @@
     var cong = /擠塞信號/.test(n.category) ? '<span class="ni-cong">擠塞</span>' : '';
     var sev = r.sev ? '<span class="ni-sev sev-' + r.sev + '">' + SEV_LABEL[r.sev] + '</span>' : '';
     var fav = r.fav;
+    var srcs = (n.srcs && n.srcs.length) ? n.srcs : (n.source ? [n.source] : []);
+    var srcHtml = srcs.map(srcBadgeOf).join('');
+    var extra = '';
+    if (n._members && n._members.length > 1) {
+      var others = n._members.filter(function (m) { return m.id !== n.id; });
+      if (others.length) {
+        extra = '<div class="ni-merged">' + others.map(function (m) {
+          return '<div class="ni-mrow">' + srcBadgeOf(m.source) + esc(m.detail) + '</div>';
+        }).join('') + '</div>';
+      }
+    }
     var timeHtml = n.posted_at
       ? '<time datetime="' + esc(n.posted_at) + '">' + esc(fmtTime(n.posted_at)) + '</time>'
       : esc(fmtTime(n.posted_at));
@@ -269,13 +341,13 @@
             '<span class="ni-status ' + (latest ? 'latest' : 'closed') + '">' + esc(statusLabel) + '</span>' +
             sev +
             cong +
-            srcBadge(n) +
+            srcHtml +
             '<span class="ni-right">' + timeHtml + '<span class="ni-rel">' + esc(fmtAgo(n.posted_at)) + '</span></span>' +
           '</div>' +
           '<div class="ni-loc">' + esc(n.location || n.category || '') + '</div>' +
           '<div class="ni-cat">' + esc(n.category) + '</div>' +
         '</div>' +
-        '<div class="ni-detail" id="d-' + esc(n.id) + '">' + esc(n.detail) + '</div>' +
+        '<div class="ni-detail" id="d-' + esc(n.id) + '">' + esc(n.detail) + extra + '</div>' +
       '</article>';
   }
 
@@ -288,7 +360,8 @@
     rows.sort(function (a, b) { return (b.fav ? 1 : 0) - (a.fav ? 1 : 0); });
 
     var sig = rows.map(function (r) {
-      return r.n.id + '|' + r.n.status + '|' + r.sev + '|' + r.fav + '|' + r.n.source + '|' + r.n.posted_at;
+      return r.n.id + '|' + r.n.status + '|' + r.sev + '|' + r.fav + '|' +
+        (r.n.srcs || [r.n.source]).join(',') + '|' + r.n.posted_at;
     }).join(';');
     if (sig === lastSig) return;
     lastSig = sig;
@@ -313,28 +386,40 @@
     });
   }
 
+  /** Active-incident summary line: counts of L3/L2/L1 among 最新情況 items. */
+  function renderSummary(items) {
+    var band = document.getElementById('summaryBand');
+    if (!band) return;
+    var c = { l3: 0, l2: 0, l1: 0 };
+    items.forEach(function (n) {
+      var s = classify(n);
+      if (s) c[s]++;
+    });
+    if (!(c.l3 + c.l2 + c.l1)) { band.hidden = true; band.innerHTML = ''; return; }
+    var parts = [];
+    if (c.l3) parts.push('<b class="sb-l3">' + c.l3 + ' 宗緊急</b>');
+    if (c.l2) parts.push('<b class="sb-l2">' + c.l2 + ' 宗警告</b>');
+    if (c.l1) parts.push('<span class="sb-l1">' + c.l1 + ' 宗提示</span>');
+    band.innerHTML = '&#9888; ' + parts.join(' · ') + '（最新情況）';
+    band.hidden = false;
+  }
+
   function render(payload) {
     var items = (payload && payload.data) || [];
-    if (payload && payload.lastRefresh) {
-      lastUpdate.textContent = 'updated ' + fmtAgo(payload.lastRefresh) + ' (' + items.length + ' items)';
-    }
     if (items.length) {
-      lastItems = items;
+      lastItems = groupIncidents(items);
     } else if (!renderedOnce) {
       lastItems = [];
     }
     // else: keep showing what we have (never blank on a scrape hiccup)
     renderedOnce = true;
+    if (payload && payload.lastRefresh) {
+      lastUpdate.textContent = 'updated ' + fmtAgo(payload.lastRefresh) + ' (' + lastItems.length + ' incidents)';
+    }
     renderChips();
     renderRegions();
+    renderSummary(lastItems);
     renderList();
-    // attach the live region only after the first paint so the initial
-    // list is not announced wholesale to screen readers
-    if (!liveAttached) {
-      newsList.setAttribute('aria-live', 'polite');
-      newsList.setAttribute('aria-atomic', 'false');
-      liveAttached = true;
-    }
   }
 
   // ---- offline / cached snapshot ----
@@ -419,7 +504,8 @@
   searchInput.addEventListener('input', function () {
     filterState.q = searchInput.value;
     writeUrl();
-    renderList();
+    if (searchT) clearTimeout(searchT);
+    searchT = setTimeout(function () { renderList(); }, 150);
   });
 
   chipRow.addEventListener('click', function (e) {
