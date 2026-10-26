@@ -79,6 +79,14 @@
       "serviceType": "1",
       "co": "kmb",
       "stops": { "kmb": ["k7", "k8"] }
+    },
+    "kmb-2000x": {
+      "route": "2000X",
+      "orig": { "zh": "測試總站", "en": "Test Terminus" },
+      "dest": { "zh": "測試尾站", "en": "Test End" },
+      "serviceType": "1",
+      "co": "kmb",
+      "stops": { "kmb": ["k1", "k2", "k3", "k4", "k5", "k6", "k7", "k8", "k9", "k10"] }
     }
   },
   "stopList": {
@@ -96,7 +104,9 @@
     "k8": { "name": { "zh": "尖沙咀東", "en": "Tsim Sha Tsui East" }, "location": { "lat": 22.30, "lng": 114.17 } },
     "c1": { "name": { "zh": "堅尼地城", "en": "Kennedy Town" }, "location": { "lat": 22.28, "lng": 114.13 } },
     "c2": { "name": { "zh": "觀塘裕民坊", "en": "Kwun Tong Yuen Man Fong" }, "location": { "lat": 22.31, "lng": 114.23 } },
-    "c5": { "name": { "zh": "卑路乍街", "en": "Belcher's Street" }, "location": { "lat": 22.28, "lng": 114.13 } }
+    "c5": { "name": { "zh": "卑路乍街", "en": "Belcher's Street" }, "location": { "lat": 22.28, "lng": 114.13 } },
+    "k9": { "name": { "zh": "測試站九", "en": "Test Stop Nine" }, "location": { "lat": 22.44, "lng": 114.17 } },
+    "k10": { "name": { "zh": "測試站十", "en": "Test Stop Ten" }, "location": { "lat": 22.44, "lng": 114.17 } }
   },
   "stopMap": {}
 }

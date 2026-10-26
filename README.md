@@ -292,11 +292,15 @@ Other features:
 - **Operator-split results** — search rows are grouped per operator family: joint 九巴/城巴 routes share one row (e.g. 101), while a number run by unrelated operators splits into separate rows (e.g. 71A = a 九巴 row and a 綠van row); tapping a row opens only that operator's directions.
 - **Day / Night toggle** — header button, persisted in `localStorage`, follows the system preference until you choose manually (override wins over `prefers-color-scheme`).
 - **Bookmarks** — star a route or stop from its detail page; stored in `localStorage`, listed under the two bookmark tabs, tap to reopen. Route bookmarks also remember the **direction** you were viewing (switching pills on a starred route updates it).
-- **Auto-refresh** — live arrival chips refresh every 30 s (paused while the tab is hidden; instant refresh when
-  you return); the detail page keeps a persistent `更新於 HH:MM:SS` last-refresh stamp. Manual refresh re-downloads
-  the route database.
+- **Auto-refresh** — live arrival chips refresh every 30 s **silently** (paused while the tab is hidden; instant
+  refresh when you return; no status toast noise); the detail page keeps a persistent `更新於 HH:MM:SS` last-refresh
+  stamp. Manual refresh re-downloads the route database.
+- **Next-arrival first** — each stop shows up to 3 chips where the **next bus is the loudest**: a larger, accent-green
+  chip with tabular figures (minute digits align across stops), `抵站` when it's within a minute, and no HH:MM clock
+  noise inside chips (the clock lives in the expanded rows). Refreshes re-use the previous chip text when nothing
+  changed, and ETA fetches are pooled to ≤6 concurrent per pass to stay kind to mobile radios and the provider APIs.
 - **Offline-first** — route database cached in IndexedDB; offline banner + Retry-on-failure; service worker caches
-  the shell (`buseta-lite-v28`).
+  the shell (`buseta-lite-v29`).
 - **Loading skeletons & >=48px touch targets** — shimmer placeholders replace the blocking splash; buttons and rows
   sized for gloved/fumbling taps.
 - **EN/ZH** toggle; near-black UI in night mode with corrected chip/badge colours.
@@ -536,7 +540,7 @@ npm test            # Run all tests once
 npm run test:watch  # Watch mode
 ```
 
-331 tests across 14 files under `test/` (hub), `apps/mark-six/test/`, `apps/hk-bus-eta/test/`, `apps/traffic-news/test/` and `apps/music-trend/test/`. The suite uses in-memory SQLite + fixtures, so it runs offline without a Supabase connection.
+334 tests across 14 files under `test/` (hub), `apps/mark-six/test/`, `apps/hk-bus-eta/test/`, `apps/traffic-news/test/` and `apps/music-trend/test/`. The suite uses in-memory SQLite + fixtures, so it runs offline without a Supabase connection.
 
 ---
 

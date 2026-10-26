@@ -211,8 +211,9 @@ body {
 .eta-chip {
   flex: 0 0 auto; text-align: center; padding: 5px 8px; min-width: 52px;
   border-radius: 9px; background: var(--route-badge-bg); color: #fff; font-size: 14px; font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
-.eta-chip .t { display: block; font-size: 9px; font-weight: 500; opacity: .75; }
+.eta-chip.first { background: var(--accent); min-width: 64px; font-size: 17px; padding: 6px 10px; }
 .eta-chip.soon { background: var(--accent); }
 .eta-chip.mut { background: #e6e9e7; color: var(--ink-2); font-weight: 500; }
 .eta-chip.err { background: var(--warn); }

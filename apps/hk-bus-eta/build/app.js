@@ -313,15 +313,18 @@ function fmtEta(iso) {
   const h = Math.floor(mins / 60);
   return { main: state.lang === "zh" ? h + " 小時" : h + " hr", sub, soon: false };
 }
+function chipsSig(etas) {
+  return etas.slice(0, 3).map((e) => fmtEta(e.eta).main).join("|");
+}
 function chipsHTML(etas) {
   const list = etas.slice(0, 3);
   if (!list.length) return '<span class="eta-chip none">—</span>';
   const multiCo = new Set(list.map((e) => e.co)).size > 1;
-  return list.map((e) => {
+  return list.map((e, i) => {
     const f = fmtEta(e.eta);
     const coHtml = multiCo ? `<span class="co-sm ${coBadgeClass(e.co)}">${esc(coTag(e.co))}</span>` : "";
-    return `<span class="eta-chip${f.soon ? " soon" : ""}" title="${esc(e.rmk || e.dest)}">` +
-      `<span class="t">${f.sub}</span>${f.main}${coHtml}</span>`;
+    const cls = f.soon ? "soon" : i === 0 ? "first" : "";
+    return `<span class="eta-chip${cls ? " " + cls : ""}" title="${esc(e.rmk || e.dest)}">${f.main}${coHtml}</span>`;
   }).join("");
 }
 function expandedHTML(etas) {
@@ -608,26 +611,33 @@ function renderRouteStops(group) {
   more.addEventListener("click", appendBatch);
   appendBatch();
 }
-function fetchRowEtas(cards) {
+async function fetchRowEtas(cards) {
   const rows = cards.map((c) => {
     const parts = c.dataset.rowkey.split("\u0002");
     const group = state.detail.groups[Number(parts[0])];
     const cos = parts[1].split(",");
     return { el: c, rowkey: c.dataset.rowkey, cos, seq: Number(parts[2]), entry: pickEntry(group) };
   });
-  const tasks = rows.map((r) => Promise.all(r.cos.map((co) => etaFor(r.entry, co, r.seq))));
-  tasks.reduce((p, task, i) => p.then(() => task.then((results) => {
-    const merged = results.flat().sort((a, b) => {
-      const ta = a.eta ? new Date(a.eta).getTime() : Infinity;
-      const tb = b.eta ? new Date(b.eta).getTime() : Infinity;
-      return ta - tb;
-    });
-    const r = rows[i];
-    state.etaRows.set(r.rowkey, { etas: merged, entry: r.entry, co: r.cos[0], cos: r.cos, seq: r.seq });
-    const chips = r.el.querySelector(".eta-chips");
-    if (chips) chips.innerHTML = chipsHTML(merged);
-    markEtaRefresh();
-  })), Promise.resolve()).catch(() => {});
+  state.refreshing = true;
+  try {
+    await pool(rows, (r) => Promise.all(r.cos.map((co) => etaFor(r.entry, co, r.seq))).then((results) => {
+      const merged = results.flat().sort((a, b) => {
+        const ta = a.eta ? new Date(a.eta).getTime() : Infinity;
+        const tb = b.eta ? new Date(b.eta).getTime() : Infinity;
+        return ta - tb;
+      });
+      state.etaRows.set(r.rowkey, { etas: merged, entry: r.entry, co: r.cos[0], cos: r.cos, seq: r.seq });
+      const sig = chipsSig(merged);
+      if (sig !== r.el.dataset.chipSig) {
+        const chips = r.el.querySelector(".eta-chips");
+        if (chips) chips.innerHTML = chipsHTML(merged);
+        r.el.dataset.chipSig = sig;
+      }
+    }), 6);
+  } finally {
+    state.refreshing = false;
+  }
+  markEtaRefresh();
 }
 
 /* ---------------- bookmark lists ---------------- */
@@ -842,8 +852,12 @@ function appendStopRow(listEl, r) {
   state.etaRows.set(rowkey, { etas: null });
   etaFor(e, r.co, r.seq).then((etas) => {
     state.etaRows.set(rowkey, { etas, entry: e, co: r.co, seq: r.seq });
-    const chips = line.querySelector(".eta-chips");
-    if (chips) chips.innerHTML = chipsHTML(etas);
+    const sig = chipsSig(etas);
+    if (sig !== line.dataset.chipSig) {
+      const chips = line.querySelector(".eta-chips");
+      if (chips) chips.innerHTML = chipsHTML(etas);
+      line.dataset.chipSig = sig;
+    }
     markEtaRefresh();
   });
 }
@@ -876,19 +890,22 @@ async function refreshVisibleEtas(silent) {
   if (!rows.length) return;
   state.refreshing = true;
   try {
-    const tasks = rows.map((r) => Promise.all((r.cos || [r.co]).map((co) => etaFor(r.entry, co, r.seq))));
-    for (let i = 0; i < tasks.length; i++) {
-      const results = await tasks[i];
+    await pool(rows, async (r) => {
+      const results = await Promise.all((r.cos || [r.co]).map((co) => etaFor(r.entry, co, r.seq)));
       const merged = results.flat().sort((a, b) => {
         const ta = a.eta ? new Date(a.eta).getTime() : Infinity;
         const tb = b.eta ? new Date(b.eta).getTime() : Infinity;
         return ta - tb;
       });
-      const r = rows[i];
-      state.etaRows.set(r.rowEl.dataset.rowkey, { etas: merged, entry: r.entry, co: (r.cos || [r.co])[0], cos: r.cos || [r.co], seq: r.seq });
-      const chips = r.rowEl.querySelector(".eta-chips");
-      if (chips) chips.innerHTML = chipsHTML(merged);
-    }
+      const key = r.rowEl.dataset.rowkey;
+      state.etaRows.set(key, { etas: merged, entry: r.entry, co: (r.cos || [r.co])[0], cos: r.cos || [r.co], seq: r.seq });
+      const sig = chipsSig(merged);
+      if (sig !== r.rowEl.dataset.chipSig) {
+        const chips = r.rowEl.querySelector(".eta-chips");
+        if (chips) chips.innerHTML = chipsHTML(merged);
+        r.rowEl.dataset.chipSig = sig;
+      }
+    }, 6);
     markEtaRefresh();
     if (!silent) statusNow(T.updated[state.lang]);
   } finally {
@@ -898,7 +915,7 @@ async function refreshVisibleEtas(silent) {
 function startAutoRefresh() {
   setInterval(() => {
     if (document.hidden || !navigator.onLine) return;
-    refreshVisibleEtas(false);
+    refreshVisibleEtas(true);
   }, 30000);
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) return;

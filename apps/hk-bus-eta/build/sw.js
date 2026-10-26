@@ -1,5 +1,5 @@
 const BASE = "/bus-eta-lite/";
-const VERSION = "buseta-lite-v28";
+const VERSION = "buseta-lite-v29";
 const SHELL = [
   BASE,
   BASE + "index.html",
