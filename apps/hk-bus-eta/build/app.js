@@ -126,10 +126,10 @@ function renderThemeBtn() {
 /* ---------------- ETA display format (exact time / minutes / both) ---------------- */
 const ETA_FMT_ORDER = ["mins", "time", "both"];
 function renderFmtBtn() {
-  const zh = state.lang === "zh";
   const btn = $("#etaFmtBtn");
-  btn.textContent = state.etaFmt === "time" ? T.etaFmtTime[zh] : state.etaFmt === "both" ? T.etaFmtBoth[zh] : T.etaFmtMins[zh];
-  btn.title = state.etaFmt === "time" ? T.etaFmtTimeT[zh] : state.etaFmt === "both" ? T.etaFmtBothT[zh] : T.etaFmtMinsT[zh];
+  const l = state.lang;
+  btn.textContent = state.etaFmt === "time" ? T.etaFmtTime[l] : state.etaFmt === "both" ? T.etaFmtBoth[l] : T.etaFmtMins[l];
+  btn.title = state.etaFmt === "time" ? T.etaFmtTimeT[l] : state.etaFmt === "both" ? T.etaFmtBothT[l] : T.etaFmtMinsT[l];
 }
 function cycleEtaFormat() {
   const i = ETA_FMT_ORDER.indexOf(state.etaFmt);
@@ -347,9 +347,11 @@ function fmtEta(iso) {
 function chipsSig(etas) {
   return etas.slice(0, 3).map((e) => fmtEta(e.eta).main).join("|");
 }
-function fmtChip(f) {
+function chipBody(f) {
+  if (state.etaFmt === "both") {
+    return (f.sub ? `<span class="t">${esc(f.sub)}</span>` : "") + f.main;
+  }
   if (state.etaFmt === "time") return f.sub || f.main;
-  if (state.etaFmt === "both") return (f.sub ? f.sub + " " : "") + f.main;
   return f.main;
 }
 function chipsHTML(etas) {
@@ -360,7 +362,7 @@ function chipsHTML(etas) {
     const f = fmtEta(e.eta);
     const coHtml = multiCo ? `<span class="co-sm ${coBadgeClass(e.co)}">${esc(coTag(e.co))}</span>` : "";
     const cls = f.soon ? "soon" : i === 0 ? "first" : "";
-    return `<span class="eta-chip${cls ? " " + cls : ""}" title="${esc(e.rmk || e.dest)}">${fmtChip(f)}${coHtml}</span>`;
+    return `<span class="eta-chip${cls ? " " + cls : ""}${state.etaFmt === "both" ? " both" : ""}" title="${esc(e.rmk || e.dest)}">${chipBody(f)}${coHtml}</span>`;
   }).join("");
 }
 function expandedHTML(etas) {

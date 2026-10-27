@@ -218,6 +218,10 @@ body {
 .eta-chip.mut { background: #e6e9e7; color: var(--ink-2); font-weight: 500; }
 .eta-chip.err { background: var(--warn); }
 .eta-chip.none { background: #e6e9e7; color: var(--ink-2); font-weight: 500; min-width: 40px; }
+.eta-chip.both { font-size: 11px; font-weight: 700; padding: 3px 6px; min-width: 56px; line-height: 1.25; }
+.eta-chip.both .t { display: block; font-size: 9px; font-weight: 500; opacity: .78; margin-bottom: 1px; }
+.eta-chip.both.first { font-size: 12px; min-width: 66px; }
+.eta-chip.both.first .t { font-size: 10px; }
 
 .eta-expanded { margin-top: 8px; padding: 8px 10px; background: #f2f5f3; border-radius: 10px; font-size: 12px; }
 .eta-expanded .e-row { display: flex; justify-content: space-between; gap: 8px; padding: 3px 0; }

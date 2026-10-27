@@ -178,6 +178,15 @@ describe('ETA display format toggle', () => {
     dom.window.close();
   });
 
+  it('shows text on the format button (label + title per mode)', async () => {
+    const dom = await openKmbCard(loadDb(), null);
+    const btn = dom.window.document.getElementById('etaFmtBtn');
+    expect(btn.textContent).toMatch(/\S/);
+    expect(btn.title).toMatch(/\S/);
+    expect(btn.title).not.toBe('undefined');
+    dom.window.close();
+  });
+
   it('cycles the format button: time -> both -> minutes', async () => {
     const dom = await openKmbCard(loadDb(), null);
     const { window } = dom;
@@ -192,12 +201,14 @@ describe('ETA display format toggle', () => {
     expect(txt).not.toMatch(/分/);
     expect(window.localStorage.getItem(FMT_KEY)).toBe('time');
 
-    // click again -> both (clock + minutes)
+    // click again -> both (two-line chip: clock on top, minutes below)
     btn.dispatchEvent(new window.MouseEvent('click', { bubbles: true, cancelable: true }));
     await settle(dom);
     txt = chipText(dom);
     expect(txt).toMatch(/\d{2}:\d{2}/);
     expect(txt).toMatch(/分/);
+    const chip = window.document.querySelector('.stop-card .eta-chips .eta-chip');
+    expect(chip.querySelector('.t')).toBeTruthy(); // clock is its own sub-line
     expect(window.localStorage.getItem(FMT_KEY)).toBe('both');
 
     // click again -> minutes only
