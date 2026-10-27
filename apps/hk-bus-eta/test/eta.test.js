@@ -23,13 +23,14 @@ function loadDb() {
   return JSON.parse(JSON.stringify(fixture));
 }
 
-async function createHarness(dbJson) {
+async function createHarness(dbJson, { seedEtaFmt = null } = {}) {
   const dom = new JSDOM(indexHtml, {
     url: 'https://life-tools-pwa.vercel.app/bus-eta-lite/',
     runScripts: 'outside-only',
     pretendToBeVisual: true,
   });
   const { window } = dom;
+  if (seedEtaFmt) window.localStorage.setItem('buseta-eta-fmt', seedEtaFmt);
   window.fetch = vi.fn(async (url) => {
     const u = String(url);
     if (u.includes('routeFareList.min.json')) {
@@ -145,6 +146,75 @@ describe('ETA read loop', () => {
     expect(statusbar.classList.contains('show')).toBe(false);
     expect(statusbar.textContent).toBe('');
     vi.useRealTimers();
+    dom.window.close();
+  });
+});
+
+describe('ETA display format toggle', () => {
+  const now = () => Date.now();
+  const FMT_KEY = 'buseta-eta-fmt';
+
+  async function openKmbCard(db, fmt) {
+    const dom = await createHarness(db, { seedEtaFmt: fmt });
+    dom.window.__etaImplFn = etaImpl(now()).fn;
+    await openRoute(dom, '71A');
+    const kmb = searchCards(dom, '71A').find((c) => /\bco-kmb\b/.test(c.querySelector('.route-no').className));
+    expect(kmb).toBeTruthy();
+    kmb.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, cancelable: true }));
+    await new Promise((r) => setTimeout(r, 80));
+    await settle(dom);
+    return dom;
+  }
+
+  function chipText(dom) {
+    return dom.window.document.querySelector('.stop-card .eta-chips').textContent;
+  }
+
+  it('defaults to minutes-only chip text (no clock)', async () => {
+    const dom = await openKmbCard(loadDb(), null);
+    const txt = chipText(dom);
+    expect(txt).toMatch(/分/); // "N 分"
+    expect(txt).not.toMatch(/\d{1,2}:\d{2}/);
+    dom.window.close();
+  });
+
+  it('cycles the format button: time -> both -> minutes', async () => {
+    const dom = await openKmbCard(loadDb(), null);
+    const { window } = dom;
+    const btn = window.document.getElementById('etaFmtBtn');
+    expect(btn).toBeTruthy();
+
+    // click once -> exact time
+    btn.dispatchEvent(new window.MouseEvent('click', { bubbles: true, cancelable: true }));
+    await settle(dom);
+    let txt = chipText(dom);
+    expect(txt).toMatch(/\d{2}:\d{2}/);
+    expect(txt).not.toMatch(/分/);
+    expect(window.localStorage.getItem(FMT_KEY)).toBe('time');
+
+    // click again -> both (clock + minutes)
+    btn.dispatchEvent(new window.MouseEvent('click', { bubbles: true, cancelable: true }));
+    await settle(dom);
+    txt = chipText(dom);
+    expect(txt).toMatch(/\d{2}:\d{2}/);
+    expect(txt).toMatch(/分/);
+    expect(window.localStorage.getItem(FMT_KEY)).toBe('both');
+
+    // click again -> minutes only
+    btn.dispatchEvent(new window.MouseEvent('click', { bubbles: true, cancelable: true }));
+    await settle(dom);
+    txt = chipText(dom);
+    expect(txt).toMatch(/分/);
+    expect(txt).not.toMatch(/\d{1,2}:\d{2}/);
+    expect(window.localStorage.getItem(FMT_KEY)).toBe('mins');
+    dom.window.close();
+  });
+
+  it('restores a saved format on boot', async () => {
+    const dom = await openKmbCard(loadDb(), 'time');
+    const txt = chipText(dom);
+    expect(txt).toMatch(/\d{2}:\d{2}/);
+    expect(txt).not.toMatch(/分/);
     dom.window.close();
   });
 });

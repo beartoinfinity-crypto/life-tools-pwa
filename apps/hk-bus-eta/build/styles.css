@@ -209,11 +209,11 @@ body {
 /* eta chips */
 .eta-chips { display: flex; gap: 6px; }
 .eta-chip {
-  flex: 0 0 auto; text-align: center; padding: 5px 8px; min-width: 52px;
+  flex: 0 0 auto; text-align: center; padding: 5px 8px; min-width: 58px;
   border-radius: 9px; background: var(--route-badge-bg); color: #fff; font-size: 14px; font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
-.eta-chip.first { background: var(--accent); min-width: 64px; font-size: 17px; padding: 6px 10px; }
+.eta-chip.first { background: var(--accent); min-width: 78px; font-size: 17px; padding: 6px 10px; }
 .eta-chip.soon { background: var(--accent); }
 .eta-chip.mut { background: #e6e9e7; color: var(--ink-2); font-weight: 500; }
 .eta-chip.err { background: var(--warn); }

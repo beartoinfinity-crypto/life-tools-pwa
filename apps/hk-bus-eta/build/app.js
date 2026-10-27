@@ -37,6 +37,12 @@ const T = {
   offBanner: { zh: "網絡連線中斷，正顯示快取資料", en: "Network offline — showing cached data" },
   onlineBack: { zh: "已恢復連線", en: "Back online" },
   lastUpdate: { zh: "更新於", en: "Updated" },
+  etaFmtMins: { zh: "分", en: "Mins" },
+  etaFmtTime: { zh: "時間", en: "Time" },
+  etaFmtBoth: { zh: "兩者", en: "Both" },
+  etaFmtMinsT: { zh: "顯示剩餘分鐘", en: "Show minutes until arrival" },
+  etaFmtTimeT: { zh: "顯示到站時間", en: "Show arrival time" },
+  etaFmtBothT: { zh: "顯示到站時間與剩餘分鐘", en: "Show arrival time and minutes" },
   installTitle: { zh: "將「巴士預報」加到主畫面？", en: "Add Bus ETA to your home screen?" },
   installBtn: { zh: "安裝", en: "Install" },
   installDismiss: { zh: "關閉", en: "Dismiss" },
@@ -59,6 +65,8 @@ const state = {
   etaRows: new Map(),
   refreshing: false,
   _pos: null,
+  etaFmt: (localStorage.getItem("buseta-eta-fmt") === "time" || localStorage.getItem("buseta-eta-fmt") === "both")
+    ? localStorage.getItem("buseta-eta-fmt") : "mins",
 };
 
 const el = {
@@ -89,6 +97,7 @@ function setLang(l) {
     l === "zh" ? "輸入車站名稱或編號，如 怡和街、TA292" : "Enter stop name or code, e.g. Percival St, TA292";
   $("#nearBtn").textContent = l === "zh" ? "附近的站" : "Nearby";
   renderThemeBtn();
+  renderFmtBtn();
   updateNetBanner();
   applyLangToCurrent();
 }
@@ -112,6 +121,28 @@ function renderThemeBtn() {
   btn.title = zh
     ? (night ? "切換日間模式" : "切換夜間模式")
     : (night ? "Switch to day mode" : "Switch to night mode");
+}
+
+/* ---------------- ETA display format (exact time / minutes / both) ---------------- */
+const ETA_FMT_ORDER = ["mins", "time", "both"];
+function renderFmtBtn() {
+  const zh = state.lang === "zh";
+  const btn = $("#etaFmtBtn");
+  btn.textContent = state.etaFmt === "time" ? T.etaFmtTime[zh] : state.etaFmt === "both" ? T.etaFmtBoth[zh] : T.etaFmtMins[zh];
+  btn.title = state.etaFmt === "time" ? T.etaFmtTimeT[zh] : state.etaFmt === "both" ? T.etaFmtBothT[zh] : T.etaFmtMinsT[zh];
+}
+function cycleEtaFormat() {
+  const i = ETA_FMT_ORDER.indexOf(state.etaFmt);
+  state.etaFmt = ETA_FMT_ORDER[(i + 1) % ETA_FMT_ORDER.length];
+  localStorage.setItem("buseta-eta-fmt", state.etaFmt);
+  renderFmtBtn();
+  // Re-render every visible ETA chips from cache (no refetch).
+  document.querySelectorAll("[data-rowkey]").forEach((rowEl) => {
+    const info = state.etaRows.get(rowEl.dataset.rowkey);
+    if (!info || info.etas === null) return;
+    const chips = rowEl.querySelector(".eta-chips");
+    if (chips) chips.innerHTML = chipsHTML(info.etas);
+  });
 }
 
 /* ---------------- IndexedDB cache ---------------- */
@@ -316,6 +347,11 @@ function fmtEta(iso) {
 function chipsSig(etas) {
   return etas.slice(0, 3).map((e) => fmtEta(e.eta).main).join("|");
 }
+function fmtChip(f) {
+  if (state.etaFmt === "time") return f.sub || f.main;
+  if (state.etaFmt === "both") return (f.sub ? f.sub + " " : "") + f.main;
+  return f.main;
+}
 function chipsHTML(etas) {
   const list = etas.slice(0, 3);
   if (!list.length) return '<span class="eta-chip none">—</span>';
@@ -324,7 +360,7 @@ function chipsHTML(etas) {
     const f = fmtEta(e.eta);
     const coHtml = multiCo ? `<span class="co-sm ${coBadgeClass(e.co)}">${esc(coTag(e.co))}</span>` : "";
     const cls = f.soon ? "soon" : i === 0 ? "first" : "";
-    return `<span class="eta-chip${cls ? " " + cls : ""}" title="${esc(e.rmk || e.dest)}">${f.main}${coHtml}</span>`;
+    return `<span class="eta-chip${cls ? " " + cls : ""}" title="${esc(e.rmk || e.dest)}">${fmtChip(f)}${coHtml}</span>`;
   }).join("");
 }
 function expandedHTML(etas) {
@@ -993,6 +1029,7 @@ function init() {
   $("#themeBtn").addEventListener("click", () =>
     applyTheme(document.documentElement.dataset.theme === "night" ? "day" : "night", true));
   $("#langBtn").addEventListener("click", () => setLang(state.lang === "zh" ? "en" : "zh"));
+  $("#etaFmtBtn").addEventListener("click", cycleEtaFormat);
   $("#refreshBtn").addEventListener("click", manualRefresh);
   $("#stopInput").placeholder =
     state.lang === "zh" ? "輸入車站名稱或編號，如 怡和街、TA292" : "Enter stop name or code, e.g. Percival St, TA292";

@@ -38,8 +38,9 @@ A mobile-first, vanilla-JS app with no build step, tuned for quick glance-and-le
   九巴/城巴 route (e.g. 170 = 九巴+城巴) gets a mixed **violet** badge, and unknown operators fall back to the
   neutral badge. The same palette colours the operator tags, the direction pills, and each stop row's operator chip.
 - **Next-arrival first** — within each stop's chip row the next bus is the biggest read: a larger accent-green first
-  chip with tabular-nums aligned minute digits, `抵站`/`Arriving` when it's inside a minute, and no HH:MM clock inside
-  chips (kept in the expanded rows).
+  chip with tabular-nums aligned minute digits, and `抵站`/`Arriving` when it's inside a minute. A header **ETA format**
+  button cycles chip text between remaining **minutes** (`3 分`), exact **arrival time** (`09:41`) or **both**, persisted
+  in `localStorage` (`buseta-eta-fmt`); the expanded rows always show time + minutes together.
 - **Day / Night toggle** — header button, persisted in `localStorage` (`buseta-theme`); defaults to and live-follows
   `prefers-color-scheme` until the user picks a theme manually.
 - **Bookmarks** — star a route or stop from its detail page; stored in `localStorage`
@@ -50,13 +51,13 @@ A mobile-first, vanilla-JS app with no build step, tuned for quick glance-and-le
   advances with every fetch cycle — including silent background refreshes (the 30 s cycle never pops a status toast).
   Refreshes are pooled to ≤6 concurrent ETA fetches and skip DOM writes when the displayed minutes are unchanged.
 - **Offline-first** — the ~8 MB route database is cached in IndexedDB (`bus-eta-lite` / `kv`); the service worker
-  caches the app shell (`buseta-lite-v29`) so the app opens instantly after the first visit. Losing the network
+  caches the app shell (`buseta-lite-v30`) so the app opens instantly after the first visit. Losing the network
   shows a persistent banner (and a Retry button if the database itself could not load); regaining it re-fetches.
 - **Loading skeletons** — the old blocking splash spinner was replaced by shimmering skeleton cards while the
   database loads (disabled under `prefers-reduced-motion`).
 - **Touch targets >= 48px** — header/tab/detail buttons, direction pills and list rows are sized for tapping on
   a moving bus.
-- **Versioning** — in-page badge (`v1.9 build <UTC>`) plus SW cache `buseta-lite-v29`; the badge build equals the
+- **Versioning** — in-page badge (`v1.10 build <UTC>`) plus SW cache `buseta-lite-v30`; the badge build equals the
   pinned commit time and the SW bump ships in the same commit (see `CONTEXT.md`).
 - **EN/ZH toggle**, and batching (incremental rendering) for long stop lists.
 

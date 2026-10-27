@@ -296,11 +296,13 @@ Other features:
   refresh when you return; no status toast noise); the detail page keeps a persistent `更新於 HH:MM:SS` last-refresh
   stamp. Manual refresh re-downloads the route database.
 - **Next-arrival first** — each stop shows up to 3 chips where the **next bus is the loudest**: a larger, accent-green
-  chip with tabular figures (minute digits align across stops), `抵站` when it's within a minute, and no HH:MM clock
-  noise inside chips (the clock lives in the expanded rows). Refreshes re-use the previous chip text when nothing
-  changed, and ETA fetches are pooled to ≤6 concurrent per pass to stay kind to mobile radios and the provider APIs.
+  chip with tabular figures (minute digits align across stops), `抵站` when it's within a minute. Refreshes re-use the
+  previous chip text when nothing changed, and ETA fetches are pooled to ≤6 concurrent per pass to stay kind to mobile
+  radios and the provider APIs. A header **ETA format** button cycles the chip text: remaining **minutes** (`3 分`, the
+  default), exact **arrival time** (`09:41`), or **both** — the choice is persisted in `localStorage`
+  (`buseta-eta-fmt`) and restored on the next visit.
 - **Offline-first** — route database cached in IndexedDB; offline banner + Retry-on-failure; service worker caches
-  the shell (`buseta-lite-v29`).
+  the shell (`buseta-lite-v30`).
 - **Loading skeletons & >=48px touch targets** — shimmer placeholders replace the blocking splash; buttons and rows
   sized for gloved/fumbling taps.
 - **EN/ZH** toggle; near-black UI in night mode with corrected chip/badge colours.
@@ -548,7 +550,7 @@ npm test            # Run all tests once
 npm run test:watch  # Watch mode
 ```
 
-341 tests across 14 files under `test/` (hub), `apps/mark-six/test/`, `apps/hk-bus-eta/test/`, `apps/traffic-news/test/` and `apps/music-trend/test/`. The suite uses in-memory SQLite + fixtures, so it runs offline without a Supabase connection.
+344 tests across 14 files under `test/` (hub), `apps/mark-six/test/`, `apps/hk-bus-eta/test/`, `apps/traffic-news/test/` and `apps/music-trend/test/`. The suite uses in-memory SQLite + fixtures, so it runs offline without a Supabase connection.
 
 ---
 
