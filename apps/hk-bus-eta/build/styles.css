@@ -157,6 +157,8 @@ body {
   display: flex; align-items: center; gap: 12px; padding: 10px 0; min-height: 48px;
   border-top: 1px solid var(--line);
   cursor: pointer;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 48px;
 }
 .stop-card:hover { background: rgba(11, 110, 79, 0.06); }
 .stop-card:first-child { border-top: none; }

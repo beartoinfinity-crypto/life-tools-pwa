@@ -45,19 +45,21 @@ A mobile-first, vanilla-JS app with no build step, tuned for quick glance-and-le
   `prefers-color-scheme` until the user picks a theme manually.
 - **Bookmarks** — star a route or stop from its detail page; stored in `localStorage`
   (`buseta-book-routes`, `buseta-book-stops`); reopened from the two bookmark tabs.
-- **Auto-refresh** — arrivals refresh every 30 s, but polling pauses while the tab is hidden (saves battery) and
+- **Auto-refresh** — arrivals refresh every 30 s at rest, but tighten to **10 s while the next bus is within 3
+  minutes** so the "almost here" window stays accurate; polling pauses while the tab is hidden (saves battery) and
   resumes with an instant refresh when you come back; manual refresh re-downloads the route database. Both detail
   pages keep a persistent **last-refresh stamp** in their note line (`更新於 HH:MM:SS` / `Updated HH:MM:SS`) that
-  advances with every fetch cycle — including silent background refreshes (the 30 s cycle never pops a status toast).
-  Refreshes are pooled to ≤6 concurrent ETA fetches and skip DOM writes when the displayed minutes are unchanged.
+  advances with every fetch cycle — including silent background refreshes (the cycle never pops a status toast).
+  Refreshes are pooled to ≤6 concurrent ETA fetches, skip DOM writes when the displayed minutes are unchanged, and
+  long stop lists use `content-visibility: auto` so off-screen stops avoid layout/paint.
 - **Offline-first** — the ~8 MB route database is cached in IndexedDB (`bus-eta-lite` / `kv`); the service worker
-  caches the app shell (`buseta-lite-v31`) so the app opens instantly after the first visit. Losing the network
+  caches the app shell (`buseta-lite-v32`) so the app opens instantly after the first visit. Losing the network
   shows a persistent banner (and a Retry button if the database itself could not load); regaining it re-fetches.
 - **Loading skeletons** — the old blocking splash spinner was replaced by shimmering skeleton cards while the
   database loads (disabled under `prefers-reduced-motion`).
 - **Touch targets >= 48px** — header/tab/detail buttons, direction pills and list rows are sized for tapping on
   a moving bus.
-- **Versioning** — in-page badge (`v1.11 build <UTC>`) plus SW cache `buseta-lite-v31`; the badge build equals the
+- **Versioning** — in-page badge (`v1.12 build <UTC>`) plus SW cache `buseta-lite-v32`; the badge build equals the
   pinned commit time and the SW bump ships in the same commit (see `CONTEXT.md`).
 - **EN/ZH toggle**, and batching (incremental rendering) for long stop lists.
 

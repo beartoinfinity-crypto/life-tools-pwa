@@ -676,6 +676,7 @@ async function fetchRowEtas(cards) {
     state.refreshing = false;
   }
   markEtaRefresh();
+  if (state.rescheduleEta) state.rescheduleEta();
 }
 
 /* ---------------- bookmark lists ---------------- */
@@ -948,17 +949,43 @@ async function refreshVisibleEtas(silent) {
     if (!silent) statusNow(T.updated[state.lang]);
   } finally {
     state.refreshing = false;
+    if (state.rescheduleEta) state.rescheduleEta();
   }
 }
 function startAutoRefresh() {
-  setInterval(() => {
+  // Adaptive cadence: poll every 30s, but tighten to 10s while any visible
+  // arrival is within 3 minutes so the "next bus" stays accurate as it lands.
+  let timer = null;
+  const tick = () => {
     if (document.hidden || !navigator.onLine) return;
     refreshVisibleEtas(true);
-  }, 30000);
+  };
+  const schedule = () => {
+    if (timer) clearTimeout(timer);
+    const soon = nearestVisibleEtaMs() <= 3 * 60 * 1000;
+    timer = setTimeout(() => {
+      tick();
+      schedule();
+    }, soon ? 10 * 1000 : 30 * 1000);
+  };
+  state.rescheduleEta = schedule;
+  schedule();
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) return;
     if (state.view === "detail") refreshVisibleEtas(true);
   });
+}
+function nearestVisibleEtaMs() {
+  let min = Infinity;
+  document.querySelectorAll("[data-rowkey]").forEach((rowEl) => {
+    const info = state.etaRows.get(rowEl.dataset.rowkey);
+    if (!info || !info.etas) return;
+    for (const e of info.etas) {
+      const t = e.eta ? new Date(e.eta).getTime() - Date.now() : Infinity;
+      if (t < min) min = t;
+    }
+  });
+  return min;
 }
 function statusNow(msg) {
   const bar = $("#statusbar");

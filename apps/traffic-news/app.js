@@ -16,6 +16,7 @@
 
   var renderedOnce = false;
   var lastItems = [];
+  var lastRefreshIso = null;
   var lastSig = null;
   var chipSig = null;
   var regionSig = null;
@@ -414,6 +415,7 @@
     // else: keep showing what we have (never blank on a scrape hiccup)
     renderedOnce = true;
     if (payload && payload.lastRefresh) {
+      lastRefreshIso = payload.lastRefresh;
       lastUpdate.textContent = 'updated ' + fmtAgo(payload.lastRefresh) + ' (' + lastItems.length + ' incidents)';
     }
     renderChips();
@@ -570,7 +572,25 @@
   readUrl();
   searchInput.value = filterState.q;
   load(false);
-  setInterval(function () { if (navigator.onLine) load(false); }, 60 * 1000);
+  // poll for fresh/updated news every 30s (server re-scrapes at most once/min)
+  setInterval(function () { if (navigator.onLine) load(false); }, 30 * 1000);
+  // ticker: keep relative times (freshness line + per-card "Xm ago") current
+  // between polls without rebuilding the DOM
+  setInterval(function () {
+    if (!lastUpdate) return;
+    var items = lastItems;
+    if (lastRefreshIso) {
+      lastUpdate.textContent = 'updated ' + fmtAgo(lastRefreshIso) + ' (' + items.length + ' incidents)';
+    }
+    Array.prototype.forEach.call(newsList.querySelectorAll('.ni-rel'), function (el) {
+      var card = el.closest('.news-item');
+      if (!card) return;
+      var id = card.getAttribute('data-id');
+      for (var i = 0; i < items.length; i++) {
+        if (items[i].id === id) { el.textContent = fmtAgo(items[i].posted_at); break; }
+      }
+    });
+  }, 15 * 1000);
 
   /* ---- PWA install banner (shares the hub's dismiss key) ---- */
   var INSTALL_DISMISS_KEY = 'life-tool-install-dismissed';

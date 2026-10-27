@@ -302,7 +302,7 @@ Other features:
   default), exact **arrival time** (`09:41`), or **both** — the choice is persisted in `localStorage`
   (`buseta-eta-fmt`) and restored on the next visit.
 - **Offline-first** — route database cached in IndexedDB; offline banner + Retry-on-failure; service worker caches
-  the shell (`buseta-lite-v31`).
+  the shell (`buseta-lite-v32`).
 - **Loading skeletons & >=48px touch targets** — shimmer placeholders replace the blocking splash; buttons and rows
   sized for gloved/fumbling taps.
 - **EN/ZH** toggle; near-black UI in night mode with corrected chip/badge colours.
@@ -550,7 +550,7 @@ npm test            # Run all tests once
 npm run test:watch  # Watch mode
 ```
 
-345 tests across 14 files under `test/` (hub), `apps/mark-six/test/`, `apps/hk-bus-eta/test/`, `apps/traffic-news/test/` and `apps/music-trend/test/`. The suite uses in-memory SQLite + fixtures, so it runs offline without a Supabase connection.
+347 tests across 15 files under `test/` (hub), `apps/mark-six/test/`, `apps/hk-bus-eta/test/`, `apps/traffic-news/test/` and `apps/music-trend/test/`. The suite uses in-memory SQLite + fixtures, so it runs offline without a Supabase connection.
 
 ---
 

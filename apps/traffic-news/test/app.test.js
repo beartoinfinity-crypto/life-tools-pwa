@@ -520,6 +520,7 @@ describe('traffic-news v1.7: incident grouping, summary band, debounce, live reg
       try { harness.dom.window.close(); } catch { /* ignore */ }
       harness = null;
     }
+    vi.useRealTimers();
     vi.restoreAllMocks();
   });
 
@@ -597,6 +598,33 @@ describe('traffic-news v1.7: incident grouping, summary band, debounce, live reg
     await new Promise((r) => setTimeout(r, 180));
     expect(ids(window)).toEqual(['r1']);
     expect(cards(window).length).toBe(1);
+  });
+
+  it('refreshes relative timestamps live via the 15s ticker (no rebuild, no poll)', async () => {
+    vi.useFakeTimers();
+    const dom = createHarness({
+      items: [item({ id: 'tick1', location: '西九龍公路', posted_at: new Date(Date.now() - 50 * 1000).toISOString() })],
+    });
+    const { window } = dom;
+    // The app's ticker re-renders with Date.now() at fire time; give the window a
+    // controllable clock so advancing fake timers also advances "now".
+    const RealDate = window.Date;
+    let nowMs = RealDate.now();
+    class FakeDate extends RealDate {
+      constructor(...a) { super(...(a.length ? a : [nowMs])); }
+      static now() { return nowMs; }
+    }
+    Object.defineProperty(window, 'Date', { value: FakeDate, configurable: true });
+    await vi.advanceTimersByTimeAsync(5); // flush the initial fetch/render microtasks
+    const rel = window.document.querySelector('.news-item[data-id="tick1"] .ni-rel');
+    expect(rel.textContent).toBe('50s');
+    // one 15s ticker pass: bump the clock AND advance the fake timer together
+    nowMs = RealDate.now() + 15000;
+    await vi.advanceTimersByTimeAsync(15000);
+    expect(rel.textContent).toBe('1m');
+    expect(window.document.querySelectorAll('.news-item').length).toBe(1);
+    vi.useRealTimers();
+    dom.window.close();
   });
 
   it('shows an active-incident summary band and hides it when all cleared', async () => {

@@ -23,10 +23,10 @@ Each app is an authored PWA with its own `index.html`, `styles.css`,
 | App dir              | SW cache          | In-page badge (build)      |
 |-----------------------|-------------------|----------------------------|
 | public/ (hub)         | life-tool-hub-v4  | v1.4 build 202609291603    |
-| apps/traffic-news     | traffic-news-v14  | v1.7 build 202610261108    |
+| apps/traffic-news     | traffic-news-v15  | v1.8 build 202610270759    |
 | apps/mark-six         | mark-six-v16      | v1.8 build 202610050754    |
 | apps/music-trend      | music-trend-v36   | v1.8 build 202609291603    |
-| apps/hk-bus-eta/build | buseta-lite-v31   | v1.11 build 202610270150   |
+| apps/hk-bus-eta/build | buseta-lite-v32   | v1.12 build 202610270759   |
 
 > `apps/hk-bus-eta/` holds both: `build-upstream/` and `LICENSE` are
 > the vendored upstream PWA (never hand-edit them), while `build/` is

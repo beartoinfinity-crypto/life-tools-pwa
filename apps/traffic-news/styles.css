@@ -133,6 +133,8 @@ main {
   padding: 12px 14px;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 84px;
 }
 
 .news-item:active { background: rgba(0, 0, 0, 0.04); }

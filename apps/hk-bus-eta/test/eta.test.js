@@ -148,6 +148,29 @@ describe('ETA read loop', () => {
     vi.useRealTimers();
     dom.window.close();
   });
+
+  it('tightens auto-refresh to 10s while the next bus is close', async () => {
+    vi.useFakeTimers();
+    const now = Date.now();
+    const dom = await createHarness(loadDb());
+    const { stats, fn } = etaImpl(now); // etaImpl yields 2-4 min ETAs -> within 3 min
+    dom.window.__etaImplFn = fn;
+    const { window } = dom;
+    const input = window.document.getElementById('routeInput');
+    input.value = '71A';
+    input.dispatchEvent(new window.Event('input', { bubbles: true }));
+    await vi.advanceTimersByTimeAsync(200); // debounce
+    const kmb = searchCards(dom, '71A').find((c) => /\bco-kmb\b/.test(c.querySelector('.route-no').className));
+    expect(kmb).toBeTruthy();
+    kmb.dispatchEvent(new window.MouseEvent('click', { bubbles: true, cancelable: true }));
+    await vi.advanceTimersByTimeAsync(200); // initial ETA fill
+    const callsBefore = stats.calls;
+    // a 10s tick must fire (fixed 30s cadence would not)
+    await vi.advanceTimersByTimeAsync(10000);
+    expect(stats.calls).toBeGreaterThan(callsBefore);
+    vi.useRealTimers();
+    dom.window.close();
+  });
 });
 
 describe('ETA display format toggle', () => {
