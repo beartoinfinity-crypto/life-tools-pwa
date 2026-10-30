@@ -249,6 +249,33 @@ body {
 .note { font-size: 12px; color: var(--ink-2); margin-bottom: 8px; }
 .eta-stamp { font-weight: 700; white-space: nowrap; }
 
+/* timetable */
+.tt-wrap { margin: 6px 0 10px; border: 1.5px solid var(--line); border-radius: 12px; background: var(--card); overflow: hidden; }
+.tt-toggle {
+  width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 4px;
+  padding: 12px 14px; min-height: 48px; background: none; border: 0; cursor: pointer;
+  font-family: var(--font); font-size: 14px; font-weight: 700; color: var(--ink);
+}
+.tt-toggle .tt-caret { color: var(--ink-2); transition: transform .2s; }
+.tt-toggle.open .tt-caret { transform: rotate(180deg); }
+.tt-panel { border-top: 1px solid var(--line); }
+.tt-row + .tt-row { border-top: 1px solid var(--line); }
+.tt-expand {
+  width: 100%; display: flex; align-items: center; gap: 8px; padding: 10px 14px; min-height: 48px;
+  background: none; border: 0; cursor: pointer; font-family: var(--font); color: var(--ink); text-align: left;
+}
+.tt-day { font-size: 13px; font-weight: 700; }
+.tt-range { font-size: 12px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.tt-hw { margin-left: auto; font-size: 12px; color: var(--chip-ink); white-space: nowrap; }
+.tt-expand .tt-caret { color: var(--ink-2); transition: transform .2s; }
+.tt-expand.open .tt-caret { transform: rotate(180deg); }
+.tt-times { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 14px 12px; }
+.tt-times[hidden] { display: none; }
+.tt-t {
+  font-size: 12px; font-variant-numeric: tabular-nums; padding: 3px 7px;
+  border-radius: 6px; background: var(--chip); color: var(--chip-ink);
+}
+
 /* status bar */
 #statusbar {
   position: fixed; left: 50%; transform: translateX(-50%); bottom: 14px; z-index: 30;

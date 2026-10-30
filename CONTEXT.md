@@ -23,10 +23,10 @@ Each app is an authored PWA with its own `index.html`, `styles.css`,
 | App dir              | SW cache          | In-page badge (build)      |
 |-----------------------|-------------------|----------------------------|
 | public/ (hub)         | life-tool-hub-v4  | v1.4 build 202609291603    |
-| apps/traffic-news     | traffic-news-v15  | v1.8 build 202610270759    |
+| apps/traffic-news     | traffic-news-v16  | v1.9 build 202610300657    |
 | apps/mark-six         | mark-six-v16      | v1.8 build 202610050754    |
 | apps/music-trend      | music-trend-v36   | v1.8 build 202609291603    |
-| apps/hk-bus-eta/build | buseta-lite-v32   | v1.12 build 202610270759   |
+| apps/hk-bus-eta/build | buseta-lite-v33   | v1.13 build 202610300657   |
 
 > `apps/hk-bus-eta/` holds both: `build-upstream/` and `LICENSE` are
 > the vendored upstream PWA (never hand-edit them), while `build/` is
@@ -112,20 +112,32 @@ live in the individual commits; this is just the map.
 - **mark-six** (v1.8, `mark-six-v16`): honesty disclaimer under the
   Smart Pick generator + a sixth `contrarian` strategy. See issue #1
   (closed) and the commit messages for `5357218`.
-- **bus-eta-lite** (v1.8..v1.12, `buseta-lite-v32`): operator-split
+- **bus-eta-lite** (v1.8..v1.13, `buseta-lite-v33`): operator-split
   route search rows; next-arrival-first chips; silent 30s refresh
   pooled to <=6 fetches with no-op churn skip; ETA display-format
   toggle (minutes / exact time / both, persisted in
   `localStorage['buseta-eta-fmt']`); adaptive refresh (10s while the
   next bus is within 3 minutes); `content-visibility` on stop cards.
   Commits: `a50a54b`, `7ed19c7`, `0676545`, `f6e154f`, `adcb56f`.
-- **traffic-news** (v1.7..v1.8, `traffic-news-v15`): incident merge
+- **traffic-news** (v1.7..v1.9, `traffic-news-v16`): incident merge
   (same location + category within 60 min => one card, multi-source
   badges, expanded view keeps member details); active-incident summary
   band; 150ms search debounce; aria-live moved to the status line;
   30s poll + 15s relative-time ticker; `content-visibility` on cards.
   Commits: `bf7e239`, `adcb56f`.
-- **Tests** now span 15 files / 347 cases (hub + mark-six +
+- **bus-eta-lite timetable** (v1.13, `buseta-lite-v33`): each
+  direction's detail page gets a collapsible daily timetable built
+  only from the route DB's own `freq` + `serviceDayMap` (no extra
+  fetch). Rows group services into weekday / Saturday / Sunday-and-
+  holiday, show the first-to-last departure range and headway, and
+  expand to the full departure list. `init()` is now idempotent so a
+  double `DOMContentLoaded` cannot bind duplicate listeners.
+- **traffic-news recent hour** (v1.9, `traffic-news-v16`): a
+  "recent 1 hour" chip (`?h=1h`) renders every incident posted in the
+  last 60 minutes as its own card (dedup only by exact id); older
+  items keep the usual similarity merge. The default merged view is
+  unchanged, and clicking the chip again restores it.
+- **Tests** now span 15 files / 355 cases (hub + mark-six +
   hk-bus-eta + traffic-news + music-trend), run with `npx vitest run`.
 
 ## Notes for the next agent

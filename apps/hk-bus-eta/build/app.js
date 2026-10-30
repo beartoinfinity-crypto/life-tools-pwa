@@ -43,6 +43,12 @@ const T = {
   etaFmtMinsT: { zh: "顯示剩餘分鐘", en: "Show minutes until arrival" },
   etaFmtTimeT: { zh: "顯示到站時間", en: "Show arrival time" },
   etaFmtBothT: { zh: "顯示到站時間與剩餘分鐘", en: "Show arrival time and minutes" },
+  timetable: { zh: "班次表", en: "Timetable" },
+  ttWd: { zh: "平日", en: "Weekday" },
+  ttSat: { zh: "星期六", en: "Saturday" },
+  ttSun: { zh: "星期日及公眾假期", en: "Sun & public holidays" },
+  ttEvery: { zh: "每", en: "every" },
+  ttMin: { zh: "分鐘", en: "min" },
   installTitle: { zh: "將「巴士預報」加到主畫面？", en: "Add Bus ETA to your home screen?" },
   installBtn: { zh: "安裝", en: "Install" },
   installDismiss: { zh: "關閉", en: "Dismiss" },
@@ -552,6 +558,78 @@ function openRoute(no, silent, from, dir, ops) {
   renderDetail();
   if (!silent) renderCurrentList();
 }
+
+/* ---------------- timetable (from route freq + serviceDayMap) ---------------- */
+function ttToMin(s) {
+  const t = String(s || "");
+  if (t.length < 4) return null;
+  const h = parseInt(t.slice(0, 2), 10), m = parseInt(t.slice(2, 4), 10);
+  return isFinite(h) && isFinite(m) ? h * 60 + m : null;
+}
+function ttFmt(min) {
+  return String(Math.floor(min / 60)).padStart(2, "0") + ":" + String(min % 60).padStart(2, "0");
+}
+/* serviceDayMap is [Sun, Mon, Tue, Wed, Thu, Fri, Sat]. */
+function ttDayClass(sdm) {
+  if (!Array.isArray(sdm) || sdm.length < 7) return null;
+  if (sdm[0] === "1") return "sun";
+  if (sdm[6] === "1") return "sat";
+  return "wd";
+}
+function timetableHTML() {
+  if (!state.detail || state.detail.kind !== "route") return "";
+  const entry = pickEntry(state.detail.groups[state.detail.sel]);
+  const freq = entry && entry.freq;
+  if (!freq || !Object.keys(freq).length) return "";
+  const sdmMap = (state.db && state.db.serviceDayMap) || {};
+  const buckets = { wd: [], sat: [], sun: [] };
+  Object.keys(freq).forEach((sid) => {
+    const cls = ttDayClass(sdmMap[sid]);
+    if (!cls) return;
+    const group = freq[sid] || {};
+    Object.keys(group).forEach((start) => {
+      const val = group[start];
+      if (!Array.isArray(val)) return;
+      const st = ttToMin(start), en = ttToMin(val[0]), hwSec = Number(val[1]);
+      if (st == null || en == null || en < st || !(hwSec > 0)) return;
+      buckets[cls].push({ start: st, end: en, hwMin: Math.max(1, Math.round(hwSec / 60)) });
+    });
+  });
+  const days = [
+    { k: "wd", label: T.ttWd[state.lang] },
+    { k: "sat", label: T.ttSat[state.lang] },
+    { k: "sun", label: T.ttSun[state.lang] },
+  ].filter((d) => buckets[d.k].length);
+  if (!days.length) return "";
+  const rows = days.map((d) => {
+    const wins = buckets[d.k].slice().sort((a, b) => a.start - b.start);
+    const first = wins[0].start;
+    const last = wins.reduce((m, w) => Math.max(m, w.end), wins[0].end);
+    const hwMin = wins.reduce((m, w) => Math.min(m, w.hwMin), wins[0].hwMin);
+    const seen = new Set();
+    wins.forEach((w) => {
+      for (let t = w.start; t <= w.end; t += w.hwMin) seen.add(t);
+    });
+    const times = [...seen].sort((a, b) => a - b);
+    return `
+      <div class="tt-row">
+        <button class="tt-expand" type="button" aria-expanded="false">
+          <span class="tt-day">${esc(d.label)}</span>
+          <span class="tt-range">${ttFmt(first)} – ${ttFmt(last)}</span>
+          <span class="tt-hw">${esc(T.ttEvery[state.lang] + " " + hwMin + " " + T.ttMin[state.lang])}</span>
+          <span class="tt-caret">▾</span>
+        </button>
+        <div class="tt-times" hidden>${times.map((t) => `<span class="tt-t">${ttFmt(t)}</span>`).join("")}</div>
+      </div>`;
+  }).join("");
+  return `
+    <div class="tt-wrap">
+      <button class="tt-toggle" id="ttToggle" type="button" aria-expanded="false">
+        <span class="tt-title">${esc(T.timetable[state.lang])}</span><span class="tt-caret">▾</span>
+      </button>
+      <div class="tt-panel" id="ttPanel" hidden>${rows}</div>
+    </div>`;
+}
 function renderDetail() {
   const { sel, groups } = state.detail;
   const g = groups[sel];
@@ -575,7 +653,7 @@ function renderDetail() {
         ${esc(pickEntry(x).dest[state.lang] || "")}<small>${esc(pickEntry(x).orig[state.lang] || "")}</small>
       </button>`).join("")}
     </div>
-    <div class="note">${state.lang === "zh" ? "點擊車站查看經此站的所有路線 · 每 30 秒自動更新" : "Tap a stop to see all routes via it · auto-refresh 30s"}<span id="etaStamp" class="eta-stamp"></span></div>`;
+    <div class="note">${state.lang === "zh" ? "點擊車站查看經此站的所有路線 · 每 30 秒自動更新" : "Tap a stop to see all routes via it · auto-refresh 30s"}<span id="etaStamp" class="eta-stamp"></span></div>${timetableHTML()}`;
   el.detailTop.querySelector("#backBtn").addEventListener("click", () => {
     const f = state.detail.from;
     if (f && f.kind === "stop") {
@@ -601,6 +679,25 @@ function renderDetail() {
       renderDetail();
     })
   );
+  const ttToggle = el.detailTop.querySelector("#ttToggle");
+  if (ttToggle) {
+    const ttPanel = el.detailTop.querySelector("#ttPanel");
+    ttToggle.addEventListener("click", () => {
+      const open = ttPanel.hidden;
+      ttPanel.hidden = !open;
+      ttToggle.setAttribute("aria-expanded", open ? "true" : "false");
+      ttToggle.classList.toggle("open", open);
+    });
+    el.detailTop.querySelectorAll(".tt-expand").forEach((b) =>
+      b.addEventListener("click", () => {
+        const times = b.parentElement.querySelector(".tt-times");
+        if (!times) return;
+        times.hidden = !times.hidden;
+        b.setAttribute("aria-expanded", times.hidden ? "false" : "true");
+        b.classList.toggle("open", !times.hidden);
+      })
+    );
+  }
   el.detailContent.innerHTML = '<div class="stop-list"></div>';
   renderRouteStops(g);
   renderEtaStamp();
@@ -1047,7 +1144,10 @@ async function manualRefresh() {
 }
 
 /* ---------------- init ---------------- */
+let inited = false;
 function init() {
+  if (inited) return;
+  inited = true;
   const savedTheme = localStorage.getItem("buseta-theme");
   applyTheme(savedTheme || systemTheme(), false);
   if (window.matchMedia && !savedTheme) {

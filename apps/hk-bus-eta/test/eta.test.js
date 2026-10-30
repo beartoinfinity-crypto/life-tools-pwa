@@ -252,3 +252,106 @@ describe('ETA display format toggle', () => {
     dom.window.close();
   });
 });
+
+describe('daily timetable', () => {
+  async function openKmb71a() {
+    const dom = await createHarness(loadDb());
+    await openRoute(dom, '71A');
+    const kmb = searchCards(dom, '71A').find((c) => /\bco-kmb\b/.test(c.querySelector('.route-no').className));
+    expect(kmb).toBeTruthy();
+    kmb.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, cancelable: true }));
+    await new Promise((r) => setTimeout(r, 60));
+    await settle(dom);
+    return dom;
+  }
+
+  it('shows a collapsible per-day-type timetable for a route with freq', async () => {
+    const dom = await openKmb71a();
+    const { window } = dom;
+    const toggle = window.document.querySelector('#ttToggle');
+    expect(toggle).toBeTruthy();
+    expect(toggle.textContent).toContain('班次表');
+    const panel = window.document.querySelector('#ttPanel');
+    expect(panel).toBeTruthy();
+    // collapsed initially
+    expect(panel.hidden).toBe(true);
+    expect(maxExpandAria(window)).toBe(false);
+
+    toggle.dispatchEvent(new window.MouseEvent('click', { bubbles: true, cancelable: true }));
+    expect(panel.hidden).toBe(false);
+
+    const rows = [...panel.querySelectorAll('.tt-row')];
+    expect(rows.map((r) => r.querySelector('.tt-day').textContent)).toEqual(['平日', '星期六', '星期日及公眾假期']);
+
+    // weekday (2001): 06:00-06:30 & 17:00-17:30 every 10 min
+    const wd = rows[0];
+    expect(wd.querySelector('.tt-range').textContent).toContain('06:00');
+    expect(wd.querySelector('.tt-range').textContent).toContain('17:30');
+    expect(wd.querySelector('.tt-hw').textContent).toContain('每 10 分鐘');
+
+    // grind every departure out of the window
+    const exp = wd.querySelector('.tt-expand');
+    const times = wd.querySelector('.tt-times');
+    expect(times.hidden).toBe(true);
+    exp.dispatchEvent(new window.MouseEvent('click', { bubbles: true, cancelable: true }));
+    expect(times.hidden).toBe(false);
+    const tts = [...times.querySelectorAll('.tt-t')].map((t) => t.textContent);
+    expect(tts).toEqual(['06:00', '06:10', '06:20', '06:30', '17:00', '17:10', '17:20', '17:30']);
+
+    // saturday (2002): 06:30-07:00 every 15 min
+    expect(rows[1].querySelector('.tt-range').textContent).toContain('06:30');
+    expect(rows[1].querySelector('.tt-range').textContent).toContain('07:00');
+    expect(rows[1].querySelector('.tt-hw').textContent).toContain('每 15 分鐘');
+
+    // sunday (2003): 08:00-08:30 every 15 min
+    expect(rows[2].querySelector('.tt-range').textContent).toContain('08:00');
+    expect(rows[2].querySelector('.tt-range').textContent).toContain('08:30');
+    dom.window.close();
+  });
+
+  function maxExpandAria(window) {
+    const btn = window.document.querySelector('#ttToggle');
+    return btn && btn.getAttribute('aria-expanded') === 'true';
+  }
+
+  it('shows only the directions own day types after a pill switch (no Sun on reverse)', async () => {
+    const dom = await openKmb71a();
+    const { window } = dom;
+    window.document.querySelector('#ttToggle').dispatchEvent(new window.MouseEvent('click', { bubbles: true, cancelable: true }));
+    // switch to the reverse direction pill (大埔墟站→大埔(富亨))
+    const pills = window.document.querySelectorAll('.pill');
+    expect(pills.length).toBe(2);
+    pills[1].dispatchEvent(new window.MouseEvent('click', { bubbles: true, cancelable: true }));
+    const panel = window.document.querySelector('#ttPanel');
+    expect(panel).toBeTruthy();
+    const rows = [...panel.querySelectorAll('.tt-row')];
+    expect(rows.map((r) => r.querySelector('.tt-day').textContent)).toEqual(['平日', '星期六']);
+    expect(rows[0].querySelector('.tt-range').textContent).toContain('06:10');
+    dom.window.close();
+  });
+
+  it('renders no timetable for routes without freq data', async () => {
+    const dom = await createHarness(loadDb());
+    await openRoute(dom, '101');
+    const card = searchCards(dom, '101')[0];
+    expect(card).toBeTruthy();
+    card.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, cancelable: true }));
+    await new Promise((r) => setTimeout(r, 60));
+    await settle(dom);
+    expect(dom.window.document.querySelector('.tt-wrap')).toBeNull();
+    dom.window.close();
+  });
+
+  it('re-renders the timetable in English after the language toggle', async () => {
+    const dom = await openKmb71a();
+    const { window } = dom;
+    window.document.getElementById('langBtn').dispatchEvent(new window.MouseEvent('click', { bubbles: true, cancelable: true }));
+    await settle(dom);
+    const toggle = window.document.querySelector('#ttToggle');
+    expect(toggle.textContent).toContain('Timetable');
+    toggle.dispatchEvent(new window.MouseEvent('click', { bubbles: true, cancelable: true }));
+    const rows = [...window.document.querySelectorAll('#ttPanel .tt-row')];
+    expect(rows.map((r) => r.querySelector('.tt-day').textContent)).toEqual(['Weekday', 'Saturday', 'Sun & public holidays']);
+    dom.window.close();
+  });
+});

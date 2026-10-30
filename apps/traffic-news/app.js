@@ -16,13 +16,14 @@
 
   var renderedOnce = false;
   var lastItems = [];
+  var viewRaw = [];
   var lastRefreshIso = null;
   var lastSig = null;
   var chipSig = null;
   var regionSig = null;
   var openIds = {};
   var favs = loadFavs();
-  var filterState = { cat: '', q: '', r: '' };
+  var filterState = { cat: '', q: '', r: '', h: '' };
   var searchT = null;
 
   // ---- severity classification (L3 urgent > L2 warning > L1 info) ----
@@ -141,6 +142,24 @@
     var ca = catKey(a), cb = catKey(b);
     return ca === cb || ca === '其他' || cb === '其他';
   }
+  function finalizeGroups(groups) {
+    return groups.map(function (g) {
+      var rep = g.rep;
+      var favId = null;
+      g.members.forEach(function (m) { if (favs[m.id]) favId = m.id; });
+      if (favId) rep.id = favId;
+      var seen = {};
+      rep.srcs = [];
+      g.members.forEach(function (m) {
+        var s = m.source || '';
+        if (!seen[s]) { seen[s] = 1; rep.srcs.push(s); }
+      });
+      rep._members = g.members;
+      rep._search = ((rep.category || '') + ' ' + (rep.location || '') + ' ' +
+        g.members.map(function (m) { return m.detail || ''; }).join(' ')).toLowerCase();
+      return rep;
+    });
+  }
   function groupIncidents(items) {
     var sorted = items.slice().sort(function (a, b) {
       return new Date(b.posted_at).getTime() - new Date(a.posted_at).getTime();
@@ -161,21 +180,33 @@
       }
       if (!placed) groups.push({ rep: n, members: [n] });
     }
-    return groups.map(function (g) {
-      var rep = g.rep;
-      var favId = null;
-      g.members.forEach(function (m) { if (favs[m.id]) favId = m.id; });
-      if (favId) rep.id = favId;
-      var seen = {};
-      rep.srcs = [];
-      g.members.forEach(function (m) {
-        var s = m.source || '';
-        if (!seen[s]) { seen[s] = 1; rep.srcs.push(s); }
-      });
-      rep._members = g.members;
-      rep._search = ((rep.category || '') + ' ' + (rep.location || '') + ' ' +
-        g.members.map(function (m) { return m.detail || ''; }).join(' ')).toLowerCase();
-      return rep;
+    return finalizeGroups(groups);
+  }
+
+  /**
+   * The 最近1小時 view: anything posted within the merge window gets its own
+   * card (deduped only by exact id) so fresh, distinct reports never collapse;
+   * older items keep the usual similarity merge.
+   */
+  function buildView(items, now) {
+    if (filterState.h !== '1h') return groupIncidents(items);
+    now = now || Date.now();
+    var sorted = items.slice().sort(function (a, b) {
+      return new Date(b.posted_at).getTime() - new Date(a.posted_at).getTime();
+    });
+    var recent = [], older = [], seen = {};
+    sorted.forEach(function (n) {
+      var t = new Date(n.posted_at).getTime();
+      if (!isNaN(t) && now - t <= MERGE_WINDOW_MS) {
+        if (seen[n.id]) return;
+        seen[n.id] = 1;
+        recent.push({ rep: n, members: [n] });
+      } else {
+        older.push(n);
+      }
+    });
+    return finalizeGroups(recent).concat(groupIncidents(older)).sort(function (a, b) {
+      return new Date(b.posted_at).getTime() - new Date(a.posted_at).getTime();
     });
   }
 
@@ -229,6 +260,7 @@
     filterState.q = p.get('q') || '';
     filterState.cat = p.get('cat') || '';
     filterState.r = p.get('r') || '';
+    filterState.h = p.get('h') === '1h' ? '1h' : '';
   }
 
   function writeUrl() {
@@ -236,6 +268,7 @@
     if (filterState.q) p.set('q', filterState.q); else p.delete('q');
     if (filterState.cat) p.set('cat', filterState.cat); else p.delete('cat');
     if (filterState.r) p.set('r', filterState.r); else p.delete('r');
+    if (filterState.h) p.set('h', filterState.h); else p.delete('h');
     var qs = p.toString();
     history.replaceState(null, '', location.pathname + (qs ? '?' + qs : ''));
   }
@@ -247,7 +280,7 @@
       var p = chipPrefix(n);
       if (!seen[p]) { seen[p] = 1; prefixes.push(p); }
     });
-    var sig = prefixes.join(',') + '|' + filterState.cat + '|' + favCount();
+    var sig = prefixes.join(',') + '|' + filterState.cat + '|' + favCount() + '|' + filterState.h;
     if (sig === chipSig) return;
     chipSig = sig;
 
@@ -257,6 +290,9 @@
     });
     var fc = favCount();
     html += chip(FAV_CAT, '收藏' + (fc ? ' ' + fc : ''), filterState.cat === FAV_CAT);
+    var hActive = filterState.h === '1h';
+    html += '<button type="button" class="chip' + (hActive ? ' active' : '') +
+      '" data-h="1h" aria-pressed="' + (hActive ? 'true' : 'false') + '">最近1小時</button>';
     chipRow.innerHTML = html;
 
     function chip(value, label, active) {
@@ -408,8 +444,10 @@
   function render(payload) {
     var items = (payload && payload.data) || [];
     if (items.length) {
-      lastItems = groupIncidents(items);
+      viewRaw = items;
+      lastItems = buildView(items);
     } else if (!renderedOnce) {
+      viewRaw = [];
       lastItems = [];
     }
     // else: keep showing what we have (never blank on a scrape hiccup)
@@ -513,6 +551,20 @@
   chipRow.addEventListener('click', function (e) {
     var b = e.target.closest ? e.target.closest('.chip') : null;
     if (!b) return;
+    if (b.getAttribute('data-h') === '1h') {
+      filterState.h = filterState.h === '1h' ? '' : '1h';
+      writeUrl();
+      lastItems = buildView(viewRaw);
+      lastSig = null;
+      regionSig = null;
+      var hActive = filterState.h === '1h';
+      b.classList.toggle('active', hActive);
+      b.setAttribute('aria-pressed', hActive ? 'true' : 'false');
+      renderRegions();
+      renderSummary(lastItems);
+      renderList();
+      return;
+    }
     filterState.cat = b.getAttribute('data-cat') || '';
     writeUrl();
     chipSig = null;

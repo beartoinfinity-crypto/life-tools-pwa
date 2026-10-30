@@ -301,8 +301,12 @@ Other features:
   radios and the provider APIs. A header **ETA format** button cycles the chip text: remaining **minutes** (`3 分`, the
   default), exact **arrival time** (`09:41`), or **both** — the choice is persisted in `localStorage`
   (`buseta-eta-fmt`) and restored on the next visit.
+- **Daily timetable** — each direction's detail page has a collapsed **班次表** built from the route database's own
+  `freq` + `serviceDayMap` data (no extra network fetch). Rows group services into 平日 / 星期六 /
+  星期日及公眾假期, show the first-to-last departure range and headway (e.g. `06:00 – 17:30 · 每 10 分鐘`), and
+  expand to the full HH:MM departure list.
 - **Offline-first** — route database cached in IndexedDB; offline banner + Retry-on-failure; service worker caches
-  the shell (`buseta-lite-v32`).
+  the shell (`buseta-lite-v33`).
 - **Loading skeletons & >=48px touch targets** — shimmer placeholders replace the blocking splash; buttons and rows
   sized for gloved/fumbling taps.
 - **EN/ZH** toggle; near-black UI in night mode with corrected chip/badge colours.
@@ -331,6 +335,9 @@ manual refresh button and a 1-minute auto-poll; installable like the other apps 
 - **District chips** — a second chip row filters by broad region (香港島 / 九龍 / 新界 / 大嶼山 / 其他),
   inferred from each item's location by keyword (falling back to detail/category, then 其他), data-driven to
   the regions actually present, and deep-linked via `?r=...`. Regions combine with the category/search filters.
+- **Recently-hour view** — a **最近1小時** chip switches to a distinct-card view (deep-linked via `?h=1h`): every
+  incident posted within the last 60 minutes renders as its own card (only exact-id repeats dedupe), while older
+  items still merge by similarity. Clicking the chip again restores the default merged view.
 - **Incident merge** — routejam and 881903 (and routejam's own per-feed attributions) report the same accident as
   separate items, so same-location/same-category items posted within 60 minutes are grouped into **one card**: the
   newest member drives the status/time, all sources show as badges (e.g. `Routejam · 881903`), the merged members'
@@ -550,7 +557,7 @@ npm test            # Run all tests once
 npm run test:watch  # Watch mode
 ```
 
-347 tests across 15 files under `test/` (hub), `apps/mark-six/test/`, `apps/hk-bus-eta/test/`, `apps/traffic-news/test/` and `apps/music-trend/test/`. The suite uses in-memory SQLite + fixtures, so it runs offline without a Supabase connection.
+355 tests across 15 files under `test/` (hub), `apps/mark-six/test/`, `apps/hk-bus-eta/test/`, `apps/traffic-news/test/` and `apps/music-trend/test/`. The suite uses in-memory SQLite + fixtures, so it runs offline without a Supabase connection.
 
 ---
 

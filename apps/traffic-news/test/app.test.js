@@ -647,3 +647,98 @@ describe('traffic-news v1.7: incident grouping, summary band, debounce, live reg
     expect(ids(window)).toEqual(['warn1']);
   });
 });
+
+describe('traffic-news v1.8: distinct cards for the last 1 hour (最近1小時)', () => {
+  let harness;
+
+  afterEach(() => {
+    if (harness) {
+      try { harness.dom.window.close(); } catch { /* ignore */ }
+      harness = null;
+    }
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  async function boot(opts = {}) {
+    harness = createHarness(opts);
+    await flush();
+    return harness;
+  }
+
+  function recentPair(now = Date.now()) {
+    return [
+      item({
+        id: 'h1', category: '道路事故-交通意外', status: '最新情況',
+        location: '西九龍公路,奧運港鐵站 [往西隧]', detail: '交通意外，車路通行延誤',
+        source: 'routejam', posted_at: new Date(now - 60 * 1000).toISOString(),
+      }),
+      item({
+        id: 'h2', category: '道路事故-交通意外', status: '最新情況',
+        location: '西九龍公路', detail: '車輛排隊，請預留時間',
+        source: '881903', posted_at: new Date(now - 5 * 60 * 1000).toISOString(),
+      }),
+    ];
+  }
+
+  it('default (merged) view is unchanged — same incident still one card', async () => {
+    const { window } = await boot({ items: recentPair() });
+    expect(ids(window)).toEqual(['h1']);
+  });
+
+  it('最近1小時 chip renders each recent item as its own distinct card with unique ids', async () => {
+    const { window } = await boot({ items: recentPair() });
+    const chip1h = window.document.querySelector('.chip[data-h="1h"]');
+    expect(chip1h).toBeTruthy();
+    expect(chip1h.textContent).toContain('最近1小時');
+    click(window, chip1h);
+    const idList = ids(window);
+    expect(idList.length).toBe(2);
+    expect(new Set(idList).size).toBe(2); // each source item keeps its own card/id
+    const byId = Object.fromEntries(cards(window).map((c) => [c.getAttribute('data-id'), c]));
+    expect(byId.h1.querySelector('.ni-src').textContent).toContain('Routejam');
+    expect(byId.h2.querySelector('.ni-src').textContent).toContain('881903');
+    expect(byId.h1.querySelector('.ni-merged')).toBeNull();
+  });
+
+  it('items older than 1h still merge by similarity inside the 1h view', async () => {
+    const now = Date.now();
+    const { window } = await boot({
+      items: [
+        item({
+          id: 'rnew', category: '道路事故-交通意外', status: '最新情況',
+          location: '西九龍公路', detail: '最新事故', source: 'routejam',
+          posted_at: new Date(now - 5 * 60 * 1000).toISOString(),
+        }),
+        item({
+          id: 'old1', category: '道路事故-交通意外', status: '最新情況',
+          location: '觀塘道', detail: '慢車', source: 'routejam',
+          posted_at: new Date(now - 65 * 60 * 1000).toISOString(),
+        }),
+        item({
+          id: 'old2', category: '道路事故-交通意外', status: '最新情況',
+          location: '觀塘道', detail: '車多', source: '881903',
+          posted_at: new Date(now - 70 * 60 * 1000).toISOString(),
+        }),
+      ],
+    });
+    click(window, window.document.querySelector('.chip[data-h="1h"]'));
+    const idList = ids(window);
+    expect(idList).toContain('rnew');
+    // the two older 觀塘道 items still collapse into one card carrying both sources
+    const older = cards(window).filter((c) => c.getAttribute('data-id') !== 'rnew');
+    expect(older.length).toBe(1);
+    const srcs = [...older[0].querySelectorAll('.ni-src')].map((s) => s.textContent);
+    expect(srcs).toContain('Routejam');
+    expect(srcs).toContain('881903');
+  });
+
+  it('toggling the 最近1小時 chip again restores the merged default view', async () => {
+    const { window } = await boot({ items: recentPair() });
+    const chip1h = window.document.querySelector('.chip[data-h="1h"]');
+    click(window, chip1h);
+    expect(ids(window).length).toBe(2);
+    click(window, chip1h);
+    expect(ids(window)).toEqual(['h1']);
+  });
+});
