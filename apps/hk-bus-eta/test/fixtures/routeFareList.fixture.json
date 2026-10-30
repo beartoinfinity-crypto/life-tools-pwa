@@ -3,7 +3,8 @@
     "2001": ["0", "1", "1", "1", "1", "1", "0"],
     "2002": ["0", "0", "0", "0", "0", "0", "1"],
     "2003": ["1", "0", "0", "0", "0", "0", "0"],
-    "2004": ["0", "1", "1", "1", "1", "1", "0"]
+    "2004": ["0", "1", "1", "1", "1", "1", "0"],
+    "511": ["1", "1", "1", "1", "1", "1", "1"]
   },
   "holidays": ["20260101"],
   "routeList": {
@@ -103,6 +104,51 @@
       "serviceType": "1",
       "co": "kmb",
       "stops": { "kmb": ["k1", "k2", "k3", "k4", "k5", "k6", "k7", "k8", "k9", "k10"] }
+    },
+    "kmb-a47x-airport-taipo": {
+      "route": "A47X",
+      "orig": { "zh": "機場(地面運輸中心)", "en": "AIRPORT (GROUND TRANSPORTATION CENTRE)" },
+      "dest": { "zh": "大埔(太和)", "en": "TAI PO (TAI WO)" },
+      "serviceType": "1",
+      "co": "kmb",
+      "stops": { "kmb": ["k1", "k2"] },
+      "freq": {
+        "511": {
+          "1005": ["1635", "1800"],
+          "2135": ["2335", "1800"],
+          "2335": ["2400", "1500"]
+        }
+      }
+    },
+    "kmb-a47x-taipo-airport": {
+      "route": "A47X",
+      "orig": { "zh": "大埔(太和)", "en": "TAI PO (TAI WO)" },
+      "dest": { "zh": "機場(地面運輸中心)", "en": "AIRPORT (GROUND TRANSPORTATION CENTRE)" },
+      "serviceType": "1",
+      "co": "kmb",
+      "stops": { "kmb": ["k2", "k1"] },
+      "freq": {
+        "511": {
+          "1035": ["1110", "2100"],
+          "1110": ["1740", "1800"],
+          "1740": ["2035", "2100"],
+          "2035": ["2205", "1800"],
+          "0500": null,
+          "0530": null,
+          "0630": null
+        }
+      }
+    },
+    "kmb-a47x-taipo-airport-special": {
+      "route": "A47X",
+      "orig": { "zh": "大埔(太和)", "en": "TAI PO (TAI WO)" },
+      "dest": { "zh": "機場(地面運輸中心)", "en": "AIRPORT (GROUND TRANSPORTATION CENTRE)" },
+      "serviceType": "2",
+      "co": "kmb",
+      "stops": { "kmb": ["k2", "k1"] },
+      "freq": {
+        "511": { "0730": ["1000", "1800"] }
+      }
     }
   },
   "stopList": {

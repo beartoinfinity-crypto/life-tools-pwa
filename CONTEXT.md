@@ -26,7 +26,7 @@ Each app is an authored PWA with its own `index.html`, `styles.css`,
 | apps/traffic-news     | traffic-news-v16  | v1.9 build 202610300657    |
 | apps/mark-six         | mark-six-v16      | v1.8 build 202610050754    |
 | apps/music-trend      | music-trend-v36   | v1.8 build 202609291603    |
-| apps/hk-bus-eta/build | buseta-lite-v33   | v1.13 build 202610300657   |
+| apps/hk-bus-eta/build | buseta-lite-v34   | v1.14 build 202610300818   |
 
 > `apps/hk-bus-eta/` holds both: `build-upstream/` and `LICENSE` are
 > the vendored upstream PWA (never hand-edit them), while `build/` is
@@ -112,7 +112,7 @@ live in the individual commits; this is just the map.
 - **mark-six** (v1.8, `mark-six-v16`): honesty disclaimer under the
   Smart Pick generator + a sixth `contrarian` strategy. See issue #1
   (closed) and the commit messages for `5357218`.
-- **bus-eta-lite** (v1.8..v1.13, `buseta-lite-v33`): operator-split
+- **bus-eta-lite** (v1.8..v1.14, `buseta-lite-v34`): operator-split
   route search rows; next-arrival-first chips; silent 30s refresh
   pooled to <=6 fetches with no-op churn skip; ETA display-format
   toggle (minutes / exact time / both, persisted in
@@ -132,12 +132,26 @@ live in the individual commits; this is just the map.
   holiday, show the first-to-last departure range and headway, and
   expand to the full departure list. `init()` is now idempotent so a
   double `DOMContentLoaded` cannot bind duplicate listeners.
+- **bus-eta-lite timetable merge** (v1.14, `buseta-lite-v34`): the
+  timetable now folds **every service entry of the selected direction**
+  into one row set (previously only the first `serviceType` 1 entry
+  was shown, so routes split across service variants -- e.g. A47X's
+  extra early/late trips -- silently omitted departures). Single
+  departures stored as `freq` windows with a `null` value (e.g. A47X
+  05:00 / 05:30 / 06:30) are now rendered as fixed times, and an
+  all-week schedule (`serviceDayMap` all `"1"`) is labelled "Daily"
+  instead of "Sun & public holidays". Reported: A47X's two directions
+  showed the same collapsed summary; the reverse now reads
+  `05:00 - 22:05 every 30 min` vs the outbound `10:05 - 24:00 every
+  25 min` (they previously both read `10:05 ...`, because the reverse
+  direction's leading single trips were dropped and both directions
+  shared the same all-week label).
 - **traffic-news recent hour** (v1.9, `traffic-news-v16`): a
   "recent 1 hour" chip (`?h=1h`) renders every incident posted in the
   last 60 minutes as its own card (dedup only by exact id); older
   items keep the usual similarity merge. The default merged view is
   unchanged, and clicking the chip again restores it.
-- **Tests** now span 15 files / 355 cases (hub + mark-six +
+- **Tests** now span 15 files / 357 cases (hub + mark-six +
   hk-bus-eta + traffic-news + music-trend), run with `npx vitest run`.
 
 ## Notes for the next agent

@@ -47,6 +47,7 @@ const T = {
   ttWd: { zh: "平日", en: "Weekday" },
   ttSat: { zh: "星期六", en: "Saturday" },
   ttSun: { zh: "星期日及公眾假期", en: "Sun & public holidays" },
+  ttDaily: { zh: "每日", en: "Daily" },
   ttEvery: { zh: "每", en: "every" },
   ttMin: { zh: "分鐘", en: "min" },
   installTitle: { zh: "將「巴士預報」加到主畫面？", en: "Add Bus ETA to your home screen?" },
@@ -572,30 +573,41 @@ function ttFmt(min) {
 /* serviceDayMap is [Sun, Mon, Tue, Wed, Thu, Fri, Sat]. */
 function ttDayClass(sdm) {
   if (!Array.isArray(sdm) || sdm.length < 7) return null;
-  if (sdm[0] === "1") return "sun";
-  if (sdm[6] === "1") return "sat";
-  return "wd";
+  if (sdm.every((c) => c === "1")) return { k: "all", label: T.ttDaily[state.lang] };
+  if (sdm[0] === "1") return { k: "sun", label: T.ttSun[state.lang] };
+  if (sdm[6] === "1") return { k: "sat", label: T.ttSat[state.lang] };
+  return { k: "wd", label: T.ttWd[state.lang] };
 }
 function timetableHTML() {
   if (!state.detail || state.detail.kind !== "route") return "";
-  const entry = pickEntry(state.detail.groups[state.detail.sel]);
-  const freq = entry && entry.freq;
-  if (!freq || !Object.keys(freq).length) return "";
+  const group = state.detail.groups[state.detail.sel];
   const sdmMap = (state.db && state.db.serviceDayMap) || {};
-  const buckets = { wd: [], sat: [], sun: [] };
-  Object.keys(freq).forEach((sid) => {
-    const cls = ttDayClass(sdmMap[sid]);
-    if (!cls) return;
-    const group = freq[sid] || {};
-    Object.keys(group).forEach((start) => {
-      const val = group[start];
-      if (!Array.isArray(val)) return;
-      const st = ttToMin(start), en = ttToMin(val[0]), hwSec = Number(val[1]);
-      if (st == null || en == null || en < st || !(hwSec > 0)) return;
-      buckets[cls].push({ start: st, end: en, hwMin: Math.max(1, Math.round(hwSec / 60)) });
+  const buckets = { all: [], wd: [], sat: [], sun: [] };
+  group.entries.forEach((entry) => {
+    const freq = entry && entry.freq;
+    if (!freq || !Object.keys(freq).length) return;
+    Object.keys(freq).forEach((sid) => {
+      const cls = ttDayClass(sdmMap[sid]);
+      if (!cls) return;
+      const bucket = buckets[cls.k];
+      const groupObj = freq[sid] || {};
+      Object.keys(groupObj).forEach((start) => {
+        const val = groupObj[start];
+        const st = ttToMin(start);
+        if (st == null) return;
+        if (Array.isArray(val)) {
+          const en = ttToMin(val[0]), hwSec = Number(val[1]);
+          if (en == null || en < st || !(hwSec > 0)) return;
+          bucket.push({ start: st, end: en, hwMin: Math.max(1, Math.round(hwSec / 60)) });
+        } else {
+          // fixed single departure (e.g. early-morning trips with a null freq value)
+          bucket.push({ start: st, end: st, hwMin: null });
+        }
+      });
     });
   });
   const days = [
+    { k: "all", label: T.ttDaily[state.lang] },
     { k: "wd", label: T.ttWd[state.lang] },
     { k: "sat", label: T.ttSat[state.lang] },
     { k: "sun", label: T.ttSun[state.lang] },
@@ -603,20 +615,23 @@ function timetableHTML() {
   if (!days.length) return "";
   const rows = days.map((d) => {
     const wins = buckets[d.k].slice().sort((a, b) => a.start - b.start);
+    const fixed = wins.filter((w) => w.hwMin == null);
+    const ranged = wins.filter((w) => w.hwMin != null);
     const first = wins[0].start;
     const last = wins.reduce((m, w) => Math.max(m, w.end), wins[0].end);
-    const hwMin = wins.reduce((m, w) => Math.min(m, w.hwMin), wins[0].hwMin);
+    const hwMin = ranged.reduce((m, w) => Math.min(m, w.hwMin), ranged[0] ? ranged[0].hwMin : null);
     const seen = new Set();
-    wins.forEach((w) => {
+    ranged.forEach((w) => {
       for (let t = w.start; t <= w.end; t += w.hwMin) seen.add(t);
     });
+    fixed.forEach((w) => seen.add(w.start));
     const times = [...seen].sort((a, b) => a - b);
     return `
       <div class="tt-row">
         <button class="tt-expand" type="button" aria-expanded="false">
           <span class="tt-day">${esc(d.label)}</span>
           <span class="tt-range">${ttFmt(first)} – ${ttFmt(last)}</span>
-          <span class="tt-hw">${esc(T.ttEvery[state.lang] + " " + hwMin + " " + T.ttMin[state.lang])}</span>
+          <span class="tt-hw">${hwMin == null ? "" : esc(T.ttEvery[state.lang] + " " + hwMin + " " + T.ttMin[state.lang])}</span>
           <span class="tt-caret">▾</span>
         </button>
         <div class="tt-times" hidden>${times.map((t) => `<span class="tt-t">${ttFmt(t)}</span>`).join("")}</div>

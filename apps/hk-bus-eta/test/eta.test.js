@@ -355,3 +355,69 @@ describe('daily timetable', () => {
     dom.window.close();
   });
 });
+
+describe('timetable service-variant merge (A47X-shaped)', () => {
+  async function openA47x() {
+    const dom = await createHarness(loadDb());
+    await openRoute(dom, 'A47X');
+    const card = searchCards(dom, 'A47X')[0];
+    expect(card).toBeTruthy();
+    card.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, cancelable: true }));
+    await new Promise((r) => setTimeout(r, 60));
+    await settle(dom);
+    return dom;
+  }
+  function showPanel(dom) {
+    dom.window.document.querySelector('#ttToggle').dispatchEvent(
+      new dom.window.MouseEvent('click', { bubbles: true, cancelable: true }));
+  }
+  function dayRows(dom) {
+    return [...dom.window.document.querySelectorAll('#ttPanel .tt-row')];
+  }
+  function expandTimes(dom, i) {
+    const row = dayRows(dom)[i];
+    row.querySelector('.tt-expand').dispatchEvent(
+      new dom.window.MouseEvent('click', { bubbles: true, cancelable: true }));
+    return [...row.querySelectorAll('.tt-t')].map((t) => t.textContent);
+  }
+
+  it('labels an all-week service as 每日 (not 星期日及公眾假期) and shows each direction range', async () => {
+    const dom = await openA47x();
+    const { window } = dom;
+    showPanel(dom);
+    // pill 0 = AIRPORT → TAI PO
+    let rs = dayRows(dom);
+    expect(rs.length).toBe(1);
+    expect(rs[0].querySelector('.tt-day').textContent).toBe('每日');
+    expect(rs[0].querySelector('.tt-range').textContent).toContain('10:05');
+    expect(rs[0].querySelector('.tt-range').textContent).toContain('24:00');
+    // pill 1 = TAI PO → AIRPORT (main + special service entries merged)
+    window.document.querySelectorAll('.pill')[1].dispatchEvent(
+      new window.MouseEvent('click', { bubbles: true, cancelable: true }));
+    rs = dayRows(dom);
+    expect(rs.length).toBe(1);
+    expect(rs[0].querySelector('.tt-day').textContent).toBe('每日');
+    expect(rs[0].querySelector('.tt-range').textContent).toContain('05:00');
+    expect(rs[0].querySelector('.tt-range').textContent).toContain('22:05');
+    dom.window.close();
+  });
+
+  it('merges special-service departures and keeps fixed single trips on the reverse direction', async () => {
+    const dom = await openA47x();
+    const { window } = dom;
+    showPanel(dom);
+    window.document.querySelectorAll('.pill')[1].dispatchEvent(
+      new window.MouseEvent('click', { bubbles: true, cancelable: true }));
+    const times = expandTimes(dom, 0);
+    // fixed single departures (0500 / 0530 / 0630) plus the serviceType 2 window (0730-1000)
+    // plus the main service windows (1035-2205) => 32 unique HH:MM departures
+    expect(times[0]).toBe('05:00');
+    expect(times).toContain('05:30');
+    expect(times).toContain('06:30');
+    expect(times).toContain('07:30');
+    expect(times).toContain('10:00');
+    expect(times).toContain('22:05');
+    expect(times).toHaveLength(32);
+    dom.window.close();
+  });
+});
