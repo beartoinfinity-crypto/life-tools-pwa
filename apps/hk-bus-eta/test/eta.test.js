@@ -421,3 +421,79 @@ describe('timetable service-variant merge (A47X-shaped)', () => {
     dom.window.close();
   });
 });
+
+describe('route stop list pagination', () => {
+  async function openNo(dom, no) {
+    await openRoute(dom, no);
+    const card = searchCards(dom, no)[0];
+    expect(card).toBeTruthy();
+    card.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, cancelable: true }));
+    await new Promise((r) => setTimeout(r, 80));
+    await settle(dom);
+    return dom;
+  }
+  function cards(dom) {
+    return [...dom.window.document.querySelectorAll('#detailContent .stop-card')];
+  }
+
+  it('renders the full 21-stop S56 loop after the upstream supplement is applied', async () => {
+    const dom = await createHarness(loadDb());
+    await openNo(dom, 'S56');
+    const list = cards(dom);
+    expect(list).toHaveLength(21);
+    expect(list[17].querySelector('.zh').textContent).toContain('富豪機場酒店');
+    expect(list[18].querySelector('.zh').textContent).toBe('航天城');
+    expect(list[20].querySelector('.zh').textContent).toBe('東涌站');
+    expect(dom.window.document.querySelector('#detailContent .btn-more')).toBeNull();
+    dom.window.close();
+  });
+
+  it('reports how many stops remain behind 載入更多車站 on a long route', async () => {
+    const dom = await createHarness(loadDb());
+    await openNo(dom, 'C99');
+    expect(cards(dom)).toHaveLength(14);
+    let more = dom.window.document.querySelector('#detailContent .btn-more');
+    expect(more).toBeTruthy();
+    expect(more.textContent).toContain('16');
+    more.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, cancelable: true }));
+    await settle(dom);
+    expect(cards(dom)).toHaveLength(28);
+    more = dom.window.document.querySelector('#detailContent .btn-more');
+    expect(more.textContent).toContain('2');
+    more.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, cancelable: true }));
+    await settle(dom);
+    expect(cards(dom)).toHaveLength(30);
+    expect(dom.window.document.querySelector('#detailContent .btn-more')).toBeNull();
+    dom.window.close();
+  });
+});
+
+describe('upstream data supplement (S56-shaped)', () => {
+  it('restores the official S56 headway windows in the timetable', async () => {
+    const dom = await createHarness(loadDb());
+    await openRoute(dom, 'S56');
+    const card = searchCards(dom, 'S56')[0];
+    expect(card).toBeTruthy();
+    card.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, cancelable: true }));
+    await new Promise((r) => setTimeout(r, 80));
+    await settle(dom);
+    const toggle = dom.window.document.querySelector('#ttToggle');
+    expect(toggle).toBeTruthy();
+    toggle.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, cancelable: true }));
+    const rows = [...dom.window.document.querySelectorAll('#ttPanel .tt-row')];
+    expect(rows.map((r) => r.querySelector('.tt-day').textContent)).toEqual(['每日']);
+    expect(rows[0].querySelector('.tt-range').textContent).toContain('05:50');
+    expect(rows[0].querySelector('.tt-range').textContent).toContain('24:00');
+    const hw = rows[0].querySelector('.tt-hw').textContent;
+    expect(hw).toContain('13');
+    expect(hw).toContain('20');
+    rows[0].querySelector('.tt-expand').dispatchEvent(
+      new dom.window.MouseEvent('click', { bubbles: true, cancelable: true }));
+    const times = [...rows[0].querySelectorAll('.tt-t')].map((t) => t.textContent);
+    expect(times[0]).toBe('05:50');
+    expect(times).toContain('09:34');
+    expect(times).toContain('23:00');
+    expect(times[times.length - 1]).toBe('24:00');
+    dom.window.close();
+  });
+});

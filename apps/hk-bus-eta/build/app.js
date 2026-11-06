@@ -183,6 +183,50 @@ async function idbSet(key, val) {
   } catch { /* ignore */ }
 }
 
+/* ---------------- upstream data supplements ----------------
+   data.hkbus.app/routeFareList.min.json is occasionally incomplete for a
+   route. On 2026-11-06 the S56 entry had only the 17 outbound stops and a
+   single 05:30 freq entry, while the official Citybus feed lists 21 stops
+   (the loop back via Regal Airport Hotel / SKYCITY / the fuel farm) and six
+   headway windows. These supplements fill only the missing parts and leave a
+   route untouched once upstream catches up.
+   Sources: rt.data.gov.hk Citybus route-stop feed + citybus.com.hk routeinfo. */
+const ROUTE_SUPPLEMENTS = {
+  S56: {
+    co: "ctb",
+    // 21 official stops, dir O (the last stop is 東涌站 again on the loop)
+    stops: ["001860", "001875", "003814", "003945", "003950", "003943", "003454", "001883", "002710", "001879", "001877", "001846", "002657", "001832", "001833", "003395", "001834", "001836", "003816", "001847", "001860"],
+    // daily 05:50-09:34 every 14, 09:34-15:25 every 13, 15:25-15:40 every 15,
+    // 15:40-20:40 every 20, 20:40-23:00 every 14, 23:00-24:00 every 15
+    freq: {
+      "511": {
+        "0550": ["0934", "840"],
+        "0934": ["1525", "780"],
+        "1525": ["1540", "900"],
+        "1540": ["2040", "1200"],
+        "2040": ["2300", "840"],
+        "2300": ["2400", "900"],
+      },
+    },
+  },
+};
+function applySupplements(db) {
+  if (!db || !db.routeList) return db;
+  Object.keys(ROUTE_SUPPLEMENTS).forEach((routeNo) => {
+    const sup = ROUTE_SUPPLEMENTS[routeNo];
+    const entry = Object.values(db.routeList).find((e) =>
+      e && String(e.route).toUpperCase() === routeNo &&
+      (Array.isArray(e.co) ? e.co.includes(sup.co) : e.co === sup.co)
+    );
+    if (!entry || !entry.stops) return;
+    const arr = entry.stops[sup.co];
+    if (Array.isArray(arr) && arr.length < sup.stops.length) entry.stops[sup.co] = sup.stops.slice();
+    const days = Object.keys((entry.freq && entry.freq["511"]) || {});
+    if (days.length <= 1) entry.freq = Object.assign({}, entry.freq, { "511": Object.assign({}, sup.freq["511"]) });
+  });
+  return db;
+}
+
 /* ---------------- DB load ---------------- */
 async function loadDb() {
   const [cachedDb, cachedTs] = await Promise.all([idbGet("db"), idbGet("ts")]);
@@ -221,6 +265,7 @@ async function refreshDb() {
   await idbSet("ts", Date.now());
 }
 function applyDb(db) {
+  applySupplements(db);
   state.db = db;
   buildIndexes();
   if (state.view === "detail" && state.detail) {
@@ -620,6 +665,8 @@ function timetableHTML() {
     const first = wins[0].start;
     const last = wins.reduce((m, w) => Math.max(m, w.end), wins[0].end);
     const hwMin = ranged.reduce((m, w) => Math.min(m, w.hwMin), ranged[0] ? ranged[0].hwMin : null);
+    const hwMax = ranged.reduce((m, w) => Math.max(m, w.hwMin), ranged[0] ? ranged[0].hwMin : null);
+    const hwLabel = hwMin == null ? "" : (hwMax !== hwMin ? hwMin + "–" + hwMax : String(hwMin));
     const seen = new Set();
     ranged.forEach((w) => {
       for (let t = w.start; t <= w.end; t += w.hwMin) seen.add(t);
@@ -631,7 +678,7 @@ function timetableHTML() {
         <button class="tt-expand" type="button" aria-expanded="false">
           <span class="tt-day">${esc(d.label)}</span>
           <span class="tt-range">${ttFmt(first)} – ${ttFmt(last)}</span>
-          <span class="tt-hw">${hwMin == null ? "" : esc(T.ttEvery[state.lang] + " " + hwMin + " " + T.ttMin[state.lang])}</span>
+          <span class="tt-hw">${hwMin == null ? "" : esc(T.ttEvery[state.lang] + " " + hwLabel + " " + T.ttMin[state.lang])}</span>
           <span class="tt-caret">▾</span>
         </button>
         <div class="tt-times" hidden>${times.map((t) => `<span class="tt-t">${ttFmt(t)}</span>`).join("")}</div>
@@ -727,6 +774,9 @@ function renderRouteStops(group) {
   const stops = e.stops[coMain];
   const cosStr = allCos.join(",");
   const STOP_BATCH = 14;
+  // short routes (e.g. city shuttles / circular routes) fit on one screen,
+  // so render them in full instead of hiding the tail behind "load more"
+  const AUTO_EXPAND_MAX = 24;
   const cards = [];
   stops.forEach((ref, seq) => {
     const name = stopName(ref);
@@ -749,17 +799,19 @@ function renderRouteStops(group) {
   let offset = 0;
   const more = document.createElement("button");
   more.className = "btn-more";
-  more.textContent = T.moreStops[state.lang];
-  const appendBatch = () => {
-    const batch = cards.slice(offset, offset + STOP_BATCH);
-    offset += STOP_BATCH;
+  const appendBatch = (auto) => {
+    const size = auto ? cards.length - offset : STOP_BATCH;
+    const batch = cards.slice(offset, offset + size);
+    offset += size;
     batch.forEach((c) => listEl.appendChild(c));
     fetchRowEtas(batch);
-    if (cards.length > offset) listEl.appendChild(more);
-    else more.remove();
+    if (cards.length > offset) {
+      more.textContent = T.moreStops[state.lang] + " (" + (cards.length - offset) + ")";
+      listEl.appendChild(more);
+    } else more.remove();
   };
-  more.addEventListener("click", appendBatch);
-  appendBatch();
+  more.addEventListener("click", () => appendBatch(false));
+  appendBatch(cards.length <= AUTO_EXPAND_MAX);
 }
 async function fetchRowEtas(cards) {
   const rows = cards.map((c) => {

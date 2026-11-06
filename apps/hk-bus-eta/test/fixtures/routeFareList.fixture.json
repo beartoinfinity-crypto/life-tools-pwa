@@ -149,6 +149,23 @@
       "freq": {
         "511": { "0730": ["1000", "1800"] }
       }
+    },
+    "ctb-s56-tung-chung-airport": {
+      "route": "S56",
+      "orig": { "zh": "東涌站", "en": "Tung Chung Station" },
+      "dest": { "zh": "一號客運大樓(北), 暢達路", "en": "Terminal 1 (North), Cheong Tat Road" },
+      "serviceType": "1",
+      "co": "ctb",
+      "stops": { "ctb": ["001860", "001875", "003814", "003945", "003950", "003943", "003454", "001883", "002710", "001879", "001877", "001846", "002657", "001832", "001833", "003395", "001834"] },
+      "freq": { "511": { "0530": null } }
+    },
+    "ctb-c99-loop": {
+      "route": "C99",
+      "orig": { "zh": "循環線總站", "en": "Loop Terminus" },
+      "dest": { "zh": "循環線總站", "en": "Loop Terminus" },
+      "serviceType": "1",
+      "co": "ctb",
+      "stops": { "ctb": ["s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8", "s9", "s10", "s11", "s12", "s13", "s14", "s15", "s16", "s17", "s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8", "s9", "s10", "s11", "s12", "s13"] }
     }
   },
   "stopList": {
@@ -168,7 +185,44 @@
     "c2": { "name": { "zh": "觀塘裕民坊", "en": "Kwun Tong Yuen Man Fong" }, "location": { "lat": 22.31, "lng": 114.23 } },
     "c5": { "name": { "zh": "卑路乍街", "en": "Belcher's Street" }, "location": { "lat": 22.28, "lng": 114.13 } },
     "k9": { "name": { "zh": "測試站九", "en": "Test Stop Nine" }, "location": { "lat": 22.44, "lng": 114.17 } },
-    "k10": { "name": { "zh": "測試站十", "en": "Test Stop Ten" }, "location": { "lat": 22.44, "lng": 114.17 } }
+    "k10": { "name": { "zh": "測試站十", "en": "Test Stop Ten" }, "location": { "lat": 22.44, "lng": 114.17 } },
+    "s1": { "name": { "zh": "東涌站", "en": "Tung Chung Station" }, "location": { "lat": 22.289, "lng": 113.942 } },
+    "s2": { "name": { "zh": "東涌發展碼頭", "en": "Tung Chung Development Pier" }, "location": { "lat": 22.293, "lng": 113.946 } },
+    "s3": { "name": { "zh": "裕雅苑雅盛閣, 怡東路", "en": "Yue Nga Court Nga Shing House, Yi Tung Road" }, "location": { "lat": 22.297, "lng": 113.951 } },
+    "s4": { "name": { "zh": "裕豐苑, 匯東街", "en": "Yue Fung Court, Wui Tung Street" }, "location": { "lat": 22.299, "lng": 113.955 } },
+    "s5": { "name": { "zh": "迎東邨, 迎東路", "en": "Ying Tung Estate, Ying Tung Road" }, "location": { "lat": 22.302, "lng": 113.958 } },
+    "s6": { "name": { "zh": "翔東邨", "en": "Cheung Tung Estate" }, "location": { "lat": 22.304, "lng": 113.961 } },
+    "s7": { "name": { "zh": "昇薈, 迎東路", "en": "Century Link, Ying Tung Road" }, "location": { "lat": 22.306, "lng": 113.964 } },
+    "s8": { "name": { "zh": "映灣園二期, 文東路", "en": "Caribbean Coast Phase 2, Man Tung Road" }, "location": { "lat": 22.301, "lng": 113.949 } },
+    "s9": { "name": { "zh": "映灣園四期, 文東路", "en": "Caribbean Coast Phase 4, Man Tung Road" }, "location": { "lat": 22.299, "lng": 113.946 } },
+    "s10": { "name": { "zh": "東涌市政大樓, 文東路", "en": "Tung Chung Municipal Services Building, Man Tung Road" }, "location": { "lat": 22.296, "lng": 113.943 } },
+    "s11": { "name": { "zh": "海堤灣畔, 惠東路", "en": "Seaview Crescent, Wai Tung Road" }, "location": { "lat": 22.293, "lng": 113.939 } },
+    "s12": { "name": { "zh": "飛機燃料庫, 觀景路", "en": "Aircraft Fuel Tank Farm, Scenic Road" }, "location": { "lat": 22.309, "lng": 113.936 } },
+    "s13": { "name": { "zh": "國泰城 (東), 東岸路", "en": "Cathay City (East), East Coast Road" }, "location": { "lat": 22.315, "lng": 113.934 } },
+    "s14": { "name": { "zh": "二號檢查閘, 暢連路", "en": "Checkpoint 2, Cheong Lin Road" }, "location": { "lat": 22.318, "lng": 113.932 } },
+    "s15": { "name": { "zh": "一號停車場, 暢達路", "en": "Car Park 1, Cheong Tat Road" }, "location": { "lat": 22.315, "lng": 113.926 } },
+    "s16": { "name": { "zh": "一號客運大樓(南), 暢達路", "en": "Terminal 1 (South), Cheong Tat Road" }, "location": { "lat": 22.312, "lng": 113.924 } },
+    "s17": { "name": { "zh": "一號客運大樓(北), 暢達路", "en": "Terminal 1 (North), Cheong Tat Road" }, "location": { "lat": 22.314, "lng": 113.923 } },
+    "001860": { "name": { "zh": "東涌站", "en": "Tung Chung Station" }, "location": { "lat": 22.289, "lng": 113.942 } },
+    "001875": { "name": { "zh": "東涌發展碼頭", "en": "Tung Chung Development Pier" }, "location": { "lat": 22.293, "lng": 113.946 } },
+    "003814": { "name": { "zh": "裕雅苑雅盛閣, 怡東路", "en": "Yue Nga Court Nga Shing House, Yi Tung Road" }, "location": { "lat": 22.297, "lng": 113.951 } },
+    "003945": { "name": { "zh": "裕豐苑, 匯東街", "en": "Yue Fung Court, Wui Tung Street" }, "location": { "lat": 22.299, "lng": 113.955 } },
+    "003950": { "name": { "zh": "迎東邨, 迎東路", "en": "Ying Tung Estate, Ying Tung Road" }, "location": { "lat": 22.302, "lng": 113.958 } },
+    "003943": { "name": { "zh": "翔東邨", "en": "Cheung Tung Estate" }, "location": { "lat": 22.304, "lng": 113.961 } },
+    "003454": { "name": { "zh": "昇薈, 迎東路", "en": "Century Link, Ying Tung Road" }, "location": { "lat": 22.306, "lng": 113.964 } },
+    "001883": { "name": { "zh": "映灣園二期, 文東路", "en": "Caribbean Coast Phase 2, Man Tung Road" }, "location": { "lat": 22.301, "lng": 113.949 } },
+    "002710": { "name": { "zh": "映灣園四期, 文東路", "en": "Caribbean Coast Phase 4, Man Tung Road" }, "location": { "lat": 22.299, "lng": 113.946 } },
+    "001879": { "name": { "zh": "東涌市政大樓, 文東路", "en": "Tung Chung Municipal Services Building, Man Tung Road" }, "location": { "lat": 22.296, "lng": 113.943 } },
+    "001877": { "name": { "zh": "海堤灣畔, 惠東路", "en": "Seaview Crescent, Wai Tung Road" }, "location": { "lat": 22.293, "lng": 113.939 } },
+    "001846": { "name": { "zh": "飛機燃料庫, 觀景路", "en": "Aircraft Fuel Tank Farm, Scenic Road" }, "location": { "lat": 22.309, "lng": 113.936 } },
+    "002657": { "name": { "zh": "國泰城 (東), 東岸路", "en": "Cathay City (East), East Coast Road" }, "location": { "lat": 22.315, "lng": 113.934 } },
+    "001832": { "name": { "zh": "二號檢查閘, 暢連路", "en": "Checkpoint 2, Cheong Lin Road" }, "location": { "lat": 22.318, "lng": 113.932 } },
+    "001833": { "name": { "zh": "一號停車場, 暢達路", "en": "Car Park 1, Cheong Tat Road" }, "location": { "lat": 22.315, "lng": 113.926 } },
+    "003395": { "name": { "zh": "一號客運大樓(南), 暢達路", "en": "Terminal 1 (South), Cheong Tat Road" }, "location": { "lat": 22.312, "lng": 113.924 } },
+    "001834": { "name": { "zh": "一號客運大樓(北), 暢達路", "en": "Terminal 1 (North), Cheong Tat Road" }, "location": { "lat": 22.314, "lng": 113.923 } },
+    "001836": { "name": { "zh": "富豪機場酒店,  暢達路", "en": "Regal Airport Hotel, Cheong Tat Road" }, "location": { "lat": 22.316, "lng": 113.921 } },
+    "003816": { "name": { "zh": "航天城", "en": "SKYCITY" }, "location": { "lat": 22.318, "lng": 113.918 } },
+    "001847": { "name": { "zh": "飛機燃料庫, 觀景路", "en": "Aircraft Fuel Tank Farm, Scenic Road" }, "location": { "lat": 22.309, "lng": 113.936 } }
   },
   "stopMap": {}
 }

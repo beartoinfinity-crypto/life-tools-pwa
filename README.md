@@ -306,8 +306,12 @@ Other features:
   星期日及公眾假期 (or 每日 for all-week schedules), merge every service variant of the selected
   direction, include fixed single departures (e.g. A47X's early `05:00`/`05:30`/`06:30`), show
   the first-to-last departure range and headway, and expand to the full HH:MM departure list.
+- **Upstream data supplement** — if the hkbus route DB is missing stops or frequency for a route, a small
+  `ROUTE_SUPPLEMENTS` table fills only the gap (S56: the full 21-stop loop and its 05:50–24:00, every 13–20 min
+  timetable) and never overrides data upstream already provides. Short routes (≤24 stops) render every stop on
+  first paint; longer routes show the remaining count on **載入更多車站**.
 - **Offline-first** — route database cached in IndexedDB; offline banner + Retry-on-failure; service worker caches
-  the shell (`buseta-lite-v34`).
+  the shell (`buseta-lite-v35`).
 - **Loading skeletons & >=48px touch targets** — shimmer placeholders replace the blocking splash; buttons and rows
   sized for gloved/fumbling taps.
 - **EN/ZH** toggle; near-black UI in night mode with corrected chip/badge colours.
@@ -558,7 +562,7 @@ npm test            # Run all tests once
 npm run test:watch  # Watch mode
 ```
 
-357 tests across 15 files under `test/` (hub), `apps/mark-six/test/`, `apps/hk-bus-eta/test/`, `apps/traffic-news/test/` and `apps/music-trend/test/`. The suite uses in-memory SQLite + fixtures, so it runs offline without a Supabase connection.
+360 tests across 15 files under `test/` (hub), `apps/mark-six/test/`, `apps/hk-bus-eta/test/`, `apps/traffic-news/test/` and `apps/music-trend/test/`. The suite uses in-memory SQLite + fixtures, so it runs offline without a Supabase connection.
 
 ---
 

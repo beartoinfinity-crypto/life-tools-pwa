@@ -26,7 +26,7 @@ Each app is an authored PWA with its own `index.html`, `styles.css`,
 | apps/traffic-news     | traffic-news-v16  | v1.9 build 202610300657    |
 | apps/mark-six         | mark-six-v16      | v1.8 build 202610050754    |
 | apps/music-trend      | music-trend-v36   | v1.8 build 202609291603    |
-| apps/hk-bus-eta/build | buseta-lite-v34   | v1.14 build 202610300818   |
+| apps/hk-bus-eta/build | buseta-lite-v35   | v1.15 build 202611060723   |
 
 > `apps/hk-bus-eta/` holds both: `build-upstream/` and `LICENSE` are
 > the vendored upstream PWA (never hand-edit them), while `build/` is
@@ -112,7 +112,7 @@ live in the individual commits; this is just the map.
 - **mark-six** (v1.8, `mark-six-v16`): honesty disclaimer under the
   Smart Pick generator + a sixth `contrarian` strategy. See issue #1
   (closed) and the commit messages for `5357218`.
-- **bus-eta-lite** (v1.8..v1.14, `buseta-lite-v34`): operator-split
+- **bus-eta-lite** (v1.8..v1.15, `buseta-lite-v35`): operator-split
   route search rows; next-arrival-first chips; silent 30s refresh
   pooled to <=6 fetches with no-op churn skip; ETA display-format
   toggle (minutes / exact time / both, persisted in
@@ -146,12 +146,25 @@ live in the individual commits; this is just the map.
   25 min` (they previously both read `10:05 ...`, because the reverse
   direction's leading single trips were dropped and both directions
   shared the same all-week label).
+- **bus-eta-lite upstream supplement + short-route stops** (v1.15,
+  `buseta-lite-v35`): the route DB from data.hkbus.app can omit part of
+  a route, so a small `ROUTE_SUPPLEMENTS` table fills only the missing
+  pieces and leaves the entry untouched once upstream fixes it. First
+  entry: S56, which upstream had as 17 stops with a single 05:30 freq
+  value; the supplement restores the official 21-stop loop (Regal
+  Airport Hotel / SKYCITY / fuel farm / Tung Chung Station) from the
+  DATA.GOV.HK Citybus route-stop feed and the six daily headway windows
+  (05:50-24:00, every 13-20 min) from citybus.com.hk. The timetable now
+  prints a headway range (`every 13-20 min`) when the windows differ, and
+  short routes (<=24 stops) render every stop on first paint instead of
+  hiding the tail behind "load more"; that button also shows how many
+  stops are still hidden.
 - **traffic-news recent hour** (v1.9, `traffic-news-v16`): a
   "recent 1 hour" chip (`?h=1h`) renders every incident posted in the
   last 60 minutes as its own card (dedup only by exact id); older
   items keep the usual similarity merge. The default merged view is
   unchanged, and clicking the chip again restores it.
-- **Tests** now span 15 files / 357 cases (hub + mark-six +
+- **Tests** now span 15 files / 360 cases (hub + mark-six +
   hk-bus-eta + traffic-news + music-trend), run with `npx vitest run`.
 
 ## Notes for the next agent
