@@ -294,7 +294,8 @@ Other features:
 - **Bookmarks** — star a route or stop from its detail page; stored in `localStorage`, listed under the two bookmark tabs, tap to reopen. Route bookmarks also remember the **direction** you were viewing (switching pills on a starred route updates it).
 - **Auto-refresh** — live arrival chips refresh every 30 s **silently** (paused while the tab is hidden; instant
   refresh when you return; no status toast noise); the detail page keeps a persistent `更新於 HH:MM:SS` last-refresh
-  stamp. Manual refresh re-downloads the route database.
+  stamp. Manual refresh re-downloads the route database, and returning to the tab re-checks it — re-downloading when
+  the cached copy is more than 6 hours old, so route/stop/timetable changes show up without a reload.
 - **Next-arrival first** — each stop shows up to 3 chips where the **next bus is the loudest**: a larger, accent-green
   chip with tabular figures (minute digits align across stops), `抵站` when it's within a minute. Refreshes re-use the
   previous chip text when nothing changed, and ETA fetches are pooled to ≤6 concurrent per pass to stay kind to mobile
@@ -311,7 +312,7 @@ Other features:
   timetable) and never overrides data upstream already provides. Short routes (≤24 stops) render every stop on
   first paint; longer routes show the remaining count on **載入更多車站**.
 - **Offline-first** — route database cached in IndexedDB; offline banner + Retry-on-failure; service worker caches
-  the shell (`buseta-lite-v35`).
+  the shell (`buseta-lite-v36`).
 - **Loading skeletons & >=48px touch targets** — shimmer placeholders replace the blocking splash; buttons and rows
   sized for gloved/fumbling taps.
 - **EN/ZH** toggle; near-black UI in night mode with corrected chip/badge colours.
@@ -562,7 +563,7 @@ npm test            # Run all tests once
 npm run test:watch  # Watch mode
 ```
 
-360 tests across 15 files under `test/` (hub), `apps/mark-six/test/`, `apps/hk-bus-eta/test/`, `apps/traffic-news/test/` and `apps/music-trend/test/`. The suite uses in-memory SQLite + fixtures, so it runs offline without a Supabase connection.
+361 tests across 15 files under `test/` (hub), `apps/mark-six/test/`, `apps/hk-bus-eta/test/`, `apps/traffic-news/test/` and `apps/music-trend/test/`. The suite uses in-memory SQLite + fixtures, so it runs offline without a Supabase connection.
 
 ---
 

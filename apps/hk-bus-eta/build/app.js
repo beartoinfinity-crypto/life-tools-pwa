@@ -61,6 +61,7 @@ const T = {
 const state = {
   db: null,
   dbStatus: "loading",
+  dbAt: 0,
   lastEtaAt: null,
   lang: localStorage.getItem("buseta-lang") || "zh",
   routeNoIndex: new Map(),
@@ -228,41 +229,54 @@ function applySupplements(db) {
 }
 
 /* ---------------- DB load ---------------- */
+const DB_MAX_AGE = 6 * 3600 * 1000;
+let dbRefreshPromise = null;
+function refreshDb() {
+  if (dbRefreshPromise) return dbRefreshPromise;
+  dbRefreshPromise = (async () => {
+    const db = await fetchEtaDb();
+    if (!db || !db.routeList) throw new Error("bad db");
+    applyDb(db);
+    state.dbAt = Date.now();
+    await idbSet("db", db);
+    await idbSet("ts", state.dbAt);
+  })().finally(() => { dbRefreshPromise = null; });
+  return dbRefreshPromise;
+}
+async function refreshDbIfStale() {
+  if (!state.db) return;
+  if (Date.now() - (state.dbAt || 0) <= DB_MAX_AGE) return;
+  if (!navigator.onLine) { statusNow(T.offline[state.lang]); return; }
+  statusNow(T.updating[state.lang]);
+  try {
+    await refreshDb();
+    statusNow(T.updated[state.lang]);
+  } catch {
+    statusNow(T.offline[state.lang]);
+  }
+}
 async function loadDb() {
   const [cachedDb, cachedTs] = await Promise.all([idbGet("db"), idbGet("ts")]);
   if (cachedDb) {
     state.dbStatus = "ready";
+    state.dbAt = cachedTs || 0;
     applyDb(cachedDb);
-    const age = Date.now() - (cachedTs || 0);
-    if (age > 6 * 3600 * 1000) {
-      if (navigator.onLine) {
-        statusNow(T.updating[state.lang]);
-        refreshDb()
-          .then(() => statusNow(T.updated[state.lang]))
-          .catch(() => statusNow(T.offline[state.lang]));
-      } else statusNow(T.offline[state.lang]);
-    }
+    refreshDbIfStale();
     return;
   }
   try {
     const db = await fetchEtaDb();
     if (!db || !db.routeList) throw new Error("bad db");
     state.dbStatus = "ready";
+    state.dbAt = Date.now();
     applyDb(db);
     await idbSet("db", db);
-    await idbSet("ts", Date.now());
+    await idbSet("ts", state.dbAt);
   } catch {
     state.dbStatus = "failed";
     statusNow(T.offline[state.lang]);
     renderCurrentList();
   }
-}
-async function refreshDb() {
-  const db = await fetchEtaDb();
-  if (!db || !db.routeList) throw new Error("bad db");
-  applyDb(db);
-  await idbSet("db", db);
-  await idbSet("ts", Date.now());
 }
 function applyDb(db) {
   applySupplements(db);
@@ -1137,6 +1151,7 @@ function startAutoRefresh() {
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) return;
     if (state.view === "detail") refreshVisibleEtas(true);
+    refreshDbIfStale();
   });
 }
 function nearestVisibleEtaMs() {

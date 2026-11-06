@@ -47,19 +47,20 @@ A mobile-first, vanilla-JS app with no build step, tuned for quick glance-and-le
   (`buseta-book-routes`, `buseta-book-stops`); reopened from the two bookmark tabs.
 - **Auto-refresh** — arrivals refresh every 30 s at rest, but tighten to **10 s while the next bus is within 3
   minutes** so the "almost here" window stays accurate; polling pauses while the tab is hidden (saves battery) and
-  resumes with an instant refresh when you come back; manual refresh re-downloads the route database. Both detail
+  resumes with an instant refresh when you come back; manual refresh re-downloads the route database, and returning
+  to the tab re-checks it (re-downloading when the cached copy is more than 6 hours old). Both detail
   pages keep a persistent **last-refresh stamp** in their note line (`更新於 HH:MM:SS` / `Updated HH:MM:SS`) that
   advances with every fetch cycle — including silent background refreshes (the cycle never pops a status toast).
   Refreshes are pooled to ≤6 concurrent ETA fetches, skip DOM writes when the displayed minutes are unchanged, and
   long stop lists use `content-visibility: auto` so off-screen stops avoid layout/paint.
 - **Offline-first** — the ~8 MB route database is cached in IndexedDB (`bus-eta-lite` / `kv`); the service worker
-  caches the app shell (`buseta-lite-v35`) so the app opens instantly after the first visit. Losing the network
+  caches the app shell (`buseta-lite-v36`) so the app opens instantly after the first visit. Losing the network
   shows a persistent banner (and a Retry button if the database itself could not load); regaining it re-fetches.
 - **Loading skeletons** — the old blocking splash spinner was replaced by shimmering skeleton cards while the
   database loads (disabled under `prefers-reduced-motion`).
 - **Touch targets >= 48px** — header/tab/detail buttons, direction pills and list rows are sized for tapping on
   a moving bus.
-- **Versioning** — in-page badge (`v1.15 build <UTC>`) plus SW cache `buseta-lite-v35`; the badge build equals the
+- **Versioning** — in-page badge (`v1.16 build <UTC>`) plus SW cache `buseta-lite-v36`; the badge build equals the
   pinned commit time and the SW bump ships in the same commit (see `CONTEXT.md`).
 - **Upstream data supplement** — the hkbus route DB occasionally omits part of a route. A small `ROUTE_SUPPLEMENTS`
   table restores the missing stops/frequency (currently S56: 21 stops and the 05:50–24:00, every 13–20 min

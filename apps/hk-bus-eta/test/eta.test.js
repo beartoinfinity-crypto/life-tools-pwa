@@ -23,13 +23,14 @@ function loadDb() {
   return JSON.parse(JSON.stringify(fixture));
 }
 
-async function createHarness(dbJson, { seedEtaFmt = null } = {}) {
+async function createHarness(dbJson, { seedEtaFmt = null, clock = null } = {}) {
   const dom = new JSDOM(indexHtml, {
     url: 'https://life-tools-pwa.vercel.app/bus-eta-lite/',
     runScripts: 'outside-only',
     pretendToBeVisual: true,
   });
   const { window } = dom;
+  if (clock) window.Date.now = () => clock.now;
   if (seedEtaFmt) window.localStorage.setItem('buseta-eta-fmt', seedEtaFmt);
   window.fetch = vi.fn(async (url) => {
     const u = String(url);
@@ -494,6 +495,32 @@ describe('upstream data supplement (S56-shaped)', () => {
     expect(times).toContain('09:34');
     expect(times).toContain('23:00');
     expect(times[times.length - 1]).toBe('24:00');
+    dom.window.close();
+  });
+});
+
+describe('route DB freshness on tab return', () => {
+  it('re-downloads the route DB only after the cached copy is more than 6h old', async () => {
+    const clock = { now: new Date('2026-11-06T08:00:00Z').getTime() };
+    const dom = await createHarness(loadDb(), { clock });
+    await settle(dom);
+    const dbFetches = () =>
+      dom.window.fetch.mock.calls.filter((c) => String(c[0]).includes('routeFareList.min.json')).length;
+    const initial = dbFetches();
+    expect(initial).toBeGreaterThan(0);
+
+    // returning after 2 hours: still fresh, no extra download
+    clock.now += 2 * 3600 * 1000;
+    dom.window.document.dispatchEvent(new dom.window.Event('visibilitychange'));
+    await settle(dom);
+    expect(dbFetches()).toBe(initial);
+
+    // returning after 7 hours: stale, re-download once
+    clock.now += 5 * 3600 * 1000;
+    dom.window.document.dispatchEvent(new dom.window.Event('visibilitychange'));
+    await new Promise((r) => setTimeout(r, 0));
+    await settle(dom);
+    expect(dbFetches()).toBe(initial + 1);
     dom.window.close();
   });
 });
