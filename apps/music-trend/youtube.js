@@ -118,6 +118,81 @@ function pickOfficialMV(videos, songName, artistName) {
 }
 
 /**
+ * Parse a YouTube playlist URL (or bare list id) into a list id.
+ * Accepts youtube.com/playlist?list=, music.youtube.com, m.youtube.com,
+ * watch?v=...&list=..., or a bare playlist id. Returns the id or null.
+ */
+function parsePlaylistUrl(input) {
+  const s = String(input || '').trim();
+  if (!s) return null;
+  if (/^[A-Za-z0-9_-]{12,}$/.test(s) && !s.includes('/')) return s;
+  try {
+    const u = new URL(s);
+    if (!/(^|\.)youtube\.com$/.test(u.hostname)) return null;
+    return u.searchParams.get('list');
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Extract ALL playlist items from a playlist page, in order.
+ * Returns [{ videoId, title }].
+ *
+ * YouTube serves two shapes depending on experiment bucket:
+ *  - legacy "playlistVideoRenderer" (videoId + title.runs[0].text)
+ *  - new "lockupViewModel" (contentId + lockupMetadataViewModel.title.content)
+ * Deduplicates by videoId, keeping the first occurrence.
+ */
+function extractPlaylistVideos(html) {
+  const results = [];
+  const seen = new Set();
+  const push = (videoId, title) => {
+    if (!videoId || seen.has(videoId)) return;
+    seen.add(videoId);
+    results.push({ videoId, title });
+  };
+
+  // Legacy renderer
+  const legacyRe = /"playlistVideoRenderer":\{"videoId":"([A-Za-z0-9_-]{11})"/g;
+  let m;
+  while ((m = legacyRe.exec(html)) !== null) {
+    const after = html.slice(m.index, m.index + 3000);
+    let title = '';
+    const t = after.match(/"title":\{"runs":\[\{"text":"((?:[^"\\]|\\.)*)"/);
+    if (t) { try { title = JSON.parse('"' + t[1] + '"'); } catch { title = t[1]; } }
+    push(m[1], title);
+  }
+
+  // New lockup view model (item lockups: contentImage + contentId + metadata title)
+  const lockupRe = /"lockupViewModel":\{"contentImage":/g;
+  while ((m = lockupRe.exec(html)) !== null) {
+    const after = html.slice(m.index, m.index + 20000);
+    const cid = after.match(/"contentId":"([A-Za-z0-9_-]{11})"/);
+    if (!cid) continue;
+    let title = '';
+    const t = after.match(/"lockupMetadataViewModel":\{"title":\{"content":"((?:[^"\\]|\\.)*)"/);
+    if (t) { try { title = JSON.parse('"' + t[1] + '"'); } catch { title = t[1]; } }
+    push(cid[1], title);
+  }
+
+  return results;
+}
+
+/**
+ * Fetch a YouTube page (playlist, watch, …) with the consent-bypass cookies.
+ * Returns { ok, status, body } — never rejects.
+ */
+async function fetchYouTubePage(url, timeout = 20000) {
+  try {
+    const { status, body } = await get(url, timeout);
+    return { ok: status === 200, status, body };
+  } catch {
+    return { ok: false, status: 0, body: '' };
+  }
+}
+
+/**
  * Find the YouTube video id for a song. Returns { videoId, title } or null.
  * Two-pass search: first tries "official mv", then falls back to plain search.
  */
@@ -297,6 +372,9 @@ module.exports = {
   extractFirstVideo,
   extractVideos,
   pickOfficialMV,
+  parsePlaylistUrl,
+  extractPlaylistVideos,
+  fetchYouTubePage,
   validateYouTubeId,
   classifyOembedStatus,
   needsYtRevalidate,

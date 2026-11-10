@@ -174,7 +174,29 @@
       } catch (e) { /* unsupported shape */ }
     }
   }
-  setInterval(setTimeDisplay, 500);
+  // Tick the time display only while it can actually change — the player bar is
+  // open and a track is loaded. The interval starts on first play and stops
+  // when the bar closes (or the player unloads), so an idle page has zero
+  // timers running.
+  var timeTicker = null;
+  function startTimeTicker() {
+    if (timeTicker) return;
+    timeTicker = setInterval(function () {
+      if (playerBar.classList.contains('hidden')) { stopTimeTicker(); return; }
+      setTimeDisplay();
+    }, 500);
+  }
+  function stopTimeTicker() {
+    if (!timeTicker) return;
+    clearInterval(timeTicker);
+    timeTicker = null;
+  }
+  // One final paint when the ticker stops so the time text isn't left stale.
+  function syncTimeDisplay() {
+    setTimeDisplay();
+    if (playerBar.classList.contains('hidden') || !ytReady) stopTimeTicker();
+    else startTimeTicker();
+  }
 
   function artworkBigger(url) {
     return url; // data-saving: keep the feed's small 100x100 artwork
@@ -484,6 +506,7 @@
     clearEndWatch();
 
     playerBar.classList.remove('hidden');
+    startTimeTicker();
     nowName.textContent = s.name;
     nowArtist.textContent = s.artist;
     if (pTimeEl) pTimeEl.textContent = '0:00 / ' + (s.durationMs ? fmtTime(s.durationMs / 1000) : '--:--');
@@ -1306,7 +1329,12 @@
 
   myPickerBtn.addEventListener('click', function () {
     if (!myPicker.classList.contains('hidden')) { myPicker.classList.add('hidden'); return; }
+    refreshMyPicker();
+  });
+
+  function refreshMyPicker() {
     myPicker.classList.remove('hidden');
+    myImport.classList.add('hidden');
     myPicker.innerHTML = '<div class="loading-note">Loading…</div>';
     fetch(API_BASE + '/myplaylists', { cache: 'no-store' })
       .then(function (r) { return r.json(); })
@@ -1329,7 +1357,7 @@
         myPicker.innerHTML = html;
       })
       .catch(function (e) { myPicker.innerHTML = '<div class="my-picker-title">載入失敗: ' + esc(e.message) + '</div>'; });
-  });
+  }
 
   myPicker.addEventListener('click', function (e) {
     var renameBtn = e.target.closest ? e.target.closest('.my-pick-edit') : null;
@@ -1347,8 +1375,7 @@
         .then(function (payload) {
           if (payload && payload.error) throw new Error(payload.error);
           statusFlash('已改名為「' + payload.name + '」');
-          myPickerBtn.click();
-          myPickerBtn.click();
+          refreshMyPicker();
         })
         .catch(function (e) { statusFlash('改名失敗: ' + e.message); });
       return;
@@ -1365,8 +1392,7 @@
         .then(function (payload) {
           if (payload && payload.error) throw new Error(payload.error);
           statusFlash('已刪除歌單「' + delName + '」');
-          myPickerBtn.click();
-          myPickerBtn.click();
+          refreshMyPicker();
         })
         .catch(function (e) { statusFlash('刪除失敗: ' + e.message); });
       return;
@@ -1397,9 +1423,9 @@
     myImport.classList.remove('hidden');
     myPicker.classList.add('hidden');
     myImport.innerHTML =
-      '<div class="my-picker-title">貼上 Apple Music 連結</div>' +
+      '<div class="my-picker-title">貼上 Apple Music / YouTube 連結</div>' +
       '<div class="import-row">' +
-        '<input id="importUrl" type="url" placeholder="playlist / room / album / artist URL" class="import-input" />' +
+        '<input id="importUrl" type="url" placeholder="Apple Music 或 YouTube 歌單 URL" class="import-input" />' +
         '<button id="importFetchBtn" class="my-tool-btn">匯入</button>' +
       '</div>';
     document.getElementById('importFetchBtn').addEventListener('click', doImport);
@@ -1412,8 +1438,10 @@
     var urlInput = document.getElementById('importUrl');
     var url = urlInput ? urlInput.value.trim() : '';
     if (!url) { statusFlash('請貼上歌單連結'); return; }
-    if (!url.includes('music.apple.com') || (!url.includes('pl.') && !url.includes('/room/') && !url.includes('/album/') && !url.includes('/artist/'))) {
-      statusFlash('請輸入有效的 Apple Music 連結 (歌單 / 房間 / 專輯 / 藝人)');
+    var isApple = url.includes('music.apple.com') && (url.includes('pl.') || url.includes('/room/') || url.includes('/album/') || url.includes('/artist/'));
+    var isYouTube = /^https:\/\/([^/]*\.)?youtube\.com\//.test(url) && url.includes('list=');
+    if (!isApple && !isYouTube) {
+      statusFlash('請輸入有效的 Apple Music 或 YouTube 歌單連結');
       return;
     }
     var fetchBtn = document.getElementById('importFetchBtn');
@@ -1497,8 +1525,9 @@
         render();
         statusFlash('已匯入歌單「' + name + '」(' + songs.length + ' 首)');
         myImport.classList.add('hidden');
-        // Ask user if they want to resolve YouTube IDs
-        if (window.confirm('歌單已儲存。是否搜尋 YouTube 影片以便播放？')) {
+        // YouTube imports already carry youtubeId — only ask when ids are missing
+        var needResolve = songs.some(function (s) { return !s.youtubeId; });
+        if (needResolve && window.confirm('歌單已儲存。是否搜尋 YouTube 影片以便播放？')) {
           resolveYouTubeForPlaylist(name);
         }
       })
@@ -1587,6 +1616,7 @@
   closeBtn.addEventListener('click', function () {
     if (ytReady && ytPlayer.stopVideo) ytPlayer.stopVideo();
     playerBar.classList.add('hidden');
+    stopTimeTicker();
     currentSong = -1;
     wantPlaying = false;
     userPauseIntent = false;

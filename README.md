@@ -416,10 +416,13 @@ gate by country (`CANTO_COUNTRIES` = `{hk}` and `MANDO_COUNTRIES` = `{hk,tw,cn,s
   **Cross-device sync** — ⇧ 上傳歌單 saves the current list to Supabase under a name you type (that name *is* the
   key), and ⇩ 下載歌單 lists saved playlists and loads one onto any device. Requires the `music_user_playlists`
   table (see schema SQL).
-- **Import from Apple Music** — ＋ 匯入歌單 on the 我的 tab lets you paste an Apple Music URL (playlist `pl.xxx`,
-  room `/room/xxx`, album `/album/x/xxx`, or artist `/artist/x/xxx`). Songs are fetched via iTunes Lookup API
-  and saved as a new playlist. After save, the app offers to resolve YouTube IDs for playback. Artist imports
-  use the iTunes Search API (up to 200 songs). Resolution processes in batches of 5 with live progress updates.
+- **Import from Apple Music / YouTube** — ＋ 匯入歌單 on the 我的 tab lets you paste an Apple Music URL (playlist
+  `pl.xxx`, room `/room/xxx`, album `/album/x/xxx`, or artist `/artist/x/xxx`) or a YouTube playlist URL
+  (`youtube.com/playlist?list=…`, `music.youtube.com`, a watch link with `list=`, or a bare playlist id). Apple URLs
+  fetch songs via iTunes Lookup API; YouTube URLs scrape the playlist page (works with both the legacy
+  `playlistVideoRenderer` and the current `lockupViewModel` markup) and come ready to play — the video IDs are
+  known at import time, so no resolve pass is needed. Apple imports still offer YouTube-ID resolution after save
+  (batches of 5 with live progress).
 - **Player time** — the compact player bar shows the current playback position and song duration
   (e.g. `1:12 / 4:11`), refreshed every 500 ms from the YouTube player.
 - **Load-on-demand** — only the currently selected playlist+country is fetched (default 熱門趨勢), so opening the
@@ -563,7 +566,7 @@ npm test            # Run all tests once
 npm run test:watch  # Watch mode
 ```
 
-361 tests across 15 files under `test/` (hub), `apps/mark-six/test/`, `apps/hk-bus-eta/test/`, `apps/traffic-news/test/` and `apps/music-trend/test/`. The suite uses in-memory SQLite + fixtures, so it runs offline without a Supabase connection.
+374 tests across 16 files under `test/` (hub), `apps/mark-six/test/`, `apps/hk-bus-eta/test/`, `apps/traffic-news/test/` and `apps/music-trend/test/`. The suite uses in-memory SQLite + fixtures, so it runs offline without a Supabase connection.
 
 ---
 

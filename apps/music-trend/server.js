@@ -3,7 +3,7 @@ const https = require('https');
 const { createClient } = require('@supabase/supabase-js');
 
 const { buildPlaylists, feedUrl } = require('./parser');
-const { searchYouTube, mapLimit, validateYouTubeIds } = require('./youtube');
+const { searchYouTube, mapLimit, validateYouTubeIds, parsePlaylistUrl, extractPlaylistVideos } = require('./youtube');
 
 /** Countries whose Apple Music charts are available (code -> label). */
 const COUNTRIES = {
@@ -577,11 +577,45 @@ app.post('/api/myplaylists/:name/cleanup', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// ── Parse Apple Music playlist/room URL → songs ────────────────────
+// ── Parse Apple Music / YouTube playlist URL → songs ───────────────
 app.post('/api/playlist/parse', async (req, res) => {
   try {
     const { url } = req.body;
     if (!url) return res.status(400).json({ error: 'url required' });
+
+    // YouTube playlist URLs (youtube.com/playlist?list=, music.youtube.com,
+    // bare list ids) go through the YouTube branch below.
+    const ytListId = parsePlaylistUrl(url);
+    if (ytListId) {
+      const { fetchYouTubePage } = require('./youtube');
+      const page = await fetchYouTubePage(`https://www.youtube.com/playlist?list=${encodeURIComponent(ytListId)}`);
+      if (!page.ok) return res.status(502).json({ error: 'Failed to fetch playlist page' });
+      const videos = extractPlaylistVideos(page.body).slice(0, 200);
+      if (!videos.length) return res.status(404).json({ error: 'No tracks found in playlist' });
+      // Playlist title from <title> ("Name - YouTube" / "Name - YouTube Music")
+      let title = 'Imported Playlist';
+      const t = page.body.match(/<title>([^<]+)<\/title>/);
+      if (t) title = t[1].replace(/\s*-\s*YouTube( Music)?\s*$/i, '').trim() || title;
+      const songs = videos.map((v, i) => {
+        // Titles are usually "Artist - Song" or "Song" (channel as artist)
+        const dash = v.title.split(' - ');
+        const artist = dash.length > 1 ? dash[0] : '';
+        const name = dash.length > 1 ? dash.slice(1).join(' - ') : v.title;
+        return {
+          rank: i + 1,
+          id: v.videoId,
+          name: name || v.title,
+          artist,
+          artistUrl: '',
+          artwork: '',
+          releaseDate: '',
+          genre: 'YouTube',
+          youtubeId: v.videoId,
+          youtubeTitle: v.title
+        };
+      });
+      return res.json({ title, songs });
+    }
 
     const isPlaylist = /pl\.[a-zA-Z0-9]+/.test(url);
     const isRoom = /\/room\/\d+/.test(url);

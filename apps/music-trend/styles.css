@@ -386,6 +386,12 @@ main {
   border-radius: 12px;
   box-shadow: var(--shadow-sm);
   padding: 10px 14px;
+  /* Skip layout/paint for rows scrolled far off-screen (100-song charts):
+     the browser keeps a rough size estimate and only renders rows near the
+     viewport. contain-intrinsic-size must match the row's real height so the
+     scrollbar doesn't jump when rows become visible. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 64px;
 }
 
 .song-row .s-rank {

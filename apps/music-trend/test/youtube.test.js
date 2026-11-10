@@ -1,8 +1,10 @@
-import { describe, it, expect } from 'vitest';
+﻿import { describe, it, expect } from 'vitest';
 import {
   extractFirstVideo,
   extractVideos,
   pickOfficialMV,
+  parsePlaylistUrl,
+  extractPlaylistVideos,
   mapLimit,
   classifyOembedStatus,
   needsYtRevalidate,
@@ -12,10 +14,10 @@ import {
 
 describe('extractFirstVideo', () => {
   it('extracts the first videoRenderer id and title', () => {
-    const html = 'xx{"videoRenderer":{"videoId":"falq0Gr3rc0","thumbnail":{},"title":{"runs":[{"text":"gareth.t - 用背脊唱情歌 (official video)"}]}}}yy';
+    const html = 'xx{"videoRenderer":{"videoId":"falq0Gr3rc0","thumbnail":{},"title":{"runs":[{"text":"gareth.t - ?刻???? (official video)"}]}}}yy';
     expect(extractFirstVideo(html)).toEqual({
       videoId: 'falq0Gr3rc0',
-      title: 'gareth.t - 用背脊唱情歌 (official video)'
+      title: 'gareth.t - ?刻???? (official video)'
     });
   });
 
@@ -267,5 +269,68 @@ describe('validateYouTubeIds', () => {
       search: searchNull
     });
     expect(seen).toEqual(['nevercheck1']);
+  });
+});
+
+describe('parsePlaylistUrl', () => {
+  it('accepts standard playlist URLs and extracts the list id', () => {
+    expect(parsePlaylistUrl('https://www.youtube.com/playlist?list=PL1234567890abcdefg')).toBe('PL1234567890abcdefg');
+    expect(parsePlaylistUrl('https://music.youtube.com/playlist?list=RDabcdefghijk&si=xyz')).toBe('RDabcdefghijk');
+    expect(parsePlaylistUrl('https://m.youtube.com/playlist?list=OLAK5uy_kABCDEFG')).toBe('OLAK5uy_kABCDEFG');
+  });
+
+  it('accepts bare list ids as shorthand', () => {
+    expect(parsePlaylistUrl('PL1234567890abcdefg')).toBe('PL1234567890abcdefg');
+  });
+
+  it('accepts a watch URL with a list param', () => {
+    expect(parsePlaylistUrl('https://www.youtube.com/watch?v=abc12345678&list=PLzzz9999999999')).toBe('PLzzz9999999999');
+  });
+
+  it('rejects non-YouTube URLs and URLs without a list', () => {
+    expect(parsePlaylistUrl('https://music.apple.com/hk/playlist/pl.u-xyz')).toBeNull();
+    expect(parsePlaylistUrl('https://www.youtube.com/watch?v=abc12345678')).toBeNull();
+    expect(parsePlaylistUrl('')).toBeNull();
+    expect(parsePlaylistUrl(null)).toBeNull();
+  });
+});
+
+describe('extractPlaylistVideos', () => {
+  it('extracts videoId + title from playlistVideoRenderer blocks', () => {
+    const html = 'xx{"playlistVideoRenderer":{"videoId":"vidAAAAAAA1","thumbnail":{},"title":{"runs":[{"text":"Song One - Artist A"}]}},"other":1}yy' +
+      '{"playlistVideoRenderer":{"videoId":"vidBBBBBBB2","title":{"runs":[{"text":"Song Two \\u0022live\\u0022"}]}}}';
+    expect(extractPlaylistVideos(html)).toEqual([
+      { videoId: 'vidAAAAAAA1', title: 'Song One - Artist A' },
+      { videoId: 'vidBBBBBBB2', title: 'Song Two "live"' }
+    ]);
+  });
+
+  it('ignores videoRenderer blocks (search results) in a playlist page', () => {
+    const html = '{"videoRenderer":{"videoId":"searchResul1","title":{"runs":[{"text":"not a playlist item"}]}}}' +
+      '{"playlistVideoRenderer":{"videoId":"vidAAAAAAA1","title":{"runs":[{"text":"Real"}]}}}';
+    expect(extractPlaylistVideos(html)).toEqual([
+      { videoId: 'vidAAAAAAA1', title: 'Real' }
+    ]);
+  });
+
+  it('returns an empty array when nothing matches', () => {
+    expect(extractPlaylistVideos('<html>nope</html>')).toEqual([]);
+  });
+
+  it('extracts items from the new lockupViewModel shape (contentId + metadata title)', () => {
+    const html = 'x{"lockupViewModel":{"contentImage":{"thumbnailViewModel":{}},"contentId":"fOT0BUpITw8","contentType":"LOCKUP_CONTENT_TYPE_VIDEO","metadata":{"lockupMetadataViewModel":{"title":{"content":"BELLAKEO (Video Oficial) - Peso Pluma, Anitta"}}}}}y';
+    expect(extractPlaylistVideos(html)).toEqual([
+      { videoId: 'fOT0BUpITw8', title: 'BELLAKEO (Video Oficial) - Peso Pluma, Anitta' }
+    ]);
+  });
+
+  it('deduplicates repeated videoIds keeping the first occurrence', () => {
+    const html = '{"playlistVideoRenderer":{"videoId":"vidAAAAAAA1","title":{"runs":[{"text":"A"}]}}}' +
+      '{"lockupViewModel":{"contentImage":{},"contentId":"vidAAAAAAA1","metadata":{"lockupMetadataViewModel":{"title":{"content":"A again"}}}}}' +
+      '{"playlistVideoRenderer":{"videoId":"vidBBBBBBB2","title":{"runs":[{"text":"B"}]}}}';
+    expect(extractPlaylistVideos(html)).toEqual([
+      { videoId: 'vidAAAAAAA1', title: 'A' },
+      { videoId: 'vidBBBBBBB2', title: 'B' }
+    ]);
   });
 });

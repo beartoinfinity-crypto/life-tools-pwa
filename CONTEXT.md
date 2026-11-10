@@ -25,7 +25,7 @@ Each app is an authored PWA with its own `index.html`, `styles.css`,
 | public/ (hub)         | life-tool-hub-v4  | v1.4 build 202609291603    |
 | apps/traffic-news     | traffic-news-v16  | v1.9 build 202610300657    |
 | apps/mark-six         | mark-six-v16      | v1.8 build 202610050754    |
-| apps/music-trend      | music-trend-v36   | v1.8 build 202609291603    |
+| apps/music-trend      | music-trend-v37   | v1.9 build 202611100737    |
 | apps/hk-bus-eta/build | buseta-lite-v36   | v1.16 build 202611060734   |
 
 > `apps/hk-bus-eta/` holds both: `build-upstream/` and `LICENSE` are
@@ -166,12 +166,27 @@ live in the individual commits; this is just the map.
   user returns to it. `refreshDb()` also shares one in-flight download,
   so a manual refresh and a background refresh cannot fetch the same
   8 MB file twice.
+- **music-trend YouTube playlist import + perf pass** (v1.9,
+  `music-trend-v37`): the import panel now accepts YouTube playlist
+  URLs (`youtube.com/playlist?list=`, `music.youtube.com`, watch URLs
+  with a `list=` param, or a bare list id) alongside Apple Music
+  links. The server fetches the playlist page with the same
+  consent-bypass cookies as search and parses both YouTube shapes --
+  the legacy `playlistVideoRenderer` and the current
+  `lockupViewModel` (`contentId` + metadata title), deduped by
+  videoId. Imported songs carry their `youtubeId` from the start, so
+  playback works immediately without the resolve pass. Perf: the
+  player time display now ticks only while the player bar is open
+  (was an unconditional 500 ms interval), the my-playlists picker
+  refreshes through a helper instead of a synthetic double-click, and
+  song rows use `content-visibility: auto` so 100-row charts skip
+  layout/paint for off-screen rows.
 - **traffic-news recent hour** (v1.9, `traffic-news-v16`): a
   "recent 1 hour" chip (`?h=1h`) renders every incident posted in the
   last 60 minutes as its own card (dedup only by exact id); older
   items keep the usual similarity merge. The default merged view is
   unchanged, and clicking the chip again restores it.
-- **Tests** now span 15 files / 361 cases (hub + mark-six +
+- **Tests** now span 16 files / 374 cases (hub + mark-six +
   hk-bus-eta + traffic-news + music-trend), run with `npx vitest run`.
 
 ## Notes for the next agent
